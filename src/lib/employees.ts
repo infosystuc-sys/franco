@@ -71,7 +71,11 @@ export async function deleteEmployee(id: string): Promise<void> {
 
 /** Traduce errores de base a mensajes accionables para el usuario. */
 export function describeEmployeeError(message: string): string {
-  if (message.includes('work_orders_employee_id_fkey') || message.includes('foreign key')) {
+  if (
+    message.includes('work_orders_employee_id_fkey') ||
+    message.includes('foreign key') ||
+    message.includes('viola la llave')
+  ) {
     return 'No se puede eliminar: el empleado tiene órdenes asignadas. Es el registro ' +
       'de quién hizo cada trabajo. Marcalo como inactivo en lugar de borrarlo.';
   }
