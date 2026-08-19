@@ -94,3 +94,27 @@ create policy "lectura segun rol" on work_order_status_history for select to aut
     where w.id = work_order_status_history.work_order_id
       and w.employee_id = current_employee_id()
   ));
+
+-- DieselPro ERP — Empleados: clientes y vehiculos, solo los de sus ordenes
+--
+-- ⚠️ YA APLICADO en el proyecto Supabase "ludiesel" (migracion
+-- employee_customers_vehicles_rls). Queda como registro del esquema.
+--
+-- Ver el diseño completo en:
+--   .superpowers/sdd/2026-08-19-empleados/
+
+drop policy "authenticated read" on customers;
+create policy "lectura segun rol" on customers for select to authenticated
+  using (is_admin() or exists (
+    select 1 from work_orders w
+    where w.customer_id = customers.id
+      and w.employee_id = current_employee_id()
+  ));
+
+drop policy "authenticated read" on vehicles;
+create policy "lectura segun rol" on vehicles for select to authenticated
+  using (is_admin() or exists (
+    select 1 from work_orders w
+    where w.vehicle_id = vehicles.id
+      and w.employee_id = current_employee_id()
+  ));
