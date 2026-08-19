@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/*
+  DieselPro ERP — sistema visual
+  ------------------------------
+  Taller de inyección diesel: la referencia es la cartelería industrial y de
+  seguridad. Grafito y gris de taller como base, amarillo de seguridad como
+  único acento, rojo reservado para lo obligatorio y lo destructivo.
+  Todo plano: sin sombras difusas ni esquinas redondeadas.
+*/
+@theme {
+  /* Superficies */
+  --color-ink: #2b2b2b;          /* barra superior y menú */
+  --color-ink-hover: #3a3a3a;
+  --color-ink-line: #4a4a4a;
+  --color-surface: #efefef;      /* fondo de página */
+  --color-panel: #ffffff;        /* paneles y tablas */
+  --color-panel-alt: #f7f7f7;    /* filas alternas */
+  --color-panel-head: #e4e4e4;   /* encabezados de tabla */
+
+  /* Trazos */
+  --color-line: #d6d6d6;
+  --color-line-strong: #b4b4b4;
+
+  /* Texto */
+  --color-text: #1f1f1f;
+  --color-text-soft: #5e5e5e;
+  --color-text-faint: #8a8a8a;   /* títulos grandes y rótulos */
+
+  /* Acento: amarillo de seguridad */
+  --color-accent: #f5c518;
+  --color-accent-hover: #d9ac00;
+  --color-accent-ink: #5c4a00;   /* texto sobre amarillo */
+  --color-accent-deep: #8a6d00;  /* amarillo legible sobre claro */
+
+  /* Rojo: campos obligatorios y acciones destructivas */
+  --color-danger: #c62828;
+  --color-danger-hover: #9b1c1c;
+  --color-danger-soft: #fdecea;
+
+  /* Semáforo de estados */
+  --color-state-idle: #9a9a9a;
+  --color-state-wait: #e07b1a;
+  --color-state-work: #7b3fa0;
+  --color-state-check: #c9a227;
+  --color-state-done: #2e7d32;
+  --color-state-open: #2b6cb0;
+
+  /* Tipografía */
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-sans: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  /* Sin redondeos: la estética es de chapa y cartel, no de tarjeta */
+  --radius-none: 0px;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Foco visible en todo lo operable: el taller se maneja mucho con teclado. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-deep);
+    outline-offset: 1px;
+  }
+
+  /* Los números tabulan parejo en tablas de precios y cantidades. */
+  input[type="number"],
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+    Campo obligatorio: barra roja al borde izquierdo del control.
+    Se marca el campo, no un asterisco perdido en el rótulo.
+  */
+  .field-required {
+    border-left: 3px solid var(--color-danger);
+  }
+}

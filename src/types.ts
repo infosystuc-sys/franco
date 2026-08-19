@@ -1,0 +1,54 @@
+export type WorkOrderStatus =
+  | 'AUTORIZADO'
+  | 'EN_ESPERA_REP'
+  | 'EN_REPARACION'
+  | 'CALIBRACION'
+  | 'TERMINADO';
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export interface Vehicle {
+  id: string;
+  model: string;
+  licensePlate: string;
+  year?: number;
+}
+
+export interface WorkOrderItem {
+  id: string;
+  workOrderId: string;
+  articleId?: string | null;
+  code: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface WorkOrder {
+  id: string;
+  number: string;
+  status: WorkOrderStatus;
+  customerId: string;
+  vehicleId: string;
+  component: string;
+  technicianId?: string;
+  technicianName?: string;
+  createdAt: string;
+  updatedAt: string;
+  items?: WorkOrderItem[];
+  customer?: Customer;
+  vehicle?: Vehicle;
+}
+
+export interface Technician {
+  id: string;
+  name: string;
+  role: string;
+  avatarUrl?: string;
+}

@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# Credenciales: nunca se suben. Solo viaja el ejemplo sin valores reales.
+.env*
+!.env.example
+
+# Export original de AI Studio y su carpeta vacía: no son parte del código.
+dieselpro-erp.zip
+dieselpro-erp/
