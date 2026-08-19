@@ -77,15 +77,21 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <div
           onClick={onClose}
           aria-hidden
-          className="fixed inset-0 top-14 z-30 bg-black/50 md:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 bg-black/50 md:hidden"
+          style={{ top: 'calc(3.5rem + var(--safe-top))' }}
         />
       )}
       <nav
         className={cn(
-          'fixed left-0 top-14 z-40 flex h-[calc(100vh-3.5rem)] w-60 flex-col overflow-y-auto bg-ink py-5',
+          'fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
           'transition-transform duration-200 md:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full'
         )}
+        style={{
+          top: 'calc(3.5rem + var(--safe-top))',
+          height: 'calc(100vh - 3.5rem - var(--safe-top))',
+          paddingBottom: 'calc(1.25rem + var(--safe-bottom))',
+        }}
       >
         {groups.map((group) => (
           <div key={group.label} className="mb-5 last:mb-0">

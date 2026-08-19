@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter, BrowserRouter, Routes, Route } from 'react-router-dom';
+import { isNativeApp, setupNativeApp } from './lib/native';
 import { MainLayout } from './components/MainLayout';
 import { RequireAuth } from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
@@ -15,7 +16,21 @@ import { Vehicles } from './pages/Vehicles';
 import { WorkOrderDetails } from './pages/WorkOrderDetails';
 import { ClientPortal } from './pages/ClientPortal';
 
+/**
+ * En Android la app se sirve desde el sistema de archivos, donde las rutas
+ * tipo /cotizaciones no existen como recurso. HashRouter las resuelve sin
+ * depender del servidor. En la web se mantiene BrowserRouter y las URLs
+ * quedan iguales que siempre.
+ */
+const Router = isNativeApp ? HashRouter : BrowserRouter;
+
 export default function App() {
+  React.useEffect(() => {
+    // Devuelve false: no interceptamos el botón de volver, deja que el
+    // historial de navegación haga su trabajo.
+    setupNativeApp(() => false);
+  }, []);
+
   return (
     <Router>
       <AuthProvider>

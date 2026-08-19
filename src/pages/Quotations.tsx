@@ -144,7 +144,7 @@ export function Quotations() {
 
       <div className="border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-28">N° Cotiz.</th>
@@ -174,19 +174,19 @@ export function Quotations() {
                 const expired = isExpired(quotation.validUntil, quotation.status);
                 return (
                   <tr key={quotation.id} className="border-b border-line hover:bg-panel-alt transition-colors">
-                    <td className="p-3 font-semibold">
+                    <td data-primary className="p-3 font-semibold">
                       <Link to={`/cotizacion/${quotation.number}`} className="hover:text-accent-deep hover:underline">
                         {quotation.number}
                       </Link>
                     </td>
-                    <td className="p-3">{quotation.customerName}</td>
-                    <td className="p-3">
+                    <td data-label="Cliente" className="p-3">{quotation.customerName}</td>
+                    <td data-label="Vehículo" className="p-3">
                       <div>{quotation.vehicleLabel}</div>
                       {quotation.component && (
                         <div className="text-[11px] text-text-soft">{quotation.component}</div>
                       )}
                     </td>
-                    <td className="p-3">
+                    <td data-label="Estado" className="p-3">
                       <span className={cn(
                         "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
                         QUOTATION_STATUS_BADGE[quotation.status]
@@ -194,7 +194,7 @@ export function Quotations() {
                         {QUOTATION_STATUS_LABELS[quotation.status]}
                       </span>
                     </td>
-                    <td className="p-3 text-[11px]">
+                    <td data-label="Validez" className="p-3 text-[11px]">
                       {quotation.validUntil ? (
                         <span className={cn(expired && "text-state-wait font-bold inline-flex items-center gap-1")}>
                           {expired && <AlertTriangle size={12} />}
@@ -204,8 +204,8 @@ export function Quotations() {
                         <span className="text-text-faint">—</span>
                       )}
                     </td>
-                    <td className="p-3 text-right font-bold">$ {quotation.total.toFixed(2)}</td>
-                    <td className="p-3">
+                    <td data-label="Total" className="p-3 text-right font-bold">$ {quotation.total.toFixed(2)}</td>
+                    <td data-label="OT" className="p-3">
                       {quotation.workOrderNumber ? (
                         <Link
                           to={`/orden/${quotation.workOrderNumber}`}

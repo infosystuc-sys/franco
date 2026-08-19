@@ -15,3 +15,10 @@ dieselpro-erp/
 
 # Preferencias personales de Claude Code: no se comparten.
 .claude/settings.local.json
+
+# Compilación de Android: se regenera con "npx cap sync android".
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/

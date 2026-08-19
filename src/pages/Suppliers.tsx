@@ -104,7 +104,7 @@ export function Suppliers() {
 
       <div className="border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Proveedor</th>
@@ -132,32 +132,32 @@ export function Suppliers() {
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !supplier.active && "opacity-55"
                 )}>
-                  <td className="p-3">
+                  <td data-primary className="p-3">
                     <div className="font-bold text-text">{supplier.name}</div>
                     {supplier.legalName && supplier.legalName !== supplier.name && (
                       <div className="text-[11px] text-text-soft">{supplier.legalName}</div>
                     )}
                   </td>
-                  <td className="p-3 font-mono">
+                  <td data-label="CUIT" className="p-3 font-mono">
                     {formatCuit(supplier.taxId) || <span className="text-text-faint">—</span>}
                   </td>
-                  <td className="p-3">
+                  <td data-label="Cond. IVA" className="p-3">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-accent-deep">
                       {TAX_CONDITION_LABELS[supplier.taxCondition]}
                     </span>
                   </td>
-                  <td className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Contacto" className="p-3 text-[11px] text-text-soft">
                     {supplier.email && <div>{supplier.email}</div>}
                     {supplier.phone && <div>{supplier.phone}</div>}
                     {!supplier.email && !supplier.phone && <span className="text-text-faint">—</span>}
                   </td>
-                  <td className="p-3 text-center">
+                  <td data-label="Artículos" className="p-3 text-center">
                     <span className="inline-flex items-center gap-1 text-text-soft">
                       <Package size={13} />
                       {supplier.articles.length}
                     </span>
                   </td>
-                  <td className="p-3 text-center">
+                  <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
                       "text-[10px] font-bold uppercase tracking-wider",
                       supplier.active ? "text-state-done" : "text-text-faint"

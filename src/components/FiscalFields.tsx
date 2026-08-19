@@ -39,7 +39,7 @@ export function FiscalFields({
   return (
     <>
       {/* Identificación */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className={cn(labelClass, 'col-span-2')}>
           {nameLabel} *
           <input value={form.name} onChange={(e) => patch({ name: e.target.value })} className={inputClass} placeholder={namePlaceholder} />
@@ -53,7 +53,7 @@ export function FiscalFields({
       {/* Datos fiscales */}
       <div className="border-t border-line pt-4 space-y-3">
         <h3 className={sectionTitleClass}><Receipt size={14} /> Datos fiscales</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className={labelClass}>
             CUIT / CUIL
             <input
@@ -86,7 +86,7 @@ export function FiscalFields({
       {/* Domicilio */}
       <div className="border-t border-line pt-4 space-y-3">
         <h3 className={sectionTitleClass}>Domicilio fiscal</h3>
-        <div className="grid grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
           <label className={cn(labelClass, 'col-span-4')}>
             Calle y número
             <input value={form.addressStreet} onChange={(e) => patch({ addressStreet: e.target.value })} className={inputClass} placeholder="Av. Siempreviva 742" />
@@ -109,7 +109,7 @@ export function FiscalFields({
       {/* Contacto */}
       <div className="border-t border-line pt-4 space-y-3">
         <h3 className={sectionTitleClass}>Contacto</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className={labelClass}>
             Email
             <input type="email" value={form.email} onChange={(e) => patch({ email: e.target.value })} className={inputClass} placeholder="contacto@empresa.com" />

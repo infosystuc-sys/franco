@@ -75,7 +75,7 @@ export function ItemsEditor({
       />
 
       <div className="overflow-x-auto border border-line">
-        <table className="w-full text-left text-[13px]">
+        <table className="table-stack w-full text-left text-[13px]">
           <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-3 py-1 w-24">Código</th>
@@ -104,40 +104,40 @@ export function ItemsEditor({
                     {item.articleId ? (
                       <>
                         {/* Renglón de catálogo: código y descripción vienen del artículo */}
-                        <td className="px-3 py-1 font-mono font-semibold text-text-soft">
+                        <td data-primary className="px-3 py-1 font-mono font-semibold text-text-soft">
                           <span className="inline-flex items-center gap-1.5">
                             <Package size={12} className="text-accent-deep" />
                             {item.code}
                           </span>
                         </td>
-                        <td className="px-3 py-1">{item.description}</td>
+                        <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
                       </>
                     ) : (
                       <>
-                        <td className="px-1 py-1">
+                        <td data-label="Cant." className="px-1 py-1">
                           <input value={item.code} onChange={(e) => updateItem(idx, { code: e.target.value })} placeholder="Código" className="w-full bg-transparent px-2 py-1 text-text-soft" />
                         </td>
-                        <td className="px-1 py-1">
+                        <td data-label="P. unit." className="px-1 py-1">
                           <input value={item.description} onChange={(e) => updateItem(idx, { description: e.target.value })} placeholder="Descripción" className="w-full bg-transparent px-2 py-1" />
                         </td>
                       </>
                     )}
-                    <td className="px-1 py-1">
+                    <td data-label="Cant." className="px-1 py-1">
                       <input type="number" step="0.01" min="0" value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="w-full bg-transparent px-2 py-1 text-right" />
                     </td>
-                    <td className="px-1 py-1">
+                    <td data-label="P. unit." className="px-1 py-1">
                       <input type="number" step="0.01" min="0" value={item.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })} className="w-full bg-transparent px-2 py-1 text-right" />
                     </td>
                   </>
                 ) : (
                   <>
-                    <td className="px-3 py-1 text-text-soft">{item.code}</td>
-                    <td className="px-3 py-1">{item.description}</td>
-                    <td className="px-3 py-1 text-right">{item.quantity.toFixed(2)}</td>
-                    <td className="px-3 py-1 text-right">$ {item.unitPrice.toFixed(2)}</td>
+                    <td data-primary className="px-3 py-1 text-text-soft">{item.code}</td>
+                    <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
+                    <td data-label="Cant." className="px-3 py-1 text-right">{item.quantity.toFixed(2)}</td>
+                    <td data-label="P. unit." className="px-3 py-1 text-right">$ {item.unitPrice.toFixed(2)}</td>
                   </>
                 )}
-                <td className="px-3 py-1 text-right font-bold">$ {(item.quantity * item.unitPrice).toFixed(2)}</td>
+                <td data-label="Subtotal" className="px-3 py-1 text-right font-bold">$ {(item.quantity * item.unitPrice).toFixed(2)}</td>
                 {editable && (
                   <td className="px-3 py-1 text-center">
                     <button type="button" onClick={() => removeItem(idx)} aria-label="Quitar renglón" className="text-text-soft transition-colors hover:text-danger">
@@ -231,7 +231,7 @@ function ArticlePicker({
         </div>
 
         <div className="overflow-y-auto px-5 pb-5">
-          <table className="w-full text-left text-[12px]">
+          <table className="table-stack w-full text-left text-[12px]">
             <thead className="text-text-soft border-b border-line bg-panel-alt sticky top-0">
               <tr>
                 <th className="p-2 font-bold w-28">Código</th>
@@ -256,10 +256,10 @@ function ArticlePicker({
                   onClick={() => onPick(article)}
                   className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
                 >
-                  <td className="p-2 font-bold">{article.code}</td>
-                  <td className="p-2">{article.description}</td>
-                  <td className="p-2 text-right">$ {article.unitPrice.toFixed(2)}</td>
-                  <td className="p-2 text-center">
+                  <td data-primary className="p-2 font-bold">{article.code}</td>
+                  <td data-label="Descripción" className="p-2">{article.description}</td>
+                  <td data-label="Precio" className="p-2 text-right">$ {article.unitPrice.toFixed(2)}</td>
+                  <td data-label="Stock" className="p-2 text-center">
                     {article.tracksStock ? (
                       <span className={cn(
                         "px-2 py-0.5 text-[10px] font-bold",

@@ -124,7 +124,7 @@ export function Vehicles() {
 
       <div className="border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
@@ -154,7 +154,7 @@ export function Vehicles() {
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !vehicle.active && "opacity-55"
                 )}>
-                  <td className="p-3">
+                  <td data-primary className="p-3">
                     <div className="font-bold text-text">
                       {[vehicle.brand, vehicle.model].filter(Boolean).join(' ')}
                       {!vehicle.active && (
@@ -166,7 +166,7 @@ export function Vehicles() {
                       {vehicle.year ? ` · ${vehicle.year}` : ''}
                     </div>
                   </td>
-                  <td className="p-3">
+                  <td data-label="Patente" className="p-3">
                     {vehicle.licensePlate ? (
                       <span className="bg-panel-head px-2 py-0.5 border border-line font-mono font-bold text-[11px]">
                         {vehicle.licensePlate}
@@ -175,14 +175,14 @@ export function Vehicles() {
                       <span className="text-text-faint">—</span>
                     )}
                   </td>
-                  <td className="p-3">{vehicle.customerName}</td>
-                  <td className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Cliente" className="p-3">{vehicle.customerName}</td>
+                  <td data-label="Motor" className="p-3 text-[11px] text-text-soft">
                     {[vehicle.engineBrand, vehicle.engineModel].filter(Boolean).join(' ') || <span className="text-text-faint">—</span>}
                   </td>
-                  <td className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Inyección" className="p-3 text-[11px] text-text-soft">
                     {vehicle.injectionSystem || <span className="text-text-faint">—</span>}
                   </td>
-                  <td className="p-3 text-right text-[11px] text-text-soft">
+                  <td data-label="Uso" className="p-3 text-right text-[11px] text-text-soft">
                     {vehicle.odometer === null
                       ? <span className="text-text-faint">—</span>
                       : `${vehicle.odometer.toLocaleString('es-AR')} ${vehicle.odometerUnit === 'KM' ? 'km' : 'hs'}`}
@@ -283,7 +283,7 @@ function VehicleModal({
           {/* Identificación */}
           <div className="space-y-3">
             <h3 className={sectionTitle}><Truck size={14} /> Identificación</h3>
-            <div className="grid grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
               <label className={cn(labelClass, 'col-span-6')}>
                 Cliente propietario *
                 <select
@@ -348,7 +348,7 @@ function VehicleModal({
           {/* Motor e inyección */}
           <div className="border-t border-line pt-4 space-y-3">
             <h3 className={sectionTitle}><Cog size={14} /> Motor e inyección</h3>
-            <div className="grid grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
               <label className={cn(labelClass, 'col-span-2')}>
                 Marca motor
                 <input value={form.engineBrand} onChange={(e) => patch({ engineBrand: e.target.value })} className={inputClass} placeholder="Volvo" />
@@ -380,7 +380,7 @@ function VehicleModal({
           {/* Uso y estado */}
           <div className="border-t border-line pt-4 space-y-3">
             <h3 className={sectionTitle}><Gauge size={14} /> Uso y estado</h3>
-            <div className="grid grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
               <label className={cn(labelClass, 'col-span-3')}>
                 Kilometraje / Horas
                 <input type="number" min="0" value={form.odometer} onChange={(e) => patch({ odometer: e.target.value })} className={cn(inputClass, 'text-right')} placeholder="0" />

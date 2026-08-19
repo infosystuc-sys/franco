@@ -96,3 +96,109 @@
     border-left: 3px solid var(--color-danger);
   }
 }
+
+/*
+  ===========================================================================
+  TABLA APILABLE — solo actúa por debajo de 768px
+  ===========================================================================
+  En escritorio la tabla es una tabla y no cambia una coma. En pantallas
+  angostas cada fila se convierte en una ficha: el encabezado desaparece y
+  cada celda muestra su rótulo desde data-label. Así se evita el desplazamiento
+  horizontal, que en el taller —con guantes y una mano— es inusable.
+
+  Uso: <table class="table-stack"> y data-label en cada <td>.
+  Una celda sin data-label (acciones, por ejemplo) se muestra sin rótulo.
+*/
+@media (max-width: 767px) {
+  .table-stack,
+  .table-stack tbody,
+  .table-stack tr,
+  .table-stack td {
+    display: block;
+    width: 100%;
+  }
+
+  .table-stack thead,
+  .table-stack tfoot {
+    display: none;
+  }
+
+  .table-stack tr {
+    position: relative;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--color-line);
+    background-color: var(--color-panel);
+    padding: 0.25rem 0;
+  }
+
+  .table-stack tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .table-stack td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0.75rem;
+    text-align: right;
+    border: 0;
+  }
+
+  .table-stack td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-faint);
+  }
+
+  /* La celda marcada como principal encabeza la ficha, sin rótulo. */
+  .table-stack td[data-primary] {
+    justify-content: flex-start;
+    text-align: left;
+    background-color: var(--color-panel-alt);
+    border-bottom: 1px solid var(--color-line);
+    padding: 0.55rem 0.75rem;
+    font-weight: 600;
+  }
+
+  .table-stack td[data-primary]::before {
+    content: none;
+  }
+
+  /* Fila vacía o de carga: ocupa la ficha entera, centrada. */
+  .table-stack td[colspan] {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .table-stack td[colspan]::before {
+    content: none;
+  }
+}
+
+/*
+  ===========================================================================
+  ANDROID (Capacitor)
+  ===========================================================================
+  La app corre a pantalla completa, así que hay que respetar la barra de
+  estado y la barra de navegación del sistema. Estas variables valen 0 en el
+  navegador de escritorio, así que la web no se entera.
+*/
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Objetivos táctiles: en el taller se usa con guantes. */
+@media (max-width: 767px) and (pointer: coarse) {
+  button,
+  a[role='button'],
+  [data-touch-target] {
+    min-height: 40px;
+  }
+}

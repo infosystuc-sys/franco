@@ -78,7 +78,10 @@ export function ClientPortal() {
 
   return (
     <div className="min-h-screen bg-panel-alt flex flex-col font-sans">
-      <header className="fixed top-0 z-50 flex h-14 w-full items-center justify-between border-b border-ink-line bg-ink px-5">
+      <header
+        className="fixed top-0 z-50 flex w-full items-center justify-between border-b border-ink-line bg-ink px-5"
+        style={{ height: 'calc(3.5rem + var(--safe-top))', paddingTop: 'var(--safe-top)' }}
+      >
         <div className="flex items-baseline gap-1.5">
           <span className="font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-accent">
             DieselPro

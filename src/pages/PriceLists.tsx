@@ -185,7 +185,7 @@ export function PriceLists() {
           </h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-40">Fecha</th>
@@ -202,11 +202,11 @@ export function PriceLists() {
               )}
               {imports.map((row) => (
                 <tr key={row.id} className="border-b border-line">
-                  <td className="p-3">{new Date(row.importedAt).toLocaleString('es-AR')}</td>
-                  <td className="p-3 font-semibold">{row.supplierName}</td>
-                  <td className="p-3 text-text-soft">{row.fileName ?? '—'}</td>
-                  <td className="p-3 text-right">{row.totalRows}</td>
-                  <td className="p-3 text-right text-state-done font-bold">{row.matchedRows}</td>
+                  <td data-primary className="p-3">{new Date(row.importedAt).toLocaleString('es-AR')}</td>
+                  <td data-label="Proveedor" className="p-3 font-semibold">{row.supplierName}</td>
+                  <td data-label="Archivo" className="p-3 text-text-soft">{row.fileName ?? '—'}</td>
+                  <td data-label="Filas" className="p-3 text-right">{row.totalRows}</td>
+                  <td data-label="Actualizadas" className="p-3 text-right text-state-done font-bold">{row.matchedRows}</td>
                   <td className={cn('p-3 text-right font-bold', row.unmatchedRows > 0 ? 'text-state-wait' : 'text-text-soft')}>
                     {row.unmatchedRows}
                   </td>
@@ -329,7 +329,7 @@ function ImportSection({
             </span>
             <span>Vista previa de las primeras 5:</span>
           </div>
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead className="bg-panel-head text-text font-bold uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-1 w-32">Código prov.</th>
@@ -419,7 +419,7 @@ function UnmatchedSection({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-[13px]">
+        <table className="table-stack w-full text-left text-[13px]">
           <thead>
             <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
               <th className="p-3 font-semibold w-40">Proveedor</th>
@@ -442,10 +442,10 @@ function UnmatchedSection({
             )}
             {rows.map((row) => (
               <tr key={row.id} className="border-b border-line hover:bg-panel-alt transition-colors">
-                <td className="p-3">{row.supplierName}</td>
-                <td className="p-3 font-mono font-bold">{row.supplierCode}</td>
-                <td className="p-3">{row.description ?? <span className="text-text-faint">—</span>}</td>
-                <td className="p-3 text-right">$ {row.purchasePrice.toFixed(2)}</td>
+                <td data-label="Proveedor" className="p-3">{row.supplierName}</td>
+                <td data-primary className="p-3 font-mono font-bold">{row.supplierCode}</td>
+                <td data-label="Descripción" className="p-3">{row.description ?? <span className="text-text-faint">—</span>}</td>
+                <td data-label="P. compra" className="p-3 text-right">$ {row.purchasePrice.toFixed(2)}</td>
                 <td className="p-3 text-right space-x-1">
                   <button
                     onClick={() => setLinking(row)}
@@ -549,7 +549,7 @@ function LinkModal({
         </div>
 
         <div className="overflow-y-auto px-5 pb-5">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead className="text-text-soft border-b border-line bg-panel-alt sticky top-0">
               <tr>
                 <th className="p-2 font-bold w-28">Nuestro cód.</th>
@@ -567,9 +567,9 @@ function LinkModal({
                   onClick={() => !busy && handleLink(article.id)}
                   className="border-b border-line hover:bg-panel-alt cursor-pointer transition-colors"
                 >
-                  <td className="p-2 font-mono font-bold">{article.code}</td>
-                  <td className="p-2">{article.description}</td>
-                  <td className="p-2 text-right">$ {article.unitPrice.toFixed(2)}</td>
+                  <td data-primary className="p-2 font-mono font-bold">{article.code}</td>
+                  <td data-label="Descripción" className="p-2">{article.description}</td>
+                  <td data-label="P. venta" className="p-2 text-right">$ {article.unitPrice.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>

@@ -21,9 +21,17 @@ export function MainLayout({ children }: MainLayoutProps) {
       <TopNavBar onMenuClick={() => setMenuOpen((open) => !open)} menuOpen={menuOpen} />
       <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
 
-      <main className="mt-14 px-5 py-6 pb-16 md:ml-60">{children}</main>
+      <main
+        className="px-5 py-6 pb-16 md:ml-60"
+        style={{ marginTop: 'calc(3.5rem + var(--safe-top))' }}
+      >
+        {children}
+      </main>
 
-      <footer className="border-t border-line bg-panel px-5 py-3 md:ml-60">
+      <footer
+        className="border-t border-line bg-panel px-5 py-3 md:ml-60"
+        style={{ paddingBottom: 'calc(0.75rem + var(--safe-bottom))' }}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-text-soft">
           <span>
             <span className="font-display font-semibold uppercase tracking-[0.1em] text-accent-deep">

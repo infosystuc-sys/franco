@@ -102,7 +102,7 @@ export function Customers() {
 
       <div className="border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Cliente</th>
@@ -127,30 +127,30 @@ export function Customers() {
               )}
               {filtered.map((customer) => (
                 <tr key={customer.id} className="border-b border-line hover:bg-panel-alt transition-colors">
-                  <td className="p-3">
+                  <td data-primary className="p-3">
                     <div className="font-bold text-text">{customer.name}</div>
                     {customer.legalName && customer.legalName !== customer.name && (
                       <div className="text-[11px] text-text-soft">{customer.legalName}</div>
                     )}
                   </td>
-                  <td className="p-3 font-mono">{formatCuit(customer.taxId) || <span className="text-text-faint">—</span>}</td>
-                  <td className="p-3">
+                  <td data-label="CUIT" className="p-3 font-mono">{formatCuit(customer.taxId) || <span className="text-text-faint">—</span>}</td>
+                  <td data-label="Cond. IVA" className="p-3">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-accent-deep">
                       {TAX_CONDITION_LABELS[customer.taxCondition]}
                     </span>
                   </td>
-                  <td className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Contacto" className="p-3 text-[11px] text-text-soft">
                     {customer.email && <div>{customer.email}</div>}
                     {customer.phone && <div>{customer.phone}</div>}
                     {!customer.email && !customer.phone && <span className="text-text-faint">—</span>}
                   </td>
-                  <td className="p-3 text-center">
+                  <td data-label="Vehículos" className="p-3 text-center">
                     <span className="inline-flex items-center gap-1 text-text-soft">
                       <Truck size={13} />
                       {customer.vehicles.length}
                     </span>
                   </td>
-                  <td className="p-3 text-center">
+                  <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
                       "text-[10px] font-bold uppercase tracking-wider",
                       customer.active ? "text-state-done" : "text-text-faint"

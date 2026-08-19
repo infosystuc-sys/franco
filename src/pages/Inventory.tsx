@@ -134,7 +134,7 @@ export function Inventory() {
 
       <div className="border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-28">Código</th>
@@ -163,14 +163,14 @@ export function Inventory() {
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !article.active && "opacity-55"
                 )}>
-                  <td className="p-3 font-semibold">{article.code}</td>
-                  <td className="p-3">
+                  <td data-primary className="p-3 font-semibold">{article.code}</td>
+                  <td data-label="Descripción" className="p-3">
                     {article.description}
                     {!article.active && (
                       <span className="ml-2 text-[9px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
                     )}
                   </td>
-                  <td className="p-3 text-[11px]">
+                  <td data-label="Proveedor" className="p-3 text-[11px]">
                     {article.preferredSupplierName ? (
                       <>
                         <div className="text-text">{article.preferredSupplierName}</div>
@@ -185,12 +185,12 @@ export function Inventory() {
                       <span className="text-text-faint">Sin asignar</span>
                     )}
                   </td>
-                  <td className="p-3 text-right text-text-soft">
+                  <td data-label="P. compra" className="p-3 text-right text-text-soft">
                     {article.purchasePrice === null
                       ? <span className="text-text-faint">—</span>
                       : `$ ${article.purchasePrice.toFixed(2)}`}
                   </td>
-                  <td className="p-3 text-right">
+                  <td data-label="Utilidad" className="p-3 text-right">
                     {article.markupPercent === null ? (
                       <span className="text-text-faint" title={`Usa el global (${defaultMarkup}%)`}>
                         {defaultMarkup}%*
@@ -199,8 +199,8 @@ export function Inventory() {
                       `${article.markupPercent}%`
                     )}
                   </td>
-                  <td className="p-3 text-right font-bold text-accent-deep">$ {article.unitPrice.toFixed(2)}</td>
-                  <td className="p-3 text-center">
+                  <td data-label="P. venta" className="p-3 text-right font-bold text-accent-deep">$ {article.unitPrice.toFixed(2)}</td>
+                  <td data-label="Stock" className="p-3 text-center">
                     {article.tracksStock ? (
                       <span className={cn(
                         "px-2 py-0.5 text-[10px] font-bold",
@@ -337,7 +337,7 @@ function ArticleModal({
           {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
 
           {/* Identificación */}
-          <div className="grid grid-cols-6 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
             <label className={cn(labelClass, 'col-span-2')}>
               Nuestro código
               <input value={form.code} onChange={(e) => patch({ code: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="BOS-093" />
@@ -352,7 +352,7 @@ function ArticleModal({
           <div className="border-t border-line pt-4 space-y-3">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep">Precio de venta</h3>
 
-            <div className="grid grid-cols-6 gap-3 items-start">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:items-start">
               <label className={cn(labelClass, 'col-span-2')}>
                 Utilidad %
                 <input
@@ -582,7 +582,7 @@ function SuppliersSection({
       )}
 
       {available.length > 0 && (
-        <div className="grid grid-cols-12 gap-2 items-center">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-center">
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
