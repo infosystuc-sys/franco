@@ -6,6 +6,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
+import { Employees } from './pages/Employees';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
 import { Notifications } from './pages/Notifications';
@@ -63,6 +64,7 @@ export default function App() {
                     <Route path="/clientes" element={<Customers />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
                     <Route path="/proveedores" element={<Suppliers />} />
+                    <Route path="/empleados" element={<Employees />} />
                     <Route path="/ordenes" element={<Dashboard />} /> {/* Placeholder */}
                     {/* Fallback */}
                     <Route path="*" element={<Dashboard />} />
