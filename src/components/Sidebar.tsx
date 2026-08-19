@@ -10,6 +10,7 @@ import {
   Factory,
   FileText,
   Tags,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -49,6 +50,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: 'Análisis',
     items: [
+      { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
       { icon: Microscope, label: 'Diagnósticos', path: '/diagnosticos' },
       { icon: BarChart3, label: 'Reportes', path: '/reportes' },
     ],

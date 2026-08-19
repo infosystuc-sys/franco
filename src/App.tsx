@@ -8,6 +8,7 @@ import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
+import { Notifications } from './pages/Notifications';
 import { PriceLists } from './pages/PriceLists';
 import { PublicQuotation } from './pages/PublicQuotation';
 import { QuotationDetails } from './pages/QuotationDetails';
@@ -58,6 +59,7 @@ export default function App() {
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/inventario" element={<Inventory />} />
                     <Route path="/listas-precios" element={<PriceLists />} />
+                    <Route path="/mensajes" element={<Notifications />} />
                     <Route path="/clientes" element={<Customers />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
                     <Route path="/proveedores" element={<Suppliers />} />

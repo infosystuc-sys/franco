@@ -134,3 +134,45 @@ create unique index quotations_public_token_key on quotations (public_token);
 --
 -- Aceptar NO convierte en orden de trabajo: el cliente aprueba el presupuesto,
 -- el taller decide cuándo abre la orden y descuenta el stock.
+
+
+-- ===========================================================================
+-- FASE 3 — Avisos de la orden de trabajo
+-- ===========================================================================
+
+-- Los textos viven en la base para poder corregir una redacción sin desplegar.
+create table notification_templates (
+  status work_order_status primary key,
+  body text not null
+);
+
+-- build_work_order_message arma el texto completo. Menciona el vehículo y la
+-- patente a propósito: un cliente con varias unidades en el taller necesita
+-- saber de cuál le están hablando.
+
+-- Dos triggers sobre work_orders:
+--   after insert          -> LINK_SEGUIMIENTO
+--   after update of status -> CAMBIO_ESTADO
+-- El dedupe_key del segundo lleva el estado destino, así que corregir un
+-- estado y volver a avanzarlo NO genera un segundo mensaje al cliente.
+
+
+-- ===========================================================================
+-- Permisos de las funciones internas
+-- ===========================================================================
+-- Postgres otorga EXECUTE a public por defecto: revocar de anon y
+-- authenticated no alcanza, hay que revocar de public.
+--
+-- claim_pending_notifications devuelve el teléfono y el texto de cada mensaje
+-- y sube el contador de intentos. Sin esto, cualquiera podía leer la cola y
+-- dejar los avisos sin enviar.
+revoke execute on function public.claim_pending_notifications(int) from public;
+revoke execute on function public.mark_notification_sent(uuid) from public;
+revoke execute on function public.mark_notification_failed(uuid, text) from public;
+revoke execute on function public.enqueue_notification(
+  notification_kind, text, text, uuid, uuid, uuid, text
+) from public, anon, authenticated;
+-- build_work_order_message expone el token de seguimiento de cualquier orden.
+revoke execute on function public.build_work_order_message(
+  uuid, work_order_status, boolean
+) from public, anon, authenticated;
