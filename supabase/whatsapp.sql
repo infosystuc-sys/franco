@@ -176,3 +176,53 @@ revoke execute on function public.enqueue_notification(
 revoke execute on function public.build_work_order_message(
   uuid, work_order_status, boolean
 ) from public, anon, authenticated;
+
+
+-- ===========================================================================
+-- Tarea programada del despachador
+-- ===========================================================================
+-- Migraciones whatsapp_dispatcher_cron, whatsapp_dispatcher_cron_fix_net_schema
+-- y whatsapp_diagnostico.
+
+create extension if not exists pg_net with schema extensions;  -- queda en el esquema "net"
+create extension if not exists pg_cron;
+
+-- El secreto no se escribe en la tarea: se lee de la bóveda en cada corrida,
+-- así no queda en cron.job, que es legible por cualquiera con acceso a la base.
+-- Se carga una sola vez con:
+--   select vault.create_secret('<valor>', 'cron_secret', '...');
+create or replace function public.despachar_whatsapp()
+returns void
+language plpgsql
+security definer
+set search_path = public, net, vault
+as $$
+declare
+  v_secreto text;
+begin
+  select decrypted_secret into v_secreto
+  from vault.decrypted_secrets where name = 'cron_secret';
+
+  if v_secreto is null then
+    raise warning 'No está cargado el secreto cron_secret en la bóveda.';
+    return;
+  end if;
+
+  perform net.http_post(
+    url := 'https://mnoqdqjhsylohlvuekfh.supabase.co/functions/v1/despachar-whatsapp',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', v_secreto),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 20000
+  );
+end;
+$$;
+
+-- Misma llamada con ?diagnostico=1: informa a qué servidor intenta llegar y si
+-- la instancia está vinculada, sin revelar la clave.
+-- Ver el resultado en net._http_response.
+create or replace function public.diagnosticar_whatsapp() returns bigint ...;
+
+revoke execute on function public.despachar_whatsapp() from public, anon, authenticated;
+revoke execute on function public.diagnosticar_whatsapp() from public, anon, authenticated;
+
+select cron.schedule('despachar-whatsapp', '* * * * *', 'select public.despachar_whatsapp()');
