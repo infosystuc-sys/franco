@@ -88,7 +88,7 @@ export interface PublicWorkOrder {
   engineBrand: string | null;
   engineModel: string | null;
   injectionSystem: string | null;
-  technicianName: string | null;
+  employeeName: string | null;
   customerName: string | null;
 }
 
@@ -115,7 +115,7 @@ export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrd
     engineBrand: row.engine_brand,
     engineModel: row.engine_model,
     injectionSystem: row.injection_system,
-    technicianName: row.technician_name,
+    employeeName: row.employee_name,
     customerName: row.customer_name,
   };
 }
@@ -246,7 +246,7 @@ export interface WorkOrderDetail {
         injection_system: string | null;
       }
     | null;
-  technician: { name: string } | null;
+  employee: { name: string } | null;
   quotationNumber: string | null;
   /** Identificador aleatorio con el que se arma el link para el cliente. */
   publicToken: string;
@@ -260,7 +260,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       `id, number, status, component, public_token,
        customer:customers(name, phone, legal_name, tax_id, tax_condition),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
-       technician:technicians(name),
+       employee:employees(name),
        quotation:quotations!work_orders_quotation_id_fkey(number),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal)`
     )
@@ -277,7 +277,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     component: (data as any).component,
     customer: (data as any).customer,
     vehicle: (data as any).vehicle,
-    technician: (data as any).technician,
+    employee: (data as any).employee,
     quotationNumber: (data as any).quotation?.number ?? null,
     publicToken: (data as any).public_token,
     items: ((data as any).items ?? []).map((item: any) => ({

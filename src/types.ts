@@ -37,8 +37,8 @@ export interface WorkOrder {
   customerId: string;
   vehicleId: string;
   component: string;
-  technicianId?: string;
-  technicianName?: string;
+  employeeId?: string;
+  employeeName?: string;
   createdAt: string;
   updatedAt: string;
   items?: WorkOrderItem[];
