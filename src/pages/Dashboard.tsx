@@ -159,7 +159,7 @@ export function Dashboard() {
                   </td>
                   <td className="p-3 text-right">
                     <Link
-                      to={`/seguimiento/${order.number}`}
+                      to={`/seguimiento/${order.publicToken}`}
                       title="Ver como lo ve el cliente"
                       className="inline-block p-1 text-text-soft transition-colors hover:text-accent-deep"
                     >

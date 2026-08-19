@@ -16,51 +16,64 @@ import { useAuth } from '@/src/lib/auth';
 import { PageHeader } from '@/src/components/ui';
 import type { WorkOrderStatus } from '@/src/types';
 import {
-  fetchStatusHistory,
-  fetchWorkOrderByNumber,
+  fetchPublicStatusHistory,
+  fetchPublicWorkOrder,
   getErrorMessage,
-  type StatusChange,
+  type PublicWorkOrder,
   STATUS_DESCRIPTIONS,
   STATUS_LABELS,
   STATUS_SEQUENCE,
-  type WorkOrderDetail,
 } from '@/src/lib/workOrders';
 
+/**
+ * Portal público de seguimiento. Se entra con el token aleatorio de la orden,
+ * no con su número: los números son correlativos y se podrían enumerar para
+ * espiar las órdenes de otros clientes.
+ *
+ * No consulta las tablas: llama a una función de la base que devuelve
+ * únicamente los datos de esa orden que el cliente puede ver.
+ */
 export function ClientPortal() {
   const { session } = useAuth();
-  const { id } = useParams();
-  const [order, setOrder] = React.useState<WorkOrderDetail | null>(null);
-  const [history, setHistory] = React.useState<StatusChange[]>([]);
+  const { id: token } = useParams();
+  const [order, setOrder] = React.useState<PublicWorkOrder | null>(null);
+  const [history, setHistory] = React.useState<{ toStatus: WorkOrderStatus; changedAt: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (!id) return;
+    if (!token) return;
     let cancelled = false;
     setLoading(true);
-    fetchWorkOrderByNumber(id)
+    fetchPublicWorkOrder(token)
       .then(async (data) => {
         if (cancelled) return;
         setOrder(data);
-        if (data) setHistory(await fetchStatusHistory(data.id));
+        if (data) setHistory(await fetchPublicStatusHistory(token));
       })
       .catch((err) => !cancelled && setError(getErrorMessage(err)))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [token]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-text-soft">Cargando...</div>;
+    return <div className="min-h-screen flex items-center justify-center text-text-soft">Cargando…</div>;
   }
 
   if (error || !order) {
     return (
-      <div className="min-h-screen flex flex-col gap-3 items-center justify-center text-text-soft">
-        <span>No se encontró la orden {id}.</span>
+      <div className="min-h-screen flex flex-col gap-3 items-center justify-center px-6 text-center text-text-soft">
+        <span className="font-display text-2xl uppercase tracking-[0.04em] text-text-faint">
+          Link no válido
+        </span>
+        <span className="max-w-sm text-sm">
+          Este link de seguimiento no corresponde a ninguna orden. Puede estar
+          incompleto: verificá que lo hayas copiado entero.
+        </span>
         {session && (
-          <Link to="/" className="text-accent-deep font-bold text-sm hover:underline inline-flex items-center gap-1.5">
+          <Link to="/" className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-accent-deep hover:underline">
             <ArrowLeft size={15} /> Volver al panel
           </Link>
         )}
@@ -138,15 +151,15 @@ export function ClientPortal() {
                   <div className="flex items-center gap-2">
                     <Truck size={18} className="text-text-soft" />
                     <span className="text-sm font-bold text-text">
-                      {[order.vehicle?.brand, order.vehicle?.model].filter(Boolean).join(' ') || '—'}
+                      {[order.vehicleBrand, order.vehicleModel].filter(Boolean).join(' ') || '—'}
                     </span>
                   </div>
                 </div>
-                {order.vehicle?.license_plate && (
+                {order.licensePlate && (
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Matrícula</span>
                     <div className="bg-panel-head inline-block px-3 py-1 border border-line font-mono font-bold text-text">
-                      {order.vehicle.license_plate}
+                      {order.licensePlate}
                     </div>
                   </div>
                 )}
@@ -168,7 +181,7 @@ export function ClientPortal() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-text">Técnico Asignado</p>
-                  <p className="text-xs text-text-soft">{order.technician?.name ?? 'Sin asignar'}</p>
+                  <p className="text-xs text-text-soft">{order.technicianName ?? 'Sin asignar'}</p>
                 </div>
               </div>
               <button className="w-full bg-panel-head hover:bg-panel-head text-text text-[11px] font-bold uppercase tracking-wider py-2 border border-line transition-colors flex items-center justify-center gap-2 mt-2">

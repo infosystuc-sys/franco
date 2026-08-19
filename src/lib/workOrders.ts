@@ -72,6 +72,62 @@ export function nextStatus(current: WorkOrderStatus): WorkOrderStatus | null {
   return STATUS_SEQUENCE[index + 1];
 }
 
+/**
+ * Datos que ve el cliente en el link público. Es lo único que devuelve la
+ * base: sin CUIT, sin teléfono, sin importes y sin precios de compra.
+ */
+export interface PublicWorkOrder {
+  number: string;
+  status: WorkOrderStatus;
+  component: string | null;
+  vehicleBrand: string | null;
+  vehicleModel: string | null;
+  licensePlate: string | null;
+  vehicleType: string | null;
+  vehicleYear: number | null;
+  engineBrand: string | null;
+  engineModel: string | null;
+  injectionSystem: string | null;
+  technicianName: string | null;
+  customerName: string | null;
+}
+
+/**
+ * Consulta pública por token. No requiere sesión: la propia base filtra por
+ * el token y devuelve una sola orden. Un token inexistente devuelve null.
+ */
+export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrder | null> {
+  const { data, error } = await supabase.rpc('get_public_work_order', { p_token: token });
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) return null;
+
+  return {
+    number: row.number,
+    status: row.status,
+    component: row.component,
+    vehicleBrand: row.vehicle_brand,
+    vehicleModel: row.vehicle_model,
+    licensePlate: row.license_plate,
+    vehicleType: row.vehicle_type,
+    vehicleYear: row.vehicle_year,
+    engineBrand: row.engine_brand,
+    engineModel: row.engine_model,
+    injectionSystem: row.injection_system,
+    technicianName: row.technician_name,
+    customerName: row.customer_name,
+  };
+}
+
+export async function fetchPublicStatusHistory(
+  token: string
+): Promise<{ toStatus: WorkOrderStatus; changedAt: string }[]> {
+  const { data, error } = await supabase.rpc('get_public_status_history', { p_token: token });
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((r) => ({ toStatus: r.to_status, changedAt: r.changed_at }));
+}
+
 export interface StatusChange {
   id: string;
   fromStatus: WorkOrderStatus | null;
@@ -95,6 +151,7 @@ export interface WorkOrderListRow {
   component: string | null;
   customerName: string;
   vehicleLabel: string;
+  publicToken: string;
 }
 
 function vehicleLabel(
@@ -108,7 +165,7 @@ function vehicleLabel(
 export async function fetchDashboardData() {
   const { data, error } = await supabase
     .from('work_orders')
-    .select('id, number, status, component, customer:customers(name), vehicle:vehicles(brand, model, license_plate)')
+    .select('id, number, status, component, public_token, customer:customers(name), vehicle:vehicles(brand, model, license_plate)')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -120,6 +177,7 @@ export async function fetchDashboardData() {
     component: row.component,
     customerName: row.customer?.name ?? '—',
     vehicleLabel: vehicleLabel(row.vehicle),
+    publicToken: row.public_token,
   }));
 
   const kpis = {
@@ -190,6 +248,8 @@ export interface WorkOrderDetail {
     | null;
   technician: { name: string } | null;
   quotationNumber: string | null;
+  /** Identificador aleatorio con el que se arma el link para el cliente. */
+  publicToken: string;
   items: WorkOrderItem[];
 }
 
@@ -197,7 +257,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
   const { data, error } = await supabase
     .from('work_orders')
     .select(
-      `id, number, status, component,
+      `id, number, status, component, public_token,
        customer:customers(name, phone, legal_name, tax_id, tax_condition),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        technician:technicians(name),
@@ -219,6 +279,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     vehicle: (data as any).vehicle,
     technician: (data as any).technician,
     quotationNumber: (data as any).quotation?.number ?? null,
+    publicToken: (data as any).public_token,
     items: ((data as any).items ?? []).map((item: any) => ({
       id: item.id,
       workOrderId: (data as any).id,

@@ -130,6 +130,15 @@ export function Panel({
 }
 
 /**
+ * Link público de seguimiento de una orden.
+ * Usa el token aleatorio, no el número: los números son correlativos y
+ * cualquiera podría probar el de al lado para ver la orden de otro cliente.
+ */
+export function trackingLink(publicToken: string): string {
+  return `${window.location.origin}/seguimiento/${publicToken}`;
+}
+
+/**
  * Tira de color al borde izquierdo de una ficha o fila.
  * El color codifica el estado real, no decora: se lee el avance de un vistazo.
  */
