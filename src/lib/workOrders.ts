@@ -246,7 +246,7 @@ export interface WorkOrderDetail {
         injection_system: string | null;
       }
     | null;
-  employee: { name: string } | null;
+  employee: { id: string; name: string } | null;
   quotationNumber: string | null;
   /** Identificador aleatorio con el que se arma el link para el cliente. */
   publicToken: string;
@@ -260,7 +260,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       `id, number, status, component, public_token,
        customer:customers(name, phone, legal_name, tax_id, tax_condition),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
-       employee:employees(name),
+       employee:employees(id, name),
        quotation:quotations!work_orders_quotation_id_fkey(number),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal)`
     )
@@ -325,6 +325,19 @@ export async function fetchStatusHistory(workOrderId: string): Promise<StatusCha
     changedByEmail: row.changed_by_email,
     changedAt: row.changed_at,
   }));
+}
+
+/**
+ * Asigna o desasigna el empleado que hace el trabajo. No toca el estado ni
+ * dispara el aviso al cliente: ese mensaje se arma solo con datos del
+ * vehículo y la orden, así que la asignación no lo afecta.
+ */
+export async function assignEmployee(workOrderId: string, employeeId: string | null) {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({ employee_id: employeeId })
+    .eq('id', workOrderId);
+  if (error) throw error;
 }
 
 /**

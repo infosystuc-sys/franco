@@ -7,8 +7,10 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip, trackingLink } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
+import { fetchEmployees, type Employee } from '@/src/lib/employees';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
+  assignEmployee,
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   getErrorMessage,
@@ -36,6 +38,8 @@ export function WorkOrderDetails() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [history, setHistory] = useState<StatusChange[]>([]);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [assigningEmployee, setAssigningEmployee] = useState(false);
 
   const loadOrder = React.useCallback(async () => {
     if (!id) return;
@@ -76,6 +80,19 @@ export function WorkOrderDetails() {
     };
   }, [isAdmin]);
 
+  // Solo el admin asigna: al operario le alcanza con ver el nombre, así que
+  // no vale la pena traer la lista de empleados para su sesión.
+  React.useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    fetchEmployees(true)
+      .then((data) => !cancelled && setEmployees(data))
+      .catch(() => {/* si falla, el selector queda vacío y se puede reintentar recargando */});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
   async function handleStatusChange(status: WorkOrderStatus) {
     if (!order) return;
     setChangingStatus(true);
@@ -87,6 +104,20 @@ export function WorkOrderDetails() {
       setError(getErrorMessage(err));
     } finally {
       setChangingStatus(false);
+    }
+  }
+
+  async function handleAssignEmployee(employeeId: string | null) {
+    if (!order) return;
+    setAssigningEmployee(true);
+    setError(null);
+    try {
+      await assignEmployee(order.id, employeeId);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setAssigningEmployee(false);
     }
   }
 
@@ -167,7 +198,7 @@ export function WorkOrderDetails() {
         <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
         <Panel className="p-4">
           <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Cliente
@@ -217,6 +248,28 @@ export function WorkOrderDetails() {
             Componente
           </span>
           <span className="text-sm font-semibold text-text">{order.component ?? '—'}</span>
+        </Panel>
+
+        <Panel className="p-4">
+          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+            Empleado
+          </span>
+          {isAdmin ? (
+            <select
+              value={order.employee?.id ?? ''}
+              onChange={(e) => handleAssignEmployee(e.target.value || null)}
+              disabled={assigningEmployee}
+              className="w-full border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+            >
+              <option value="">Sin asignar</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>{employee.name}</option>
+              ))}
+            </select>
+          ) : (
+            // El operario solo consulta quién quedó a cargo: la asignación es tarea del admin.
+            <span className="block text-sm font-semibold text-text">{order.employee?.name ?? 'Sin asignar'}</span>
+          )}
         </Panel>
       </div>
 
