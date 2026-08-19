@@ -118,3 +118,50 @@ create policy "lectura segun rol" on vehicles for select to authenticated
     where w.vehicle_id = vehicles.id
       and w.employee_id = current_employee_id()
   ));
+
+-- DieselPro ERP — Empleados: cerrar el resto de las tablas
+--
+-- ⚠️ YA APLICADO en el proyecto Supabase "ludiesel" (migracion
+-- employee_close_remaining_tables). Queda como registro del esquema.
+--
+-- Ver el diseño completo en:
+--   .superpowers/sdd/2026-08-19-empleados/
+
+-- Informacion comercial y de compras: no la necesita quien repara.
+drop policy "authenticated read" on quotations;
+create policy "solo admin" on quotations for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on quotation_items;
+create policy "solo admin" on quotation_items for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on suppliers;
+create policy "solo admin" on suppliers for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on article_suppliers;
+create policy "solo admin" on article_suppliers for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on price_imports;
+create policy "solo admin" on price_imports for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on unmatched_supplier_prices;
+create policy "solo admin" on unmatched_supplier_prices for select to authenticated using (is_admin());
+
+-- La cola guarda telefonos de clientes y el texto de cada mensaje.
+drop policy "authenticated read" on notifications;
+create policy "solo admin" on notifications for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on notification_templates;
+create policy "solo admin" on notification_templates for select to authenticated using (is_admin());
+
+drop policy "authenticated read" on app_settings;
+create policy "solo admin" on app_settings for select to authenticated using (is_admin());
+
+-- Los renglones de la orden guardan codigo y descripcion propios: el operario
+-- no necesita el catalogo, que lleva costos y utilidad. Verificado que
+-- src/pages/WorkOrderDetails.tsx solo llama a fetchArticles() cuando isAdmin,
+-- asi que la pantalla de detalle no depende de esta tabla para el operario.
+drop policy "authenticated read" on articles;
+create policy "solo admin" on articles for select to authenticated using (is_admin());
+
+-- employees conserva su politica "authenticated read": el nombre del
+-- empleado aparece en la orden y los compañeros se ven entre ellos.

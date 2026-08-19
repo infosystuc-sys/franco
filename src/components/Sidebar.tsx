@@ -33,7 +33,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Operación',
     items: [
       { icon: LayoutDashboard, label: 'Panel', path: '/' },
-      { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones' },
+      { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
     ],
   },
