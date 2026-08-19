@@ -58,6 +58,7 @@ export interface QuotationListRow {
   total: number;
   workOrderId: string | null;
   workOrderNumber: string | null;
+  publicToken: string;
   createdAt: string;
 }
 
@@ -74,6 +75,8 @@ export interface QuotationDetail {
   vehicle: { brand: string | null; model: string; license_plate: string | null } | null;
   workOrderId: string | null;
   workOrderNumber: string | null;
+  /** Identificador aleatorio con el que se arma el link para el cliente. */
+  publicToken: string;
   items: WorkOrderItemInput[];
   createdAt: string;
 }
@@ -85,7 +88,7 @@ function vehicleLabelOf(vehicle: { brand: string | null; model: string; license_
 }
 
 const LIST_SELECT = `
-  id, number, status, component, valid_until, created_at,
+  id, number, status, component, valid_until, created_at, public_token,
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
@@ -113,12 +116,13 @@ export async function fetchQuotations(): Promise<QuotationListRow[]> {
     ),
     workOrderId: row.work_order?.id ?? null,
     workOrderNumber: row.work_order?.number ?? null,
+    publicToken: row.public_token,
     createdAt: row.created_at,
   }));
 }
 
 const DETAIL_SELECT = `
-  id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id,
+  id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
   customer:customers(name, legal_name, tax_id),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
@@ -148,6 +152,7 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
     vehicle: row.vehicle,
     workOrderId: row.work_order?.id ?? null,
     workOrderNumber: row.work_order?.number ?? null,
+    publicToken: row.public_token,
     createdAt: row.created_at,
     items: (row.items ?? []).map((item: any) => ({
       articleId: item.article_id ?? null,

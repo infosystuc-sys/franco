@@ -9,10 +9,12 @@ import {
   AlertTriangle,
   Lock,
   ArrowRight,
+  Copy,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
-import { Button, PageHeader } from '@/src/components/ui';
+import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { quotationLink } from '@/src/lib/publicQuotation';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { fetchArticles, type Article } from '@/src/lib/articles';
@@ -260,6 +262,8 @@ export function QuotationDetails() {
         </label>
       </div>
 
+      {isAdmin && <SharePresupuesto quotation={quotation} />}
+
       {/* Renglones: mismo editor que la OT */}
       <div className="bg-panel border border-line p-5">
         <ItemsEditor
@@ -333,5 +337,67 @@ function ActionBar({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Link del presupuesto para mandarle al cliente. A diferencia del de
+ * seguimiento, desde este el cliente puede aceptar o rechazar.
+ */
+function SharePresupuesto({ quotation }: { quotation: QuotationDetail }) {
+  const [copiado, setCopiado] = React.useState(false);
+  const link = quotationLink(quotation.publicToken);
+
+  const mensaje =
+    `Hola, le enviamos el presupuesto de su reparación.
+
+` +
+    `Presupuesto ${quotation.number}` +
+    (quotation.component ? ` · ${quotation.component}` : '') +
+    `
+
+Puede verlo en detalle y aceptarlo o rechazarlo acá:
+${link}`;
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    } catch {
+      // Sin permiso de portapapeles queda el campo para copiar a mano.
+    }
+  }
+
+  return (
+    <Panel className="p-5">
+      <SectionHeader title="Presupuesto para el cliente" />
+
+      <p className="mb-3 text-xs text-text-soft">
+        Desde este link el cliente ve el detalle con los importes y puede
+        aceptarlo o rechazarlo. Al marcar la cotización como Enviada se manda
+        solo por WhatsApp.
+      </p>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          readOnly
+          value={link}
+          onFocus={(e) => e.currentTarget.select()}
+          className="flex-1 border border-line bg-panel-alt px-3 py-2 font-mono text-xs text-text-soft"
+        />
+        <div className="flex gap-2">
+          <Button type="button" variant="ghost" onClick={copiar}>
+            {copiado ? <Check size={16} /> : <Copy size={16} />}
+            {copiado ? 'Copiado' : 'Copiar'}
+          </Button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(mensaje)}`} target="_blank" rel="noopener noreferrer">
+            <Button type="button">
+              <Send size={16} /> WhatsApp
+            </Button>
+          </a>
+        </div>
+      </div>
+    </Panel>
   );
 }

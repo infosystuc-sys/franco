@@ -157,17 +157,20 @@ Cada fase deja algo usable. No hace falta esperar al final.
 - **Modo prueba**: todo se encola pero se envía a un número propio, no al
   cliente. Permite verificar los textos sin molestar a nadie.
 
-### Fase 2 — Link de seguimiento y cambios de estado
+### Fase 2 — Cotizaciones
+Va antes que los avisos de estado: es el mensaje que mueve la aguja del
+negocio, porque de él depende que el trabajo se apruebe.
+
+- Token público en la cotización y portal donde el cliente la ve.
+- Envío por WhatsApp al pasar a "Enviada".
+- Botones de aceptar y rechazar, con las guardas de la sección anterior.
+- Aviso al taller cuando el cliente decide.
+
+### Fase 3 — Link de seguimiento y cambios de estado
 - Trigger que encola al crearse la orden y en cada cambio de estado.
 - Textos por estado, revisados uno por uno.
 - Respeto del `whatsapp_opt_out`.
 - Se sale del modo prueba cuando los textos estén aprobados.
-
-### Fase 3 — Cotizaciones
-- Envío al pasar la cotización a "Enviada".
-- **A definir**: si el cliente puede aceptar o rechazar desde el link. Es
-  atractivo, pero significa que alguien sin autenticar cambia el estado de una
-  cotización. Requiere su propio diseño de seguridad.
 
 ### Fase 4 — Factura electrónica de ARCA
 Es un módulo grande y con reglas propias. Merece su propio documento de
@@ -206,11 +209,44 @@ sirve para darse cuenta; conviene además un aviso cuando se acumulen fallos.
 
 ---
 
-## Decisiones pendientes
+## Decisiones tomadas
 
-1. **Demora antes de enviar**: ¿inmediato o unos minutos de gracia para
-   corregir?
-2. **Aceptación de cotizaciones desde el link**: ¿se implementa o el cliente
-   sigue respondiendo por WhatsApp y el taller lo carga a mano?
-3. **Número emisor**: ¿un número dedicado al sistema o el que ya usa el taller?
-4. **Datos fiscales del taller**: hacen falta para la fase 4 y hoy no están.
+1. **Envío inmediato**, sin demora de gracia. Un estado cargado por error le
+   llega al cliente. El `dedupe_key` evita el mensaje repetido, no el primero.
+2. **El cliente acepta o rechaza la cotización desde el link.** Ver abajo.
+3. **Número dedicado** para el sistema, separado del que atiende el taller.
+   Si WhatsApp bloquea el número, el taller sigue trabajando.
+4. **Los datos fiscales del taller** se cargan antes de la fase 4.
+
+---
+
+## Aceptación de cotizaciones desde el link
+
+Es la parte con más riesgo del plan, porque un desconocido pasa a modificar
+datos. El acceso público hasta ahora era de solo lectura.
+
+**Modelo de amenaza.** El link lleva un token aleatorio, igual que el de
+seguimiento: no se puede enumerar. Quien lo tiene, es porque el taller se lo
+mandó a ese cliente. Es el mismo criterio con el que funciona cualquier link
+de aprobación o de firma electrónica.
+
+**Lo que se permite**, y nada más:
+
+- Pasar de `EMITIDA` o `ENVIADA` a `ACEPTADA` o `RECHAZADA`.
+- Nada más. No se pueden tocar renglones, precios, ni volver atrás.
+
+**Guardas, todas en la base y no en la interfaz:**
+
+| Guarda | Por qué |
+|---|---|
+| Solo desde `EMITIDA` o `ENVIADA` | Una cotización ya resuelta no se toca |
+| Rechaza si ya tiene OT | Ya se convirtió: es un hecho consumado |
+| Rechaza si está vencida | El precio ya no vale |
+| Registra fecha y origen de la decisión | Queda constancia de quién aceptó y cuándo |
+
+**Lo que sigue siendo del taller:** aceptar no convierte la cotización en orden
+de trabajo. Eso lo sigue haciendo un admin con un botón. El cliente aprueba el
+presupuesto; el taller decide cuándo abre la orden y descuenta el stock.
+
+**Si el cliente se equivoca**, el taller puede reabrir la cotización — ya
+existe ese botón.

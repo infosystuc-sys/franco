@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
 import { PriceLists } from './pages/PriceLists';
+import { PublicQuotation } from './pages/PublicQuotation';
 import { QuotationDetails } from './pages/QuotationDetails';
 import { Quotations } from './pages/Quotations';
 import { Suppliers } from './pages/Suppliers';
@@ -37,6 +38,9 @@ export default function App() {
         <Routes>
           {/* Client Portal Route (público, sin login) */}
           <Route path="/seguimiento/:id" element={<ClientPortal />} />
+
+          {/* Presupuesto que el cliente acepta o rechaza (público, con token) */}
+          <Route path="/presupuesto/:token" element={<PublicQuotation />} />
 
           {/* Login (público) */}
           <Route path="/login" element={<Login />} />
