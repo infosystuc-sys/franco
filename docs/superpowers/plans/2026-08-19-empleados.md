@@ -25,14 +25,20 @@
 
 Todas las verificaciones de permisos usan este patrón, que consulta la base haciéndose pasar por el operario. Va siempre dentro de `begin/rollback` para no dejar rastro:
 
+**El orden importa.** Los claims van primero y el rol después. Al revés, la
+subconsulta que resuelve el `sub` contra `profiles` corre ya con el rol puesto y
+queda sujeta a la política `auth.uid() = id` de esa tabla, justo cuando
+`auth.uid()` todavía es nulo: el `sub` sale nulo y hasta el admin queda como
+anónimo, con `is_admin()` en false. Se descubrió al implementar la Task 2.
+
 ```sql
 begin;
-  select set_config('role', 'authenticated', true);
   select set_config('request.jwt.claims',
     json_build_object(
       'sub', (select id from profiles where email = 'operario@gmail.com'),
       'role', 'authenticated'
     )::text, true);
+  select set_config('role', 'authenticated', true);
 
   -- consultas a verificar acá
 
