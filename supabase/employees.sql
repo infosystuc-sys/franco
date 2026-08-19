@@ -53,3 +53,44 @@ as $func$
   left join customers c on c.id = wo.customer_id
   where wo.public_token = p_token;
 $func$;
+
+-- DieselPro ERP — Empleados: cada uno ve solo sus ordenes de trabajo
+--
+-- ⚠️ YA APLICADO en el proyecto Supabase "ludiesel" (migracion
+-- employee_row_level_security). Queda como registro del esquema.
+--
+-- Ver el diseño completo en:
+--   .superpowers/sdd/2026-08-19-empleados/
+
+-- Quien es el empleado que esta mirando. Devuelve null si el usuario no esta
+-- vinculado a ninguno, o si el empleado fue dado de baja: en ambos casos no ve
+-- ninguna orden, que es lo buscado.
+create or replace function public.current_employee_id()
+returns uuid
+language sql
+security definer
+stable
+set search_path = public
+as $func$
+  select id from employees where profile_id = auth.uid() and active;
+$func$;
+
+drop policy "authenticated read" on work_orders;
+create policy "lectura segun rol" on work_orders for select to authenticated
+  using (is_admin() or employee_id = current_employee_id());
+
+drop policy "authenticated read" on work_order_items;
+create policy "lectura segun rol" on work_order_items for select to authenticated
+  using (is_admin() or exists (
+    select 1 from work_orders w
+    where w.id = work_order_items.work_order_id
+      and w.employee_id = current_employee_id()
+  ));
+
+drop policy "authenticated read" on work_order_status_history;
+create policy "lectura segun rol" on work_order_status_history for select to authenticated
+  using (is_admin() or exists (
+    select 1 from work_orders w
+    where w.id = work_order_status_history.work_order_id
+      and w.employee_id = current_employee_id()
+  ));
