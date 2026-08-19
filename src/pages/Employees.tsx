@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Pencil, Trash2, X, Search, UserCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, UserCheck, Eye, EyeOff } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button, Label, PageHeader, Panel, fieldClass } from '@/src/components/ui';
@@ -204,12 +204,17 @@ function EmployeeModal({
   const [hasAccess, setHasAccess] = React.useState(!!employee?.profileId);
   const [accessUsuario, setAccessUsuario] = React.useState('');
   const [accessPassword, setAccessPassword] = React.useState('');
+  // Oculta por defecto: el modal queda abierto un rato largo (el admin arma
+  // el usuario, lo piensa, a veces lo corrige) y un taller no es una oficina
+  // cerrada — cualquiera que pase por atrás o una captura de pantalla la vería.
+  const [showAccessPassword, setShowAccessPassword] = React.useState(false);
   const [grantingAccess, setGrantingAccess] = React.useState(false);
   const [accessError, setAccessError] = React.useState<string | null>(null);
   const [accessSuccess, setAccessSuccess] = React.useState<string | null>(null);
 
   const [showChangePassword, setShowChangePassword] = React.useState(false);
   const [newPassword, setNewPassword] = React.useState('');
+  const [showNewPassword, setShowNewPassword] = React.useState(false);
   const [changingPassword, setChangingPassword] = React.useState(false);
   const [changeError, setChangeError] = React.useState<string | null>(null);
   const [changeSuccess, setChangeSuccess] = React.useState(false);
@@ -364,12 +369,23 @@ function EmployeeModal({
                         </Label>
                         <Label>
                           Contraseña inicial
-                          <input
-                            value={accessPassword}
-                            onChange={(e) => setAccessPassword(e.target.value)}
-                            className={fieldClass(false, 'font-normal normal-case')}
-                            placeholder="Mínimo 6 caracteres"
-                          />
+                          <div className="relative">
+                            <input
+                              type={showAccessPassword ? 'text' : 'password'}
+                              value={accessPassword}
+                              onChange={(e) => setAccessPassword(e.target.value)}
+                              className={fieldClass(false, 'font-normal normal-case pr-9')}
+                              placeholder="Mínimo 6 caracteres"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowAccessPassword((v) => !v)}
+                              title={showAccessPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-soft hover:text-text"
+                            >
+                              {showAccessPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
                         </Label>
                       </div>
                       <button
@@ -409,12 +425,23 @@ function EmployeeModal({
                       )}
                       <Label>
                         Contraseña nueva
-                        <input
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className={fieldClass(false, 'font-normal normal-case')}
-                          placeholder="Mínimo 6 caracteres"
-                        />
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? 'text' : 'password'}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className={fieldClass(false, 'font-normal normal-case pr-9')}
+                            placeholder="Mínimo 6 caracteres"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword((v) => !v)}
+                            title={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-soft hover:text-text"
+                          >
+                            {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
                       </Label>
                       <div className="flex gap-2">
                         <button
