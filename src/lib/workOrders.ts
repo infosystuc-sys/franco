@@ -193,6 +193,18 @@ export async function fetchDashboardData() {
   return { kpis, pendingOrders };
 }
 
+/**
+ * Si el usuario logueado es un operario, dice si tiene un empleado activo
+ * vinculado. Sin esto, un operario dado de baja (o nunca vinculado) ve la
+ * lista de órdenes vacía y no hay forma de distinguirlo de alguien que
+ * simplemente todavía no tiene nada asignado.
+ */
+export async function hasLinkedEmployee(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('current_employee_id');
+  if (error) throw error;
+  return data !== null;
+}
+
 export interface NewWorkOrderInput {
   customerId: string;
   vehicleId: string;

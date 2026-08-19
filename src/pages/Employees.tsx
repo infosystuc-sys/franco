@@ -6,7 +6,9 @@ import { Button, Label, PageHeader, Panel, fieldClass } from '@/src/components/u
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  cambiarClave,
   createEmployee,
+  darAcceso,
   deleteEmployee,
   describeEmployeeError,
   fetchEmployees,
@@ -170,6 +172,7 @@ export function Employees() {
             setEditing(null);
             loadEmployees();
           }}
+          onAccessChanged={loadEmployees}
         />
       )}
     </div>
@@ -180,10 +183,12 @@ function EmployeeModal({
   employee,
   onClose,
   onSaved,
+  onAccessChanged,
 }: {
   employee: Employee | null;
   onClose: () => void;
   onSaved: () => void;
+  onAccessChanged: () => void;
 }) {
   const [form, setForm] = React.useState<EmployeeInput>(
     employee
@@ -192,6 +197,63 @@ function EmployeeModal({
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // El vínculo puede crearse dentro de este mismo modal (botón "Dar acceso"),
+  // así que se sigue localmente: esperar a que el padre recargue la lista y
+  // vuelva a pasar `employee` dejaría el botón mostrando el estado viejo.
+  const [hasAccess, setHasAccess] = React.useState(!!employee?.profileId);
+  const [accessUsuario, setAccessUsuario] = React.useState('');
+  const [accessPassword, setAccessPassword] = React.useState('');
+  const [grantingAccess, setGrantingAccess] = React.useState(false);
+  const [accessError, setAccessError] = React.useState<string | null>(null);
+  const [accessSuccess, setAccessSuccess] = React.useState<string | null>(null);
+
+  const [showChangePassword, setShowChangePassword] = React.useState(false);
+  const [newPassword, setNewPassword] = React.useState('');
+  const [changingPassword, setChangingPassword] = React.useState(false);
+  const [changeError, setChangeError] = React.useState<string | null>(null);
+  const [changeSuccess, setChangeSuccess] = React.useState(false);
+
+  async function handleGrantAccess() {
+    if (!employee) return;
+    if (!accessUsuario.trim() || !accessPassword) {
+      setAccessError('Completá usuario y contraseña.');
+      return;
+    }
+    setGrantingAccess(true);
+    setAccessError(null);
+    try {
+      await darAcceso(employee.id, accessUsuario.trim(), accessPassword);
+      setHasAccess(true);
+      setAccessSuccess(`Acceso creado con usuario "${accessUsuario.trim()}". Comunicale la contraseña al empleado.`);
+      onAccessChanged();
+    } catch (err) {
+      setAccessError(getErrorMessage(err));
+    } finally {
+      setGrantingAccess(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!employee) return;
+    if (!newPassword) {
+      setChangeError('Ingresá la contraseña nueva.');
+      return;
+    }
+    setChangingPassword(true);
+    setChangeError(null);
+    try {
+      await cambiarClave(employee.id, newPassword);
+      setChangeSuccess(true);
+      setNewPassword('');
+      setShowChangePassword(false);
+      onAccessChanged();
+    } catch (err) {
+      setChangeError(getErrorMessage(err));
+    } finally {
+      setChangingPassword(false);
+    }
+  }
 
   function patch(changes: Partial<EmployeeInput>) {
     setForm((prev) => ({ ...prev, ...changes }));
@@ -273,13 +335,111 @@ function EmployeeModal({
           </label>
 
           {employee && (
-            // Solo informativo: el acceso al sistema (crear el usuario y vincularlo)
-            // no se gestiona desde acá, así que no hay campo para editarlo.
-            <div className="border-t border-line pt-4 text-xs text-text-soft">
-              <span className="font-semibold uppercase tracking-wider text-text-faint">Acceso al sistema: </span>
-              {employee.profileId
-                ? (employee.email ?? 'Tiene usuario, pero no vemos su email desde acá.')
-                : 'Sin acceso: este empleado no tiene usuario para entrar a la app.'}
+            <div className="border-t border-line pt-4 space-y-3">
+              <span className="block font-semibold uppercase tracking-wider text-[11px] text-text-faint">
+                Acceso al sistema
+              </span>
+
+              {!hasAccess && (
+                <div className="space-y-2">
+                  <p className="text-xs text-text-soft">
+                    Sin acceso: este empleado no tiene usuario para entrar a la app.
+                  </p>
+                  {accessError && (
+                    <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{accessError}</div>
+                  )}
+                  {accessSuccess ? (
+                    <p className="text-xs text-state-done">{accessSuccess}</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Label>
+                          Usuario
+                          <input
+                            value={accessUsuario}
+                            onChange={(e) => setAccessUsuario(e.target.value)}
+                            className={fieldClass(false, 'font-normal normal-case')}
+                            placeholder="carlos"
+                          />
+                        </Label>
+                        <Label>
+                          Contraseña inicial
+                          <input
+                            value={accessPassword}
+                            onChange={(e) => setAccessPassword(e.target.value)}
+                            className={fieldClass(false, 'font-normal normal-case')}
+                            placeholder="Mínimo 6 caracteres"
+                          />
+                        </Label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleGrantAccess}
+                        disabled={grantingAccess}
+                        className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+                      >
+                        {grantingAccess ? 'Creando...' : 'Dar acceso'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {hasAccess && (
+                <div className="space-y-2">
+                  <p className="text-xs text-text-soft">
+                    {employee.email ?? 'Tiene usuario, pero no vemos su email desde acá.'}
+                  </p>
+                  {changeSuccess && <p className="text-xs text-state-done">Contraseña actualizada.</p>}
+                  {!showChangePassword ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowChangePassword(true);
+                        setChangeSuccess(false);
+                      }}
+                      className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt border border-line"
+                    >
+                      Cambiar contraseña
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {changeError && (
+                        <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{changeError}</div>
+                      )}
+                      <Label>
+                        Contraseña nueva
+                        <input
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className={fieldClass(false, 'font-normal normal-case')}
+                          placeholder="Mínimo 6 caracteres"
+                        />
+                      </Label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleChangePassword}
+                          disabled={changingPassword}
+                          className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+                        >
+                          {changingPassword ? 'Guardando...' : 'Guardar contraseña'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowChangePassword(false);
+                            setChangeError(null);
+                          }}
+                          className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

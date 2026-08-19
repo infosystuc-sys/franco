@@ -20,6 +20,7 @@ import {
   createWorkOrder,
   fetchDashboardData,
   getErrorMessage,
+  hasLinkedEmployee,
   STATUS_LABELS,
   STATUS_STRIP,
   type WorkOrderListRow,
@@ -33,6 +34,9 @@ export function Dashboard() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [showNewOrder, setShowNewOrder] = React.useState(false);
+  // null mientras no se sabe (o no aplica, por ser admin): solo se usa para
+  // elegir el mensaje de la lista vacía de un operario.
+  const [linkedEmployee, setLinkedEmployee] = React.useState<boolean | null>(null);
 
   const loadData = React.useCallback(async () => {
     setLoading(true);
@@ -51,6 +55,24 @@ export function Dashboard() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Aparte de loadData: si esto fallara no debe tapar la lista de órdenes,
+  // que es lo importante. Solo decide qué mensaje mostrar si queda vacía.
+  React.useEffect(() => {
+    if (role !== 'operario') return;
+    hasLinkedEmployee()
+      .then(setLinkedEmployee)
+      .catch(() => setLinkedEmployee(null));
+  }, [role]);
+
+  // Un operario dado de baja (o nunca vinculado) también ve la lista vacía,
+  // pero por un motivo distinto al de "todavía no tenés nada asignado": sin
+  // esto, parece que el sistema falla en lugar de explicar qué pasa.
+  const emptyMessage = isAdmin
+    ? 'No hay órdenes abiertas. Empezá por una cotización.'
+    : linkedEmployee === false
+      ? 'Tu usuario no está vinculado a ningún empleado activo. Pedile al administrador que lo revise.'
+      : 'No tenés órdenes asignadas. El encargado del taller te las asigna desde la orden de trabajo.';
 
   // Cada indicador es un estado del circuito: el color es el mismo que marca
   // la tira lateral de la fila, así el número y la orden se asocian solos.
@@ -122,7 +144,7 @@ export function Dashboard() {
               {!loading && orders.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-text-soft">
-                    No hay órdenes abiertas. Empezá por una cotización.
+                    {emptyMessage}
                   </td>
                 </tr>
               )}

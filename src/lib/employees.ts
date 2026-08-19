@@ -69,6 +69,46 @@ export async function deleteEmployee(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Da de alta el acceso al sistema de un empleado que todavía no lo tiene.
+ * Crear el usuario necesita la clave de servicio, que no puede viajar al
+ * navegador: por eso lo hace la Edge Function `gestionar-empleado` del lado
+ * del servidor, usando la sesión del admin que invoca.
+ */
+export async function darAcceso(employeeId: string, usuario: string, password: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('gestionar-empleado', {
+    body: { accion: 'crear', employeeId, usuario, password },
+  });
+  if (error) throw new Error(await describeFunctionError(error));
+}
+
+/** Cambia la contraseña de un empleado que ya tiene acceso creado. */
+export async function cambiarClave(employeeId: string, password: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('gestionar-empleado', {
+    body: { accion: 'clave', employeeId, password },
+  });
+  if (error) throw new Error(await describeFunctionError(error));
+}
+
+/**
+ * La función siempre responde JSON con `{ error: '<mensaje accionable>' }`
+ * cuando falla, pero el cliente de Supabase no lo expone en `error.message`
+ * (que queda en un genérico "Edge Function returned a non-2xx status code").
+ * El cuerpo real viaja en `error.context`, la respuesta HTTP cruda.
+ */
+async function describeFunctionError(error: unknown): Promise<string> {
+  const context = (error as { context?: Response }).context;
+  if (context && typeof context.json === 'function') {
+    try {
+      const body = await context.json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // El cuerpo no era JSON: se sigue con el mensaje genérico de abajo.
+    }
+  }
+  return error instanceof Error ? error.message : 'No se pudo completar la operación.';
+}
+
 /** Traduce errores de base a mensajes accionables para el usuario. */
 export function describeEmployeeError(message: string): string {
   if (
