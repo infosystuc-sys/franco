@@ -12,3 +12,6 @@ coverage/
 # Export original de AI Studio y su carpeta vacía: no son parte del código.
 dieselpro-erp.zip
 dieselpro-erp/
+
+# Preferencias personales de Claude Code: no se comparten.
+.claude/settings.local.json
