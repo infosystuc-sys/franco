@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "comment": "La app resuelve las rutas en el navegador. Sin esto, entrar directo a /cotizaciones o a un link de seguimiento daría 404, porque en el servidor esos archivos no existen.",
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
