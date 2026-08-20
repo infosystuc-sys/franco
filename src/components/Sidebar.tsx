@@ -11,6 +11,7 @@ import {
   FileText,
   Tags,
   MessageSquare,
+  HardHat,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -33,7 +34,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Operación',
     items: [
       { icon: LayoutDashboard, label: 'Panel', path: '/' },
-      { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones' },
+      { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
     ],
   },
@@ -45,6 +46,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: Factory, label: 'Proveedores', path: '/proveedores', adminOnly: true },
       { icon: Package, label: 'Inventario', path: '/inventario', adminOnly: true },
       { icon: Tags, label: 'Listas de Precios', path: '/listas-precios', adminOnly: true },
+      { icon: HardHat, label: 'Empleados', path: '/empleados', adminOnly: true },
     ],
   },
   {

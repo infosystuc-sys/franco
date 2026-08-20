@@ -181,7 +181,7 @@ export function ClientPortal() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-text">Técnico Asignado</p>
-                  <p className="text-xs text-text-soft">{order.technicianName ?? 'Sin asignar'}</p>
+                  <p className="text-xs text-text-soft">{order.employeeName ?? 'Sin asignar'}</p>
                 </div>
               </div>
               <button className="w-full bg-panel-head hover:bg-panel-head text-text text-[11px] font-bold uppercase tracking-wider py-2 border border-line transition-colors flex items-center justify-center gap-2 mt-2">

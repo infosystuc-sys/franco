@@ -37,8 +37,8 @@ export interface WorkOrder {
   customerId: string;
   vehicleId: string;
   component: string;
-  technicianId?: string;
-  technicianName?: string;
+  employeeId?: string;
+  employeeName?: string;
   createdAt: string;
   updatedAt: string;
   items?: WorkOrderItem[];
@@ -46,9 +46,3 @@ export interface WorkOrder {
   vehicle?: Vehicle;
 }
 
-export interface Technician {
-  id: string;
-  name: string;
-  role: string;
-  avatarUrl?: string;
-}
