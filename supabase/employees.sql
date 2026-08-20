@@ -165,3 +165,22 @@ create policy "solo admin" on articles for select to authenticated using (is_adm
 
 -- employees conserva su politica "authenticated read": el nombre del
 -- empleado aparece en la orden y los compañeros se ven entre ellos.
+
+
+-- ===========================================================================
+-- Cierre de una vía de escritura que quedaba abierta
+-- ===========================================================================
+-- Migración lock_adjust_article_stock, aplicada en la revisión final de rama.
+--
+-- adjust_article_stock es security definer y escribe el stock sin comprobar
+-- quién la llama. Postgres otorga EXECUTE a public por defecto, así que quedaba
+-- invocable por cualquiera —incluido un usuario anónimo con la clave pública—
+-- y bastaba conocer el id de un artículo para alterar el inventario. Un
+-- operario obtiene esos ids de los renglones de sus propias órdenes, que sí
+-- puede leer.
+--
+-- Cerrarle la lectura de `articles` no alcanzaba: la escritura pasaba por acá.
+-- Solo la invoca el disparador work_order_items_stock_sync, que corre con los
+-- permisos de quien lo definió y no necesita este grant.
+revoke execute on function public.adjust_article_stock(uuid, numeric)
+  from public, anon, authenticated;

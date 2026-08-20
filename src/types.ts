@@ -46,9 +46,3 @@ export interface WorkOrder {
   vehicle?: Vehicle;
 }
 
-export interface Technician {
-  id: string;
-  name: string;
-  role: string;
-  avatarUrl?: string;
-}
