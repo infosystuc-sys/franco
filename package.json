@@ -11,7 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "android:sync": "vite build && cap sync android",
-    "android:build": "vite build && cap sync android && cd android && gradlew assembleDebug",
+    "android:build": "vite build && cap sync android && cd android && gradlew.bat assembleDebug",
     "android:open": "cap open android"
   },
   "dependencies": {
