@@ -116,21 +116,49 @@ igual.
 
 ---
 
-## Lo que hace una factura de artículos
+## Lo que hace una compra de artículos
 
 Dentro de la misma transacción que la guarda:
 
-1. Repone stock con `adjust_article_stock`, que ya existe y con delta positivo
-   repone.
+1. Repone stock con `adjust_article_stock`, que ya existe, bloquea la fila,
+   ignora los artículos que no llevan stock y rechaza dejar el saldo en
+   negativo. Todo el movimiento pasa por ahí en vez de tocar
+   `articles.stock_quantity` a mano.
 2. Pisa `article_suppliers.purchase_price` con el neto unitario ya
-   bonificado, lo que recalcula solo el precio de venta según la utilidad.
+   bonificado, lo que recalcula solo el precio de venta: un trigger existente
+   se dispara al cambiar ese campo.
 
-**La nota de crédito lleva un tilde "devuelve mercadería"**, marcado por
-defecto: la misma NC puede ser una devolución (resta stock) o un ajuste de
-precio (no lo toca), y en el papel no se distinguen.
+### Qué comprobante mueve stock, y en qué dirección
 
-**La nota de crédito nunca actualiza el precio de compra.** Un ajuste puntual
-no debería mover la lista de venta.
+| Comprobante | Stock | Quién lo decide |
+|---|---|---|
+| Factura | suma | siempre, la mercadería entró |
+| Nota de crédito | resta | tilde "devuelve mercadería", marcado por defecto |
+| Nota de débito | suma | tilde "ingresa mercadería", **des**marcado por defecto |
+
+El campo se llama `moves_stock` y solo dice **si** mueve; la dirección sale
+del tipo de comprobante. La NC y la ND preguntan porque en el papel no se
+distingue una devolución de un ajuste de precio, y una ND casi siempre es un
+cargo posterior sin mercadería.
+
+Quién decide no es el navegador: la RPC fuerza `true` en la factura de
+artículos y `false` en cualquier comprobante de conceptos.
+
+**Solo la factura actualiza el precio de compra.** Una nota de crédito o de
+débito es un ajuste puntual y no debería mover la lista de venta.
+
+### Artículo comprado a un proveedor que no lo tenía vinculado
+
+Se crea el vínculo con el precio facturado. Si el artículo **no tenía ningún
+proveedor**, además queda como preferido, y entonces pasa a definir el precio
+de venta. Si ya tenía otro preferido, el nuevo entra como alternativo y la
+lista de venta no se mueve: una compra suelta a un proveedor nuevo no puede
+recalcular precios sin que nadie lo decida.
+
+El código propio del proveedor se inicializa con el nuestro —único por
+artículo, así que no choca con el índice `(supplier_id, upper(supplier_code))`—
+y se corrige al importar la lista del proveedor. Es la misma convención que
+usó la migración de listas de precios.
 
 ## Anulación
 
@@ -155,7 +183,8 @@ Cada fase deja algo usable.
 - Cuenta corriente por proveedor.
 
 ### Fase 3 — Compras de artículos
-- Renglones con artículo del catálogo.
+- Renglones con artículo del catálogo, con buscador propio que muestra último
+  precio de compra y stock, no el precio de venta.
 - Movimiento de stock y actualización del precio de compra.
 
 **Fase 2 antes que 3 a propósito.** El comprobante y el pie de impuestos son
@@ -186,5 +215,6 @@ consistencia de importes) y checklist manual.
 ## Aplicación de las migraciones
 
 El MCP de Supabase no tiene permiso sobre el proyecto de esta app, así que los
-archivos se corren a mano en el SQL Editor. Fase 1 es
-`supabase/purchase-catalogs.sql`.
+archivos se corren a mano en el SQL Editor. En orden:
+`supabase/purchase-catalogs.sql` (fase 1), `supabase/purchases.sql` (fase 2) y
+`supabase/purchases-articles.sql` (fase 3).

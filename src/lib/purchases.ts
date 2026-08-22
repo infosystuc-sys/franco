@@ -247,7 +247,7 @@ export interface PurchaseDetail extends PurchaseListRow {
   number: number;
   receivedDate: string;
   paymentTermsDays: number;
-  returnsGoods: boolean;
+  movesStock: boolean;
 
   supplierLegalName: string | null;
   supplierTaxId: string | null;
@@ -309,7 +309,7 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDetail | nu
     .select(
       `id, kind, doc_type, letter, full_number, sales_point, number, status,
        supplier_id, supplier_name, supplier_legal_name, supplier_tax_id, supplier_tax_condition,
-       issue_date, received_date, due_date, payment_terms_days, returns_goods,
+       issue_date, received_date, due_date, payment_terms_days, moves_stock,
        gross_amount, line_discount_amount, general_discount_percent, general_discount_amount,
        net_taxed, net_exempt, net_untaxed, vat_amount, other_taxes_amount,
        total_amount, settled_amount, notes, voided_at, voided_reason,
@@ -331,7 +331,7 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDetail | nu
     number: Number(row.number),
     receivedDate: row.received_date,
     paymentTermsDays: Number(row.payment_terms_days),
-    returnsGoods: row.returns_goods,
+    movesStock: row.moves_stock,
 
     supplierLegalName: row.supplier_legal_name,
     supplierTaxId: row.supplier_tax_id,
@@ -424,7 +424,12 @@ export interface PurchaseHeaderInput {
   dueDate: string;
   paymentTermsDays: number;
   generalDiscountPercent: number;
-  returnsGoods: boolean;
+  /**
+   * Si el comprobante mueve inventario. La factura de artículos siempre lo
+   * mueve —lo fuerza la base—; en la NC y la ND lo decide el usuario, porque
+   * la misma NC puede ser una devolución o un ajuste de precio.
+   */
+  movesStock: boolean;
   notes: string;
 }
 
@@ -446,7 +451,7 @@ export async function savePurchaseInvoice(
       due_date: header.dueDate,
       payment_terms_days: header.paymentTermsDays,
       general_discount_percent: header.generalDiscountPercent,
-      returns_goods: header.returnsGoods,
+      moves_stock: header.movesStock,
       notes: header.notes.trim() || null,
     },
     p_items: lines.map((line) => ({
@@ -485,8 +490,17 @@ export function describePurchaseError(message: string): string {
   if (message.includes('purchase_invoices_sin_duplicados')) {
     return 'Ese comprobante ya está cargado para este proveedor. Buscalo en el listado antes de volver a cargarlo.';
   }
+  // El vínculo artículo↔proveedor lleva el código propio del proveedor, único
+  // por proveedor. Si ya usó ese código para otro artículo, el alta del
+  // vínculo rebota con un error que por sí solo no dice nada.
+  if (message.includes('article_suppliers_supplier_code_key')) {
+    return 'Ese proveedor ya tiene otro artículo cargado con el mismo código. Revisá el vínculo en Inventario antes de cargar la compra.';
+  }
+  if (message.includes('Stock insuficiente')) {
+    return `${message}. No se puede devolver ni anular más mercadería de la que queda en stock.`;
+  }
   if (message.includes('schema cache') || message.includes('does not exist')) {
-    return 'Falta aplicar la migración de compras en la base (supabase/purchases.sql).';
+    return 'Falta aplicar la migración de compras en la base (supabase/purchases.sql y purchases-articles.sql).';
   }
   return message;
 }

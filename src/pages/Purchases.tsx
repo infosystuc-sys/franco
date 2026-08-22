@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, Eye, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { Search, Eye, AlertTriangle, ShoppingCart, Boxes, Package } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -101,9 +101,14 @@ export function Purchases() {
         title="Compras"
         subtitle="Comprobantes recibidos de proveedores y lo que se les debe."
         actions={
-          <Link to="/compras/nueva">
-            <Button><Plus size={16} /> Nueva compra</Button>
-          </Link>
+          <>
+            <Link to="/compras/nueva/articulos">
+              <Button variant="secondary"><Boxes size={16} /> Compra de artículos</Button>
+            </Link>
+            <Link to="/compras/nueva/conceptos">
+              <Button><Package size={16} /> Compra de conceptos</Button>
+            </Link>
+          </>
         }
       />
 
@@ -314,8 +319,7 @@ export function Purchases() {
 
       <p className="text-xs text-text-soft">
         Los pagos todavía no se registran: el saldo de cada comprobante es su
-        total. Eso lo resuelve el módulo de pagos. Las compras de artículos, que
-        mueven stock, llegan en la etapa siguiente.
+        total. Eso lo resuelve el módulo de pagos.
       </p>
     </div>
   );

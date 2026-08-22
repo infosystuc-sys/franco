@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Ban, AlertTriangle, Printer } from 'lucide-react';
+import { XCircle, Ban, AlertTriangle, Printer, Boxes } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -117,7 +117,26 @@ export function PurchaseDetails() {
               </span>
             )
           }
-          subtitle={`${doc.supplierName} · compra de ${PURCHASE_KIND_LABELS[doc.kind].toLowerCase()}`}
+          subtitle={
+            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>{doc.supplierName} · compra de {PURCHASE_KIND_LABELS[doc.kind].toLowerCase()}</span>
+              {doc.kind === 'ARTICULOS' && (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]',
+                    doc.movesStock ? 'bg-panel-head text-text-soft' : 'bg-panel-alt text-text-faint'
+                  )}
+                >
+                  <Boxes size={11} />
+                  {doc.movesStock
+                    ? doc.docType === 'NOTA_CREDITO'
+                      ? 'Descontó stock'
+                      : 'Repuso stock'
+                    : 'No movió stock'}
+                </span>
+              )}
+            </span>
+          }
           actions={
             <>
               <Link to="/compras">
@@ -203,7 +222,7 @@ export function PurchaseDetails() {
           <table className="w-full text-left text-[12px]">
             <thead className="border-b-2 border-line-strong text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
-                <th className="w-36 py-1.5 pr-2">Concepto</th>
+                <th className="w-36 py-1.5 pr-2">{doc.kind === 'ARTICULOS' ? 'Código' : 'Concepto'}</th>
                 <th className="py-1.5 pr-2">Detalle</th>
                 <th className="w-14 py-1.5 pr-2 text-right">Cant.</th>
                 <th className="w-24 py-1.5 pr-2 text-right">P. unit.</th>
@@ -215,7 +234,9 @@ export function PurchaseDetails() {
             <tbody>
               {doc.items.map((item) => (
                 <tr key={item.lineNumber} className="border-b border-line">
-                  <td className="py-1.5 pr-2 text-text-soft">{item.conceptName ?? '—'}</td>
+                  <td className="py-1.5 pr-2 font-mono text-text-soft">
+                    {doc.kind === 'ARTICULOS' ? (item.code ?? '—') : (item.conceptName ?? '—')}
+                  </td>
                   <td className="py-1.5 pr-2">{item.description}</td>
                   <td className="py-1.5 pr-2 text-right">{item.quantity.toFixed(2)}</td>
                   <td className="py-1.5 pr-2 text-right">$ {formatMoney(item.unitPrice)}</td>

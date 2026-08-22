@@ -64,7 +64,7 @@ export default function App() {
                     <Route path="/cotizaciones" element={<Quotations />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/compras" element={<Purchases />} />
-                    <Route path="/compras/nueva" element={<PurchaseNew />} />
+                    <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />
                     <Route path="/alicuotas" element={<TaxRates />} />
                     <Route path="/conceptos" element={<ExpenseConcepts />} />

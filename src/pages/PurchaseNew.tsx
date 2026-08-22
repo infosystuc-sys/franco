@@ -1,16 +1,17 @@
 import React from 'react';
-import { Plus, Trash2, Save, XCircle, AlertTriangle, Check } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { cn, formatMoney } from '@/src/lib/utils';
+import { Plus, Trash2, Save, XCircle, AlertTriangle, Check, Package, Boxes } from 'lucide-react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
+import { PurchaseArticlePicker } from '@/src/components/PurchaseArticlePicker';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
 import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConcepts';
+import { fetchArticles, type Article } from '@/src/lib/articles';
 import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
-import { todayLocal } from '@/src/lib/utils';
 import {
   computePurchaseTotals,
   describePurchaseError,
@@ -22,6 +23,7 @@ import {
   suggestedTaxAmount,
   type PurchaseDocType,
   type PurchaseFootTax,
+  type PurchaseKind,
   type PurchaseLetter,
   type PurchaseLine,
 } from '@/src/lib/purchases';
@@ -38,23 +40,33 @@ const EMPTY_LINE: PurchaseLine = {
 };
 
 /**
- * Carga de una factura de compra de conceptos.
+ * Carga de un comprobante de compra, en sus dos formas.
  *
  * El comprobante ya existe en papel: acá se transcribe. Por eso el número no
  * se genera y por eso los importes del pie quedan editables — tienen que
  * poder cerrar exacto con lo que el proveedor imprimió, aunque él haya
  * redondeado distinto.
+ *
+ * La diferencia entre las dos formas es el cuerpo y sus consecuencias: los
+ * renglones de artículo mueven stock y actualizan el precio de compra; los de
+ * concepto no tocan nada fuera del comprobante.
  */
 export function PurchaseNew() {
   const { role } = useAuth();
+  const { kind: kindParam } = useParams();
   const navigate = useNavigate();
+
+  const kind: PurchaseKind = kindParam === 'articulos' ? 'ARTICULOS' : 'CONCEPTOS';
+  const isArticles = kind === 'ARTICULOS';
 
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [concepts, setConcepts] = React.useState<ExpenseConcept[]>([]);
+  const [articles, setArticles] = React.useState<Article[]>([]);
   const [rates, setRates] = React.useState<TaxRate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showPicker, setShowPicker] = React.useState(false);
 
   // ── Encabezado
   const [supplierId, setSupplierId] = React.useState('');
@@ -66,9 +78,11 @@ export function PurchaseNew() {
   const [receivedDate, setReceivedDate] = React.useState(todayLocal());
   const [dueDate, setDueDate] = React.useState('');
   const [dueDateTouched, setDueDateTouched] = React.useState(false);
+  // Solo se pregunta en NC y ND: la factura de artículos siempre mueve stock.
+  const [movesStock, setMovesStock] = React.useState(false);
 
   // ── Cuerpo y pie
-  const [lines, setLines] = React.useState<PurchaseLine[]>([{ ...EMPTY_LINE }]);
+  const [lines, setLines] = React.useState<PurchaseLine[]>([]);
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
   const [notes, setNotes] = React.useState('');
@@ -77,23 +91,33 @@ export function PurchaseNew() {
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
-    Promise.all([fetchSuppliers(true), fetchExpenseConcepts(true), fetchTaxRates(true)])
-      .then(([s, c, r]) => {
+
+    Promise.all([
+      fetchSuppliers(true),
+      fetchTaxRates(true),
+      isArticles ? fetchArticles(false) : Promise.resolve([] as Article[]),
+      isArticles ? Promise.resolve([] as ExpenseConcept[]) : fetchExpenseConcepts(true),
+    ])
+      .then(([s, r, a, c]) => {
         if (cancelled) return;
         setSuppliers(s);
-        setConcepts(c);
         setRates(r);
+        setArticles(a);
+        setConcepts(c);
         // El IVA más común arranca preseleccionado: en la mayoría de las
         // facturas todos los renglones van al 21%.
         const general = r.find((rate) => rate.kind === 'IVA' && rate.rate === 21);
-        if (general) setLines([{ ...EMPTY_LINE, vatRateId: general.id }]);
+        // En conceptos se arranca con un renglón en blanco listo para tipear.
+        // En artículos no: el renglón nace de elegir uno del catálogo.
+        if (!isArticles) setLines([{ ...EMPTY_LINE, vatRateId: general?.id ?? '' }]);
       })
       .catch((err) => !cancelled && setError(describePurchaseError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
+
     return () => {
       cancelled = true;
     };
-  }, [role]);
+  }, [role, isArticles]);
 
   const supplier = suppliers.find((s) => s.id === supplierId) ?? null;
   const vatRates = React.useMemo(() => rates.filter((r) => r.kind === 'IVA'), [rates]);
@@ -102,9 +126,13 @@ export function PurchaseNew() {
     [rates]
   );
 
-  // El vencimiento se propone del plazo del proveedor, salvo que ya lo hayan
-  // tocado a mano: pisar una fecha escrita a propósito sería peor que no
-  // proponer nada.
+  // La NC suele ser devolución, así que arranca marcada; la ND casi nunca
+  // trae mercadería, así que arranca desmarcada. La factura no pregunta.
+  React.useEffect(() => {
+    if (!isArticles) return;
+    setMovesStock(docType === 'NOTA_CREDITO');
+  }, [docType, isArticles]);
+
   React.useEffect(() => {
     if (dueDateTouched || !supplier || !issueDate) return;
     setDueDate(proposeDueDate(issueDate, supplier.paymentTermsDays));
@@ -116,6 +144,9 @@ export function PurchaseNew() {
   );
 
   if (role !== 'admin') return <Navigate to="/" replace />;
+  if (kindParam !== 'articulos' && kindParam !== 'conceptos') {
+    return <Navigate to="/compras" replace />;
+  }
 
   if (loading) {
     return <div className="mx-auto max-w-6xl p-8 text-center text-text-soft">Cargando padrones…</div>;
@@ -125,19 +156,35 @@ export function PurchaseNew() {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   }
 
-  function addLine() {
-    const defaultRate = vatRates.find((r) => r.rate === 21) ?? vatRates[0];
-    setLines((current) => [...current, { ...EMPTY_LINE, vatRateId: defaultRate?.id ?? '' }]);
+  function defaultVatRateId(): string {
+    return (vatRates.find((r) => r.rate === 21) ?? vatRates[0])?.id ?? '';
+  }
+
+  function addConceptLine() {
+    setLines((current) => [...current, { ...EMPTY_LINE, vatRateId: defaultVatRateId() }]);
+  }
+
+  function addArticle(article: Article) {
+    setLines((current) => [
+      ...current,
+      {
+        ...EMPTY_LINE,
+        articleId: article.id,
+        code: article.code,
+        description: article.description,
+        // Se propone lo que se venía pagando; el precio real sale del papel.
+        unitPrice: article.purchasePrice ?? 0,
+        vatRateId: defaultVatRateId(),
+      },
+    ]);
+    setShowPicker(false);
   }
 
   function addFootTax(taxRateId: string) {
     if (!taxRateId || footTaxes.some((tax) => tax.taxRateId === taxRateId)) return;
     const rate = footRates.find((r) => r.id === taxRateId);
     if (!rate) return;
-    setFootTaxes((current) => [
-      ...current,
-      { taxRateId, amount: suggestedTaxAmount(rate, totals) },
-    ]);
+    setFootTaxes((current) => [...current, { taxRateId, amount: suggestedTaxAmount(rate, totals) }]);
   }
 
   const declared = Number(declaredTotal);
@@ -150,8 +197,8 @@ export function PurchaseNew() {
   const missingDescription = lines.some((line) => line.description.trim() === '');
   const canSave =
     !!supplierId &&
-    Number(salesPoint) >= 0 &&
     salesPoint.trim() !== '' &&
+    Number(salesPoint) >= 0 &&
     Number(number) > 0 &&
     !!issueDate &&
     !!dueDate &&
@@ -161,6 +208,8 @@ export function PurchaseNew() {
     totals.total > 0 &&
     !saving;
 
+  const stockMoves = isArticles && (docType === 'FACTURA' || movesStock);
+
   async function handleSave() {
     if (!canSave || !supplier) return;
     setSaving(true);
@@ -168,7 +217,7 @@ export function PurchaseNew() {
     try {
       const saved = await savePurchaseInvoice(
         {
-          kind: 'CONCEPTOS',
+          kind,
           docType,
           letter,
           salesPoint: Number(salesPoint),
@@ -179,7 +228,7 @@ export function PurchaseNew() {
           dueDate,
           paymentTermsDays: supplier.paymentTermsDays,
           generalDiscountPercent: Number(generalDiscount) || 0,
-          returnsGoods: false,
+          movesStock,
           notes,
         },
         lines,
@@ -195,8 +244,18 @@ export function PurchaseNew() {
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
-        title="Nueva compra"
-        subtitle="Comprobante de conceptos: gastos sin artículos ni stock asociado."
+        title={isArticles ? 'Compra de artículos' : 'Compra de conceptos'}
+        meta={
+          <span className="inline-flex items-center gap-1.5 border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+            {isArticles ? <Boxes size={14} /> : <Package size={14} />}
+            {isArticles ? 'Mueve stock' : 'Sin stock'}
+          </span>
+        }
+        subtitle={
+          isArticles
+            ? 'Repuestos del catálogo. Repone stock y actualiza el precio de compra.'
+            : 'Gastos sin artículos ni stock asociado: fletes, servicios, honorarios.'
+        }
         actions={
           <>
             <Link to="/compras">
@@ -273,9 +332,7 @@ export function PurchaseNew() {
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Punto de venta *
             <input
-              type="number"
-              min="0"
-              max="99999"
+              type="number" min="0" max="99999"
               value={salesPoint}
               onChange={(e) => setSalesPoint(e.target.value)}
               placeholder="3"
@@ -286,8 +343,7 @@ export function PurchaseNew() {
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Número *
             <input
-              type="number"
-              min="1"
+              type="number" min="1"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
               placeholder="12345"
@@ -306,8 +362,7 @@ export function PurchaseNew() {
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Fecha del comprobante *
             <input
-              type="date"
-              value={issueDate}
+              type="date" value={issueDate}
               onChange={(e) => setIssueDate(e.target.value)}
               className={cn(inputClass, !issueDate && 'field-required')}
             />
@@ -316,8 +371,7 @@ export function PurchaseNew() {
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Fecha de recepción
             <input
-              type="date"
-              value={receivedDate}
+              type="date" value={receivedDate}
               onChange={(e) => setReceivedDate(e.target.value)}
               className={inputClass}
             />
@@ -326,8 +380,7 @@ export function PurchaseNew() {
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Vencimiento *
             <input
-              type="date"
-              value={dueDate}
+              type="date" value={dueDate}
               onChange={(e) => {
                 setDueDate(e.target.value);
                 setDueDateTouched(true);
@@ -343,16 +396,45 @@ export function PurchaseNew() {
             </span>
           </label>
         </div>
+
+        {/* El tilde de stock solo aparece donde hay una decisión real que
+            tomar: en la factura no la hay, la mercadería entró. */}
+        {isArticles && docType !== 'FACTURA' && (
+          <label className="mt-4 flex cursor-pointer items-start gap-2 border border-line bg-panel-alt p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={movesStock}
+              onChange={(e) => setMovesStock(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-accent-deep"
+            />
+            <span>
+              <span className="font-semibold text-text">
+                {docType === 'NOTA_CREDITO' ? 'Devuelve mercadería' : 'Ingresa mercadería'}
+              </span>
+              <span className="mt-0.5 block text-xs text-text-soft">
+                {docType === 'NOTA_CREDITO'
+                  ? 'Marcado, el stock se descuenta. Sin marcar, la nota de crédito es solo un ajuste de precio y no toca el inventario.'
+                  : 'Marcado, el stock se suma. Una nota de débito suele ser un cargo posterior sin mercadería, por eso arranca sin marcar.'}
+              </span>
+            </span>
+          </label>
+        )}
       </Panel>
 
       {/* ── CUERPO ─────────────────────────────────────────────────── */}
       <Panel className="mb-6 p-5">
         <SectionHeader
-          title="Conceptos"
+          title={isArticles ? 'Artículos' : 'Conceptos'}
           actions={
-            <Button type="button" variant="ghost" onClick={addLine} className="px-3">
-              <Plus size={16} /> Agregar renglón
-            </Button>
+            isArticles ? (
+              <Button type="button" onClick={() => setShowPicker(true)} className="px-3">
+                <Package size={16} /> Agregar artículo
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" onClick={addConceptLine} className="px-3">
+                <Plus size={16} /> Agregar renglón
+              </Button>
+            )
           }
         />
 
@@ -360,8 +442,8 @@ export function PurchaseNew() {
           <table className="table-stack w-full text-left text-[13px]">
             <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
-                <th className="px-2 py-1 w-44">Concepto</th>
-                <th className="px-2 py-1">Detalle</th>
+                <th className="px-2 py-1 w-44">{isArticles ? 'Código' : 'Concepto'}</th>
+                <th className="px-2 py-1">{isArticles ? 'Descripción' : 'Detalle'}</th>
                 <th className="px-2 py-1 w-20 text-right">Cant.</th>
                 <th className="px-2 py-1 w-28 text-right">P. unitario</th>
                 <th className="px-2 py-1 w-20 text-right">Bonif. %</th>
@@ -371,33 +453,58 @@ export function PurchaseNew() {
               </tr>
             </thead>
             <tbody>
+              {lines.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-6 text-center text-text-soft">
+                    {isArticles
+                      ? 'Sin artículos. Agregalos desde el catálogo con el botón de arriba.'
+                      : 'Sin renglones cargados.'}
+                  </td>
+                </tr>
+              )}
+
               {lines.map((line, idx) => {
                 const net = line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100);
                 return (
                   <tr key={idx} className={cn('h-9 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
-                    <td data-label="Concepto" className="px-1 py-1">
-                      <select
-                        value={line.conceptId ?? ''}
-                        onChange={(e) => patchLine(idx, { conceptId: e.target.value || null })}
-                        className="w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none"
-                      >
-                        <option value="">— texto libre —</option>
-                        {concepts.map((concept) => (
-                          <option key={concept.id} value={concept.id}>{concept.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td data-label="Detalle" className="px-1 py-1">
-                      <input
-                        value={line.description}
-                        onChange={(e) => patchLine(idx, { description: e.target.value })}
-                        placeholder="Detalle del gasto"
-                        className={cn(
-                          'w-full bg-transparent px-2 py-1',
-                          line.description.trim() === '' && 'bg-danger-soft'
-                        )}
-                      />
-                    </td>
+                    {isArticles ? (
+                      <>
+                        <td data-primary className="px-2 py-1 font-mono font-semibold text-text-soft">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Package size={12} className="text-accent-deep" />
+                            {line.code}
+                          </span>
+                        </td>
+                        <td data-label="Descripción" className="px-2 py-1">{line.description}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td data-label="Concepto" className="px-1 py-1">
+                          <select
+                            value={line.conceptId ?? ''}
+                            onChange={(e) => patchLine(idx, { conceptId: e.target.value || null })}
+                            className="w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none"
+                          >
+                            <option value="">— texto libre —</option>
+                            {concepts.map((concept) => (
+                              <option key={concept.id} value={concept.id}>{concept.name}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td data-label="Detalle" className="px-1 py-1">
+                          <input
+                            value={line.description}
+                            onChange={(e) => patchLine(idx, { description: e.target.value })}
+                            placeholder="Detalle del gasto"
+                            className={cn(
+                              'w-full bg-transparent px-2 py-1',
+                              line.description.trim() === '' && 'bg-danger-soft'
+                            )}
+                          />
+                        </td>
+                      </>
+                    )}
+
                     <td data-label="Cant." className="px-1 py-1">
                       <input
                         type="number" step="0.01" min="0"
@@ -444,9 +551,8 @@ export function PurchaseNew() {
                       <button
                         type="button"
                         onClick={() => setLines((current) => current.filter((_, i) => i !== idx))}
-                        disabled={lines.length === 1}
                         aria-label="Quitar renglón"
-                        className="text-text-soft transition-colors hover:text-danger disabled:opacity-30"
+                        className="text-text-soft transition-colors hover:text-danger"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -461,9 +567,18 @@ export function PurchaseNew() {
         {(missingVat || missingDescription) && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-danger">
             <AlertTriangle size={14} />
-            {missingDescription
-              ? 'Hay renglones sin detalle.'
-              : 'Hay renglones sin alícuota de IVA.'}
+            {missingDescription ? 'Hay renglones sin detalle.' : 'Hay renglones sin alícuota de IVA.'}
+          </p>
+        )}
+
+        {stockMoves && lines.length > 0 && (
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-text-soft">
+            <Boxes size={14} className="mt-0.5 shrink-0 text-accent-deep" />
+            Al guardar, el stock de estos artículos va a{' '}
+            {docType === 'NOTA_CREDITO' ? 'descontarse' : 'reponerse'}
+            {docType === 'FACTURA' &&
+              ', y el precio de compra del proveedor se va a actualizar con el neto de cada renglón'}
+            .
           </p>
         )}
       </Panel>
@@ -595,8 +710,7 @@ export function PurchaseNew() {
                 onChange={(e) => setDeclaredTotal(e.target.value)}
                 placeholder="Tipeá el total que figura en el papel"
                 className={cn(
-                  inputClass,
-                  'font-mono',
+                  inputClass, 'font-mono',
                   declaredDiff !== null && declaredDiff !== 0 && 'border-danger bg-danger-soft'
                 )}
               />
@@ -634,6 +748,14 @@ export function PurchaseNew() {
           </Button>
         </div>
       </Panel>
+
+      {showPicker && (
+        <PurchaseArticlePicker
+          articles={articles}
+          onPick={addArticle}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }
