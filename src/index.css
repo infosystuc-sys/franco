@@ -202,3 +202,56 @@
     min-height: 40px;
   }
 }
+
+/*
+  ===========================================================================
+  IMPRESIÓN — la factura en papel
+  ===========================================================================
+  La pantalla de la factura ES el documento imprimible: no hay una segunda
+  plantilla que pueda quedar desactualizada respecto de lo que se ve. Al
+  imprimir se apaga el cromo de la app (barra, menú, pie y botones) y queda
+  el comprobante solo en la hoja. "Guardar como PDF" del navegador alcanza,
+  y funciona igual dentro de la app Android.
+*/
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  /* El margen que reserva el menú lateral no existe en papel. */
+  .print-area {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  /*
+    El comprobante ocupa la hoja entera y sin recuadro: el borde es un
+    recurso de pantalla, para separarlo del fondo gris.
+  */
+  .print-document {
+    border: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Que no se parta un renglón ni el bloque de totales entre dos hojas. */
+  .print-document tr,
+  .print-document table {
+    break-inside: avoid;
+  }
+
+  /* El sello de anulada se imprime: una factura anulada tiene que decirlo. */
+  .print-document {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

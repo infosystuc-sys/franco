@@ -239,11 +239,16 @@ export interface WorkOrderDetail {
   component: string | null;
   customer:
     | {
+        id: string;
         name: string;
         phone: string | null;
         legal_name: string | null;
         tax_id: string | null;
         tax_condition: TaxCondition;
+        address_street: string | null;
+        address_city: string | null;
+        address_state: string | null;
+        address_zip: string | null;
       }
     | null;
   vehicle:
@@ -270,7 +275,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     .from('work_orders')
     .select(
       `id, number, status, component, public_token,
-       customer:customers(name, phone, legal_name, tax_id, tax_condition),
+       customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
+                          address_street, address_city, address_state, address_zip),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees(id, name),
        quotation:quotations!work_orders_quotation_id_fkey(number),

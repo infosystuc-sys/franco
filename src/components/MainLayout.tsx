@@ -22,14 +22,14 @@ export function MainLayout({ children }: MainLayoutProps) {
       <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
 
       <main
-        className="px-5 py-6 pb-16 md:ml-60"
+        className="print-area px-5 py-6 pb-16 md:ml-60"
         style={{ marginTop: 'calc(3.5rem + var(--safe-top))' }}
       >
         {children}
       </main>
 
       <footer
-        className="border-t border-line bg-panel px-5 py-3 md:ml-60"
+        className="no-print border-t border-line bg-panel px-5 py-3 md:ml-60"
         style={{ paddingBottom: 'calc(0.75rem + var(--safe-bottom))' }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-text-soft">
