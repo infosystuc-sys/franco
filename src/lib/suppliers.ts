@@ -18,13 +18,23 @@ export interface SupplierArticle {
 
 export interface Supplier extends FiscalEntity {
   articles: SupplierArticle[];
+  /** Plazo de pago en dias. Propone el vencimiento al cargar una compra. 0 = contado. */
+  paymentTermsDays: number;
 }
 
-export type SupplierInput = FiscalEntityInput;
+/**
+ * El plazo de pago no vive en FiscalEntity porque no aplica a los clientes:
+ * las ventas van todas a 7 dias por regla del taller, mientras que cada
+ * proveedor impone el suyo.
+ */
+export interface SupplierInput extends FiscalEntityInput {
+  paymentTermsDays: number;
+}
 
 function mapSupplier(row: any): Supplier {
   return {
     ...mapFiscalEntity(row),
+    paymentTermsDays: Number(row.payment_terms_days ?? 30),
     articles: (row.links ?? []).map((link: any) => ({
       id: link.article?.id ?? link.id,
       code: link.article?.code ?? '—',
@@ -41,6 +51,13 @@ function mapSupplier(row: any): Supplier {
 const SELECT_WITH_ARTICLES =
   '*, links:article_suppliers(supplier_code, purchase_price, is_preferred, article:articles(id, code, description))';
 
+function toRow(input: SupplierInput) {
+  return {
+    ...fiscalEntityToRow(input),
+    payment_terms_days: input.paymentTermsDays,
+  };
+}
+
 export async function fetchSuppliers(onlyActive = false): Promise<Supplier[]> {
   let query = supabase.from('suppliers').select(SELECT_WITH_ARTICLES).order('name');
   if (onlyActive) query = query.eq('active', true);
@@ -53,7 +70,7 @@ export async function fetchSuppliers(onlyActive = false): Promise<Supplier[]> {
 export async function createSupplier(input: SupplierInput): Promise<Supplier> {
   const { data, error } = await supabase
     .from('suppliers')
-    .insert(fiscalEntityToRow(input))
+    .insert(toRow(input))
     .select(SELECT_WITH_ARTICLES)
     .single();
   if (error) throw error;
@@ -63,7 +80,7 @@ export async function createSupplier(input: SupplierInput): Promise<Supplier> {
 export async function updateSupplier(id: string, input: SupplierInput): Promise<Supplier> {
   const { data, error } = await supabase
     .from('suppliers')
-    .update(fiscalEntityToRow(input))
+    .update(toRow(input))
     .eq('id', id)
     .select(SELECT_WITH_ARTICLES)
     .single();

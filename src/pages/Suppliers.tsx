@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Pencil, Trash2, X, Search, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Search, Package, CalendarClock } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
@@ -12,7 +12,6 @@ import {
   formatCuit,
   isValidCuit,
   TAX_CONDITION_LABELS,
-  type FiscalEntityInput,
 } from '@/src/lib/fiscal';
 import {
   createSupplier,
@@ -21,6 +20,7 @@ import {
   fetchSuppliers,
   updateSupplier,
   type Supplier,
+  type SupplierInput,
 } from '@/src/lib/suppliers';
 
 export function Suppliers() {
@@ -203,16 +203,16 @@ function SupplierModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = React.useState<FiscalEntityInput>(
+  const [form, setForm] = React.useState<SupplierInput>(
     supplier
-      ? fiscalEntityToForm(supplier)
+      ? { ...fiscalEntityToForm(supplier), paymentTermsDays: supplier.paymentTermsDays }
       // Un proveedor normalmente factura, así que por defecto es Resp. Inscripto.
-      : { ...EMPTY_FISCAL_FORM, taxCondition: 'RESPONSABLE_INSCRIPTO' }
+      : { ...EMPTY_FISCAL_FORM, taxCondition: 'RESPONSABLE_INSCRIPTO', paymentTermsDays: 30 }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  function patch(changes: Partial<FiscalEntityInput>) {
+  function patch(changes: Partial<SupplierInput>) {
     setForm((prev) => ({ ...prev, ...changes }));
   }
 
@@ -262,6 +262,30 @@ function SupplierModal({
             legalNamePlaceholder="Diesel Parts Sociedad Anónima"
             activeLabel="Activo (disponible para asignar a artículos)"
           />
+
+          {/* Condiciones comerciales: de acá sale el vencimiento que se
+              propone al cargar una factura de compra de este proveedor. */}
+          <div className="space-y-3 border-t border-line pt-4">
+            <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
+              <CalendarClock size={14} /> Condiciones comerciales
+            </h3>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft sm:w-1/2">
+              Plazo de pago (días)
+              <input
+                type="number"
+                min="0"
+                max="365"
+                value={form.paymentTermsDays}
+                onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
+                className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
+              />
+              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                {form.paymentTermsDays === 0
+                  ? 'Contado: la factura vence el mismo día que se emite.'
+                  : `Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
+              </span>
+            </label>
+          </div>
 
           {supplier && <SupplierArticlesSection supplier={supplier} />}
 

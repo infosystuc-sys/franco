@@ -12,6 +12,9 @@ import {
   Tags,
   MessageSquare,
   HardHat,
+  Percent,
+  ClipboardList,
+  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -36,6 +39,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: LayoutDashboard, label: 'Panel', path: '/' },
       { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
+      { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
     ],
   },
   {
@@ -47,6 +51,8 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: Package, label: 'Inventario', path: '/inventario', adminOnly: true },
       { icon: Tags, label: 'Listas de Precios', path: '/listas-precios', adminOnly: true },
       { icon: HardHat, label: 'Empleados', path: '/empleados', adminOnly: true },
+      { icon: Percent, label: 'Alícuotas', path: '/alicuotas', adminOnly: true },
+      { icon: ClipboardList, label: 'Conceptos de Gasto', path: '/conceptos', adminOnly: true },
     ],
   },
   {
