@@ -15,6 +15,9 @@ import {
   Percent,
   ClipboardList,
   ShoppingCart,
+  Wallet,
+  Landmark,
+  FileCheck,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -40,6 +43,8 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
       { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
+      { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
+      { icon: FileCheck, label: 'Cheques', path: '/cheques', adminOnly: true },
     ],
   },
   {
@@ -53,6 +58,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: HardHat, label: 'Empleados', path: '/empleados', adminOnly: true },
       { icon: Percent, label: 'Alícuotas', path: '/alicuotas', adminOnly: true },
       { icon: ClipboardList, label: 'Conceptos de Gasto', path: '/conceptos', adminOnly: true },
+      { icon: Landmark, label: 'Medios de Pago', path: '/medios-pago', adminOnly: true },
     ],
   },
   {
