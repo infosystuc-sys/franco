@@ -18,6 +18,8 @@ import {
   Wallet,
   Landmark,
   FileCheck,
+  Receipt,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -42,6 +44,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: LayoutDashboard, label: 'Panel', path: '/' },
       { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
+      { icon: Receipt, label: 'Facturación', path: '/facturas', adminOnly: true },
       { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
       { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
       { icon: FileCheck, label: 'Cheques', path: '/cheques', adminOnly: true },
@@ -67,6 +70,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
       { icon: Microscope, label: 'Diagnósticos', path: '/diagnosticos' },
       { icon: BarChart3, label: 'Reportes', path: '/reportes' },
+    ],
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { icon: Settings, label: 'Configuración', path: '/configuracion', adminOnly: true },
     ],
   },
 ];
@@ -99,7 +108,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       )}
       <nav
         className={cn(
-          'fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
+          'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
           'transition-transform duration-200 md:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full'
         )}

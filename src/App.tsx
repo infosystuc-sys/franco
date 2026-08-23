@@ -8,6 +8,9 @@ import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { Employees } from './pages/Employees';
 import { ExpenseConcepts } from './pages/ExpenseConcepts';
+import { InvoiceDetails } from './pages/InvoiceDetails';
+import { InvoiceNew } from './pages/InvoiceNew';
+import { Invoices } from './pages/Invoices';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
 import { Notifications } from './pages/Notifications';
@@ -21,6 +24,7 @@ import { PurchaseDetails } from './pages/PurchaseDetails';
 import { PurchaseNew } from './pages/PurchaseNew';
 import { Purchases } from './pages/Purchases';
 import { Quotations } from './pages/Quotations';
+import { Settings } from './pages/Settings';
 import { Suppliers } from './pages/Suppliers';
 import { TaxRates } from './pages/TaxRates';
 import { Vehicles } from './pages/Vehicles';
@@ -66,6 +70,9 @@ export default function App() {
                     <Route path="/orden/:id" element={<WorkOrderDetails />} />
                     <Route path="/cotizaciones" element={<Quotations />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
+                    <Route path="/facturas" element={<Invoices />} />
+                    <Route path="/facturar/:otNumber" element={<InvoiceNew />} />
+                    <Route path="/factura/:id" element={<InvoiceDetails />} />
                     <Route path="/compras" element={<Purchases />} />
                     <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />
@@ -74,6 +81,7 @@ export default function App() {
                     <Route path="/medios-pago" element={<PaymentMethods />} />
                     <Route path="/alicuotas" element={<TaxRates />} />
                     <Route path="/conceptos" element={<ExpenseConcepts />} />
+                    <Route path="/configuracion" element={<Settings />} />
                     <Route path="/inventario" element={<Inventory />} />
                     <Route path="/listas-precios" element={<PriceLists />} />
                     <Route path="/mensajes" element={<Notifications />} />

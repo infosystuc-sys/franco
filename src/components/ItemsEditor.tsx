@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Trash2, Package, Search, X } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
 import type { Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
@@ -18,12 +18,19 @@ export function ItemsEditor({
   articles,
   editable,
   title = 'Renglones',
+  totals,
 }: {
   items: WorkOrderItemInput[];
   onChange: (items: WorkOrderItemInput[]) => void;
   articles: Article[];
   editable: boolean;
   title?: string;
+  /**
+   * Reemplaza el cuadro de totales. Lo usa la facturación, donde el IVA
+   * depende de la letra del comprobante: en una factura C es cero y en una B
+   * no se discrimina, así que el 21% fijo de acá no sirve.
+   */
+  totals?: React.ReactNode;
 }) {
   const [showPicker, setShowPicker] = React.useState(false);
 
@@ -134,10 +141,10 @@ export function ItemsEditor({
                     <td data-primary className="px-3 py-1 text-text-soft">{item.code}</td>
                     <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
                     <td data-label="Cant." className="px-3 py-1 text-right">{item.quantity.toFixed(2)}</td>
-                    <td data-label="P. unit." className="px-3 py-1 text-right">$ {item.unitPrice.toFixed(2)}</td>
+                    <td data-label="P. unit." className="px-3 py-1 text-right">$ {formatMoney(item.unitPrice)}</td>
                   </>
                 )}
-                <td data-label="Subtotal" className="px-3 py-1 text-right font-bold">$ {(item.quantity * item.unitPrice).toFixed(2)}</td>
+                <td data-label="Subtotal" className="px-3 py-1 text-right font-bold">$ {formatMoney(item.quantity * item.unitPrice)}</td>
                 {editable && (
                   <td className="px-3 py-1 text-center">
                     <button type="button" onClick={() => removeItem(idx)} aria-label="Quitar renglón" className="text-text-soft transition-colors hover:text-danger">
@@ -154,7 +161,7 @@ export function ItemsEditor({
                 Total neto
               </td>
               <td className="px-3 py-2 text-right font-display text-lg font-medium text-text">
-                $ {total.toFixed(2)}
+                $ {formatMoney(total)}
               </td>
               {editable && <td></td>}
             </tr>
@@ -162,24 +169,26 @@ export function ItemsEditor({
         </table>
       </div>
 
-      <div className="flex justify-end">
-        <div className="w-full space-y-2 border border-line bg-panel-alt p-4 md:w-1/3">
-          <div className="flex justify-between text-xs text-text-soft">
-            <span>Subtotal</span>
-            <span className="text-text">$ {total.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-xs text-text-soft">
-            <span>IVA 21%</span>
-            <span className="text-text">$ {iva.toFixed(2)}</span>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
-            <span className="font-display text-2xl font-medium text-text">
-              $ {(total + iva).toFixed(2)}
-            </span>
+      {totals ?? (
+        <div className="flex justify-end">
+          <div className="w-full space-y-2 border border-line bg-panel-alt p-4 md:w-1/3">
+            <div className="flex justify-between text-xs text-text-soft">
+              <span>Subtotal</span>
+              <span className="text-text">$ {formatMoney(total)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-text-soft">
+              <span>IVA 21%</span>
+              <span className="text-text">$ {formatMoney(iva)}</span>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
+              <span className="font-display text-2xl font-medium text-text">
+                $ {formatMoney(total + iva)}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {showPicker && (
         <ArticlePicker articles={articles} onPick={addArticle} onClose={() => setShowPicker(false)} />
@@ -258,7 +267,7 @@ function ArticlePicker({
                 >
                   <td data-primary className="p-2 font-bold">{article.code}</td>
                   <td data-label="Descripción" className="p-2">{article.description}</td>
-                  <td data-label="Precio" className="p-2 text-right">$ {article.unitPrice.toFixed(2)}</td>
+                  <td data-label="Precio" className="p-2 text-right">$ {formatMoney(article.unitPrice)}</td>
                   <td data-label="Stock" className="p-2 text-center">
                     {article.tracksStock ? (
                       <span className={cn(

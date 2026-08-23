@@ -14,7 +14,7 @@ export function TopNavBar({
 
   return (
     <header
-      className="fixed top-0 z-50 flex w-full items-center justify-between gap-3 border-b border-ink-line bg-ink px-4"
+      className="no-print fixed top-0 z-50 flex w-full items-center justify-between gap-3 border-b border-ink-line bg-ink px-4"
       /* En Android la barra de estado se superpone: se agrega su alto arriba. */
       style={{ height: 'calc(3.5rem + var(--safe-top))', paddingTop: 'var(--safe-top)' }}
     >

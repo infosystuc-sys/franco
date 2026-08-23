@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Copy, Send } from 'lucide-react';
+import { XCircle, Save, Check, FileText, ArrowRight, History, Copy, Send, Receipt } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -8,6 +8,11 @@ import { Button, PageHeader, Panel, SectionHeader, StateStrip, trackingLink } fr
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
 import { fetchEmployees, type Employee } from '@/src/lib/employees';
+import {
+  fetchInvoiceForWorkOrder,
+  INVOICE_TYPE_LABELS,
+  type WorkOrderInvoiceRef,
+} from '@/src/lib/invoices';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
   assignEmployee,
@@ -40,6 +45,7 @@ export function WorkOrderDetails() {
   const [changingStatus, setChangingStatus] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assigningEmployee, setAssigningEmployee] = useState(false);
+  const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
 
   const loadOrder = React.useCallback(async () => {
     if (!id) return;
@@ -58,6 +64,12 @@ export function WorkOrderDetails() {
         })) ?? []
       );
       setHistory(data ? await fetchStatusHistory(data.id) : []);
+
+      // La factura se consulta aparte y sin propagar el error: el operario no
+      // tiene permiso de lectura sobre facturas, y si la migracion todavia no
+      // se aplico la tabla no existe. En ninguno de los dos casos deberia
+      // caerse la pantalla de la orden: simplemente no hay boton.
+      setInvoice(data ? await fetchInvoiceForWorkOrder(data.id).catch(() => null) : null);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -185,6 +197,7 @@ export function WorkOrderDetails() {
                 <XCircle size={16} /> Volver
               </Button>
             </Link>
+            {isAdmin && <InvoiceAction order={order} invoice={invoice} />}
             {isAdmin && (
               <Button onClick={handleSave} disabled={saving}>
                 <Save size={16} /> {saving ? 'Guardando…' : 'Guardar'}
@@ -334,6 +347,53 @@ export function WorkOrderDetails() {
         />
       </Panel>
     </div>
+  );
+}
+
+/**
+ * El acceso a la facturación desde la orden.
+ *
+ * Ya facturada deja de ser un botón y pasa a ser un link al comprobante:
+ * ofrecer "Facturar" sobre una orden que ya tiene factura sería prometer algo
+ * que la base va a rechazar. Sin terminar queda deshabilitado explicando por
+ * qué, que es más útil que esconderlo.
+ */
+function InvoiceAction({
+  order,
+  invoice,
+}: {
+  order: WorkOrderDetail;
+  invoice: WorkOrderInvoiceRef | null;
+}) {
+  if (invoice) {
+    return (
+      <Link to={`/factura/${invoice.id}`}>
+        <Button variant="secondary" type="button">
+          <Receipt size={16} /> {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber}
+        </Button>
+      </Link>
+    );
+  }
+
+  if (order.status !== 'TERMINADO') {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        disabled
+        title={`Se factura cuando la orden está terminada. Ahora está en ${STATUS_LABELS[order.status]}.`}
+      >
+        <Receipt size={16} /> Facturar
+      </Button>
+    );
+  }
+
+  return (
+    <Link to={`/facturar/${order.number}`}>
+      <Button variant="secondary" type="button">
+        <Receipt size={16} /> Facturar
+      </Button>
+    </Link>
   );
 }
 
