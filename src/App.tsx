@@ -19,6 +19,9 @@ import { PublicQuotation } from './pages/PublicQuotation';
 import { QuotationDetails } from './pages/QuotationDetails';
 import { PaymentMethods } from './pages/PaymentMethods';
 import { Checks } from './pages/Checks';
+import { PaymentOrderDetails } from './pages/PaymentOrderDetails';
+import { PaymentOrderNew } from './pages/PaymentOrderNew';
+import { PaymentOrders } from './pages/PaymentOrders';
 import { ReceiptDetails } from './pages/ReceiptDetails';
 import { ReceiptNew } from './pages/ReceiptNew';
 import { Receipts } from './pages/Receipts';
@@ -82,6 +85,9 @@ export default function App() {
                     <Route path="/cobranzas" element={<Receipts />} />
                     <Route path="/cobranzas/nueva" element={<ReceiptNew />} />
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />
+                    <Route path="/pagos" element={<PaymentOrders />} />
+                    <Route path="/pagos/nueva" element={<PaymentOrderNew />} />
+                    <Route path="/pago/:id" element={<PaymentOrderDetails />} />
                     <Route path="/tesoreria" element={<Treasury />} />
                     <Route path="/cheques" element={<Checks />} />
                     <Route path="/medios-pago" element={<PaymentMethods />} />
