@@ -20,6 +20,7 @@ import {
   FileCheck,
   Receipt,
   Settings,
+  HandCoins,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation } from 'react-router-dom';
@@ -45,6 +46,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
       { icon: Receipt, label: 'Facturación', path: '/facturas', adminOnly: true },
+      { icon: HandCoins, label: 'Cobranzas', path: '/cobranzas', adminOnly: true },
       { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
       { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
       { icon: FileCheck, label: 'Cheques', path: '/cheques', adminOnly: true },
