@@ -37,7 +37,8 @@ export type DecisionResult =
   | 'NO_EXISTE'
   | 'YA_RESUELTA'
   | 'YA_CONVERTIDA'
-  | 'VENCIDA';
+  | 'VENCIDA'
+  | 'FALTA_MOTIVO';
 
 export const DECISION_MESSAGES: Record<DecisionResult, string> = {
   ACEPTADA: 'Presupuesto aceptado. El taller ya fue avisado y va a comenzar el trabajo.',
@@ -46,6 +47,7 @@ export const DECISION_MESSAGES: Record<DecisionResult, string> = {
   YA_RESUELTA: 'Este presupuesto ya fue respondido. Si necesitás cambiarlo, comunicate con el taller.',
   YA_CONVERTIDA: 'El trabajo de este presupuesto ya está en marcha.',
   VENCIDA: 'Este presupuesto venció. Pedile uno nuevo al taller.',
+  FALTA_MOTIVO: 'Para rechazar el presupuesto tenés que contarnos el motivo.',
 };
 
 export async function fetchPublicQuotation(token: string): Promise<PublicQuotation | null> {
@@ -85,13 +87,22 @@ export async function fetchPublicQuotationItems(token: string): Promise<PublicQu
 
 /**
  * Decisión del cliente. Todas las validaciones viven en la base: que esté
- * vigente, que no se haya respondido antes y que no tenga ya una orden en
- * marcha. Acá solo se traduce el resultado.
+ * vigente, que no se haya respondido antes, que no tenga ya una orden en
+ * marcha y —al rechazar— que venga el motivo. Acá solo se traduce el
+ * resultado.
+ *
+ * El motivo se valida en la base y no solo en el formulario porque el link es
+ * público: cualquiera puede llamar a la RPC directamente.
  */
-export async function decideQuotation(token: string, accept: boolean): Promise<DecisionResult> {
+export async function decideQuotation(
+  token: string,
+  accept: boolean,
+  reason = ''
+): Promise<DecisionResult> {
   const { data, error } = await supabase.rpc('decide_quotation', {
     p_token: token,
     p_accept: accept,
+    p_reason: reason.trim() || null,
   });
   if (error) throw error;
   return data as DecisionResult;

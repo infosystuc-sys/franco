@@ -10,6 +10,7 @@ import {
   Lock,
   ArrowRight,
   Copy,
+  ThumbsDown,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -172,6 +173,24 @@ export function QuotationDetails() {
 
       {error && (
         <div className="bg-danger-soft border border-danger/40 text-danger text-sm px-4 py-3">{error}</div>
+      )}
+
+      {/* El motivo del rechazo es lo que dice si conviene recotizar o si el
+          trabajo se perdió. Se sigue mostrando después de reabrir la
+          cotización: es justo cuando más sirve tenerlo a la vista. */}
+      {quotation.rejectionReason && (
+        <div className="border border-line bg-panel-alt px-4 py-3">
+          <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-danger">
+            <ThumbsDown size={13} />
+            {quotation.status === 'RECHAZADA' ? 'El cliente rechazó' : 'Rechazo anterior'}
+            {quotation.decidedAt && (
+              <span className="font-normal normal-case tracking-normal text-text-soft">
+                · {new Date(quotation.decidedAt).toLocaleDateString('es-AR')}
+              </span>
+            )}
+          </span>
+          <p className="whitespace-pre-line text-sm text-text">{quotation.rejectionReason}</p>
+        </div>
       )}
       {notice && (
         <div className="bg-panel-alt border border-state-done/40 text-state-done text-sm px-4 py-3">{notice}</div>

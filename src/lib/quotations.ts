@@ -79,6 +79,13 @@ export interface QuotationDetail {
   publicToken: string;
   items: WorkOrderItemInput[];
   createdAt: string;
+  /** Cuándo respondió el cliente desde el link. Null si todavía no respondió. */
+  decidedAt: string | null;
+  /**
+   * Por qué el cliente rechazó. Se conserva al reabrir la cotización: estás
+   * recotizando por ese motivo, así que es cuando más sirve tenerlo.
+   */
+  rejectionReason: string | null;
 }
 
 function vehicleLabelOf(vehicle: { brand: string | null; model: string; license_plate: string | null } | null): string {
@@ -118,11 +125,14 @@ export async function fetchQuotations(): Promise<QuotationListRow[]> {
     workOrderNumber: row.work_order?.number ?? null,
     publicToken: row.public_token,
     createdAt: row.created_at,
+    decidedAt: row.decided_at,
+    rejectionReason: row.rejection_reason,
   }));
 }
 
 const DETAIL_SELECT = `
   id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
+  decided_at, rejection_reason,
   customer:customers(name, legal_name, tax_id),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
@@ -154,6 +164,8 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
     workOrderNumber: row.work_order?.number ?? null,
     publicToken: row.public_token,
     createdAt: row.created_at,
+    decidedAt: row.decided_at,
+    rejectionReason: row.rejection_reason,
     items: (row.items ?? []).map((item: any) => ({
       articleId: item.article_id ?? null,
       code: item.code ?? '',

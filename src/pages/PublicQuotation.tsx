@@ -31,6 +31,7 @@ export function PublicQuotation() {
   const [deciding, setDeciding] = React.useState(false);
   const [confirming, setConfirming] = React.useState<'aceptar' | 'rechazar' | null>(null);
   const [result, setResult] = React.useState<DecisionResult | null>(null);
+  const [reason, setReason] = React.useState('');
 
   const load = React.useCallback(async () => {
     if (!token) return;
@@ -51,11 +52,13 @@ export function PublicQuotation() {
   async function decidir(accept: boolean) {
     if (!token) return;
     setDeciding(true);
-    setConfirming(null);
     try {
-      const r = await decideQuotation(token, accept);
-      setResult(r);
-      await load();
+      const r = await decideQuotation(token, accept, reason);
+      // Si falta el motivo no se cierra el paso de confirmación: el cliente
+      // tiene que poder completarlo sin volver a empezar.
+      if (r !== 'FALTA_MOTIVO') setConfirming(null);
+      setResult(r === 'FALTA_MOTIVO' ? null : r);
+      if (r !== 'FALTA_MOTIVO') await load();
     } finally {
       setDeciding(false);
     }
@@ -248,11 +251,39 @@ export function PublicQuotation() {
                   ? '¿Confirmás que aceptás este presupuesto? El taller va a comenzar el trabajo.'
                   : '¿Confirmás que rechazás este presupuesto?'}
               </p>
+
+              {/* El motivo es lo único que le queda al taller para reaccionar:
+                  si fue el precio puede recotizar, si fue el plazo puede
+                  reordenar el trabajo. Sin eso, el presupuesto perdido no
+                  enseña nada. */}
+              {confirming === 'rechazar' && (
+                <label className="mb-4 block">
+                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    ¿Por qué lo rechazás? *
+                  </span>
+                  <textarea
+                    autoFocus
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={3}
+                    placeholder="Por ejemplo: el precio se fue de presupuesto, necesito el vehículo antes, ya lo resolví en otro lado…"
+                    className={cn(
+                      'w-full resize-y border border-line bg-panel px-3 py-2 text-sm',
+                      'focus:border-accent-deep focus:outline-none',
+                      reason.trim() === '' && 'field-required'
+                    )}
+                  />
+                  <span className="mt-1 block text-[11px] text-text-soft">
+                    Nos sirve para mejorar la próxima cotización.
+                  </span>
+                </label>
+              )}
+
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   variant={confirming === 'aceptar' ? 'primary' : 'danger'}
                   onClick={() => decidir(confirming === 'aceptar')}
-                  disabled={deciding}
+                  disabled={deciding || (confirming === 'rechazar' && reason.trim() === '')}
                   className="justify-center sm:flex-1"
                 >
                   {deciding ? 'Enviando…' : confirming === 'aceptar' ? 'Sí, acepto' : 'Sí, rechazo'}
