@@ -30,6 +30,8 @@ import { PurchaseDetails } from './pages/PurchaseDetails';
 import { PurchaseNew } from './pages/PurchaseNew';
 import { Purchases } from './pages/Purchases';
 import { Quotations } from './pages/Quotations';
+import { ReportView } from './pages/ReportView';
+import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Suppliers } from './pages/Suppliers';
 import { TaxRates } from './pages/TaxRates';
@@ -82,6 +84,8 @@ export default function App() {
                     <Route path="/compras" element={<Purchases />} />
                     <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />
+                    <Route path="/informes" element={<Reports />} />
+                    <Route path="/informe/:id" element={<ReportView />} />
                     <Route path="/cobranzas" element={<Receipts />} />
                     <Route path="/cobranzas/nueva" element={<ReceiptNew />} />
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />

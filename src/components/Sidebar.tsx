@@ -73,7 +73,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
       { icon: Microscope, label: 'Diagnósticos', path: '/diagnosticos' },
-      { icon: BarChart3, label: 'Reportes', path: '/reportes' },
+      { icon: BarChart3, label: 'Informes', path: '/informes', adminOnly: true },
     ],
   },
   {
