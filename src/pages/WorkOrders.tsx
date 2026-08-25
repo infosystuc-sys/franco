@@ -1,47 +1,47 @@
 import React from 'react';
-import {
-  CheckCircle2,
-  Wrench,
-  Hourglass,
-  CheckCircle,
-  FolderOpen,
-  Plus,
-  Eye,
-  Edit2,
-} from 'lucide-react';
-import { cn } from '@/src/lib/utils';
-import { Link } from 'react-router-dom';
+import { Plus, Search, Eye, Edit2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { cn, formatDate } from '@/src/lib/utils';
+import { Button, PageHeader, Panel, StateStrip } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
-import { Button, Panel, PageHeader, SectionHeader, StateStrip } from '@/src/components/ui';
 import { NewWorkOrderModal } from '@/src/components/NewWorkOrderModal';
 import {
-  fetchDashboardData,
+  fetchAllWorkOrders,
   getErrorMessage,
-  hasLinkedEmployee,
   STATUS_LABELS,
+  STATUS_SEQUENCE,
   STATUS_STRIP,
-  type WorkOrderListRow,
+  type WorkOrderRow,
 } from '@/src/lib/workOrders';
+import type { WorkOrderStatus } from '@/src/types';
 
-export function Dashboard() {
+/**
+ * El listado completo de órdenes, en cualquier estado.
+ *
+ * El Panel es una cola de trabajo y por diseño solo muestra lo pendiente;
+ * acá está todo, con quién la tiene asignada y desde cuándo, para poder
+ * buscar una orden terminada hace tres semanas sin tener que recordarla.
+ *
+ * Un operario ve únicamente sus propias órdenes: lo decide el RLS de
+ * work_orders, no esta pantalla.
+ */
+export function WorkOrders() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
-  const [orders, setOrders] = React.useState<WorkOrderListRow[]>([]);
-  const [kpis, setKpis] = React.useState({ autorizadas: 0, enReparacion: 0, espRepuestos: 0, terminadasHoy: 0, cerradasMes: 0 });
+  const navigate = useNavigate();
+
+  const [orders, setOrders] = React.useState<WorkOrderRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState<WorkOrderStatus | ''>('');
   const [showNewOrder, setShowNewOrder] = React.useState(false);
-  // null mientras no se sabe (o no aplica, por ser admin): solo se usa para
-  // elegir el mensaje de la lista vacía de un operario.
-  const [linkedEmployee, setLinkedEmployee] = React.useState<boolean | null>(null);
 
-  const loadData = React.useCallback(async () => {
+  const loadOrders = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { kpis, pendingOrders } = await fetchDashboardData();
-      setKpis(kpis);
-      setOrders(pendingOrders);
+      setOrders(await fetchAllWorkOrders());
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -50,42 +50,32 @@ export function Dashboard() {
   }, []);
 
   React.useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadOrders();
+  }, [loadOrders]);
 
-  // Aparte de loadData: si esto fallara no debe tapar la lista de órdenes,
-  // que es lo importante. Solo decide qué mensaje mostrar si queda vacía.
-  React.useEffect(() => {
-    if (role !== 'operario') return;
-    hasLinkedEmployee()
-      .then(setLinkedEmployee)
-      .catch(() => setLinkedEmployee(null));
-  }, [role]);
+  const counts = React.useMemo(() => {
+    const base = {} as Record<WorkOrderStatus, number>;
+    STATUS_SEQUENCE.forEach((status) => { base[status] = 0; });
+    orders.forEach((order) => { base[order.status] += 1; });
+    return base;
+  }, [orders]);
 
-  // Un operario dado de baja (o nunca vinculado) también ve la lista vacía,
-  // pero por un motivo distinto al de "todavía no tenés nada asignado": sin
-  // esto, parece que el sistema falla en lugar de explicar qué pasa.
-  const emptyMessage = isAdmin
-    ? 'No hay órdenes abiertas. Empezá por una cotización.'
-    : linkedEmployee === false
-      ? 'Tu usuario no está vinculado a ningún empleado activo. Pedile al administrador que lo revise.'
-      : 'No tenés órdenes asignadas. El encargado del taller te las asigna desde la orden de trabajo.';
-
-  // Cada indicador es un estado del circuito: el color es el mismo que marca
-  // la tira lateral de la fila, así el número y la orden se asocian solos.
-  const kpiCards = [
-    { label: 'Autorizadas', value: kpis.autorizadas, icon: CheckCircle2, strip: STATUS_STRIP.AUTORIZADO },
-    { label: 'Esp. Repuestos', value: kpis.espRepuestos, icon: Hourglass, strip: STATUS_STRIP.EN_ESPERA_REP },
-    { label: 'En Reparación', value: kpis.enReparacion, icon: Wrench, strip: STATUS_STRIP.EN_REPARACION },
-    { label: 'Terminadas hoy', value: kpis.terminadasHoy, icon: CheckCircle, strip: STATUS_STRIP.TERMINADO },
-    { label: 'Cerradas del mes', value: kpis.cerradasMes, icon: FolderOpen, strip: 'var(--color-state-idle)' },
-  ];
+  const filtered = React.useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return orders.filter((order) => {
+      if (statusFilter && order.status !== statusFilter) return false;
+      if (!term) return true;
+      return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(term));
+    });
+  }, [orders, search, statusFilter]);
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Panel de control"
-        subtitle="Órdenes abiertas en el taller, por etapa."
+        title="Órdenes de Trabajo"
+        subtitle="Todas las órdenes, en cualquier estado."
         actions={
           isAdmin && (
             <Button onClick={() => setShowNewOrder(true)}>
@@ -96,29 +86,41 @@ export function Dashboard() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
-          No se pudo conectar con Supabase: {error}
-        </div>
+        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
-        {kpiCards.map((kpi) => (
-          <Panel key={kpi.label} className="relative flex flex-col justify-between p-4 pl-5">
-            <StateStrip color={kpi.strip} />
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-text-soft">
-                {kpi.label}
-              </span>
-              <kpi.icon size={18} className="shrink-0 text-text-faint" />
-            </div>
-            <span className="font-display text-4xl font-medium leading-none text-text">
-              {loading ? '—' : kpi.value}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {STATUS_SEQUENCE.map((status) => (
+          <button
+            key={status}
+            onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
+            className={cn(
+              'relative overflow-hidden border p-3 text-left transition-colors',
+              statusFilter === status
+                ? 'border-accent bg-accent/10'
+                : 'border-line-strong bg-panel hover:bg-panel-alt'
+            )}
+          >
+            <StateStrip color={STATUS_STRIP[status]} />
+            <span className="block pl-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              {STATUS_LABELS[status]}
             </span>
-          </Panel>
+            <span className="block pl-2 font-display text-2xl font-medium text-text">
+              {loading ? '—' : counts[status]}
+            </span>
+          </button>
         ))}
       </div>
 
-      <SectionHeader title="Órdenes que requieren atención" />
+      <div className="relative sm:w-72">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Número, cliente, vehículo o empleado…"
+          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+        />
+      </div>
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -129,23 +131,27 @@ export function Dashboard() {
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
                 <th className="w-40 p-3 font-semibold">Estado</th>
+                <th className="w-36 p-3 font-semibold">Empleado</th>
+                <th className="w-28 p-3 font-semibold">Fecha</th>
                 <th className="w-28 p-3 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-text-soft">Cargando…</td>
+                  <td colSpan={7} className="p-8 text-center text-text-soft">Cargando…</td>
                 </tr>
               )}
-              {!loading && orders.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-text-soft">
-                    {emptyMessage}
+                  <td colSpan={7} className="p-8 text-center text-text-soft">
+                    {orders.length === 0
+                      ? 'No hay órdenes cargadas todavía.'
+                      : 'Ninguna orden coincide con la búsqueda.'}
                   </td>
                 </tr>
               )}
-              {orders.map((order) => (
+              {filtered.map((order) => (
                 <tr
                   key={order.id}
                   className="relative border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
@@ -176,6 +182,12 @@ export function Dashboard() {
                       {STATUS_LABELS[order.status]}
                     </span>
                   </td>
+                  <td data-label="Empleado" className="p-3 text-text-soft">
+                    {order.employeeName ?? '—'}
+                  </td>
+                  <td data-label="Fecha" className="p-3 text-text-soft">
+                    {formatDate(order.createdAt.slice(0, 10))}
+                  </td>
                   <td className="p-3 text-right">
                     <Link
                       to={`/seguimiento/${order.publicToken}`}
@@ -202,13 +214,12 @@ export function Dashboard() {
       {showNewOrder && (
         <NewWorkOrderModal
           onClose={() => setShowNewOrder(false)}
-          onCreated={() => {
+          onCreated={(workOrder) => {
             setShowNewOrder(false);
-            loadData();
+            navigate(`/orden/${workOrder.number}`);
           }}
         />
       )}
-
     </div>
   );
 }

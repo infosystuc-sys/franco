@@ -193,6 +193,46 @@ export async function fetchDashboardData() {
   return { kpis, pendingOrders };
 }
 
+export interface WorkOrderRow extends WorkOrderListRow {
+  employeeName: string | null;
+  createdAt: string;
+}
+
+/**
+ * Todas las órdenes, en cualquier estado. A diferencia de fetchDashboardData
+ * —que solo trae lo pendiente, porque el Panel es una cola de trabajo— esta
+ * alimenta el listado completo de /ordenes, con quién la tiene asignada y
+ * desde cuándo.
+ *
+ * El RLS de work_orders ya filtra solo: un operario recibe únicamente sus
+ * propias órdenes, sin que esta función tenga que saberlo.
+ */
+export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
+  const { data, error } = await supabase
+    .from('work_orders')
+    .select(
+      `id, number, status, component, public_token, created_at,
+       customer:customers(name),
+       vehicle:vehicles(brand, model, license_plate),
+       employee:employees(name)`
+    )
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    number: row.number,
+    status: row.status,
+    component: row.component,
+    customerName: row.customer?.name ?? '—',
+    vehicleLabel: vehicleLabel(row.vehicle),
+    publicToken: row.public_token,
+    employeeName: row.employee?.name ?? null,
+    createdAt: row.created_at,
+  }));
+}
+
 /**
  * Si el usuario logueado es un operario, dice si tiene un empleado activo
  * vinculado. Sin esto, un operario dado de baja (o nunca vinculado) ve la
