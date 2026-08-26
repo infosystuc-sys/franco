@@ -178,7 +178,7 @@ export function QuotationDetails() {
               onSend={handleSend}
               onAccept={() => handleStatus('ACEPTADA', 'Cotización aceptada. Ya podés convertirla en orden de trabajo.')}
               onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
-              onReopen={() => handleStatus('ENVIADA', 'Cotización reabierta para edición.')}
+              onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
               onConvert={handleConvert}
             />
           )
