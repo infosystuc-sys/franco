@@ -97,6 +97,10 @@ export function QuotationDetails() {
   const frozen = !isQuotationEditable(quotation.status);
   const editable = isAdmin && !frozen;
   const expired = isExpired(quotation.validUntil, quotation.status);
+  // Refleja lo que está en pantalla, no necesariamente lo último guardado:
+  // si agregaron renglones y todavía no guardaron, igual habilita enviar. La
+  // base es la que de verdad impide dejarla vacía, esto es solo la UX rápida.
+  const hasItems = items.length > 0;
 
   async function run(action: () => Promise<void>, successMessage?: string) {
     setBusy(true);
@@ -122,6 +126,15 @@ export function QuotationDetails() {
     await updateQuotationStatus(quotation.id, status);
     await loadQuotation();
   }, message);
+
+  function handleSend() {
+    if (items.length === 0) {
+      setNotice(null);
+      setError('No se puede enviar: cargá al menos un renglón antes de enviarla.');
+      return;
+    }
+    handleStatus('ENVIADA', 'Cotización marcada como enviada.');
+  }
 
   const handleConvert = () => run(async () => {
     const created = await convertToWorkOrder(quotation.id);
@@ -160,8 +173,9 @@ export function QuotationDetails() {
               quotation={quotation}
               busy={busy}
               editable={editable}
+              hasItems={hasItems}
               onSave={handleSave}
-              onSend={() => handleStatus('ENVIADA', 'Cotización marcada como enviada.')}
+              onSend={handleSend}
               onAccept={() => handleStatus('ACEPTADA', 'Cotización aceptada. Ya podés convertirla en orden de trabajo.')}
               onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
               onReopen={() => handleStatus('ENVIADA', 'Cotización reabierta para edición.')}
@@ -300,6 +314,7 @@ function ActionBar({
   quotation,
   busy,
   editable,
+  hasItems,
   onSave,
   onSend,
   onAccept,
@@ -310,6 +325,7 @@ function ActionBar({
   quotation: QuotationDetail;
   busy: boolean;
   editable: boolean;
+  hasItems: boolean;
   onSave: () => void;
   onSend: () => void;
   onAccept: () => void;
@@ -328,7 +344,12 @@ function ActionBar({
       )}
 
       {quotation.status === 'EMITIDA' && (
-        <button onClick={onSend} disabled={busy} className={cn(btn, 'bg-blue-600 text-white hover:bg-blue-700')}>
+        <button
+          onClick={onSend}
+          disabled={busy || !hasItems}
+          title={hasItems ? undefined : 'Cargá al menos un renglón antes de enviarla.'}
+          className={cn(btn, 'bg-blue-600 text-white hover:bg-blue-700')}
+        >
           <Send size={16} /> Marcar enviada
         </button>
       )}
