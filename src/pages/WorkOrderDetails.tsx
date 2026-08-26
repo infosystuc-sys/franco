@@ -323,6 +323,7 @@ export function WorkOrderDetails() {
         {isAdmin && (
           <StatusControls
             order={order}
+            invoice={invoice}
             busy={changingStatus}
             onChange={handleStatusChange}
           />
@@ -398,61 +399,105 @@ function InvoiceAction({
 /**
  * Avance del estado de la OT. El botón principal sigue el flujo natural;
  * el desplegable permite corregir a cualquier otro estado si alguien se pasó.
+ *
+ * Terminada, "Corregir estado" pasa a llamarse "Reabrir orden": misma
+ * mecánica (elegís el destino en el desplegable), pero con su propio rótulo
+ * porque acá el volver atrás es la acción principal, no una corrección
+ * excepcional. Si ya hay factura emitida, se avisa pero no se bloquea: la
+ * factura no se actualiza sola.
  */
 function StatusControls({
   order,
+  invoice,
   busy,
   onChange,
 }: {
   order: WorkOrderDetail;
+  invoice: WorkOrderInvoiceRef | null;
   busy: boolean;
   onChange: (status: WorkOrderStatus) => void;
 }) {
   const [correcting, setCorrecting] = useState(false);
   const following = nextStatus(order.status);
+  const isDone = order.status === 'TERMINADO';
+  const reopenOptions = STATUS_SEQUENCE.filter((status) => status !== 'TERMINADO');
+  const [reopenTarget, setReopenTarget] = useState<WorkOrderStatus>(
+    reopenOptions[reopenOptions.length - 1]
+  );
 
   return (
-    <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-      {following ? (
-        <Button onClick={() => onChange(following)} disabled={busy}>
-          {busy ? 'Actualizando…' : `Avanzar a ${STATUS_LABELS[following]}`}
-          <ArrowRight size={16} />
-        </Button>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-done">
-          <Check size={16} /> Orden terminada
-        </span>
-      )}
-
-      {correcting ? (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-            Corregir a
+    <div className="mt-7 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {following ? (
+          <Button onClick={() => onChange(following)} disabled={busy}>
+            {busy ? 'Actualizando…' : `Avanzar a ${STATUS_LABELS[following]}`}
+            <ArrowRight size={16} />
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-done">
+            <Check size={16} /> Orden terminada
           </span>
-          <select
-            value={order.status}
-            onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
-            disabled={busy}
-            className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
-          >
-            {STATUS_SEQUENCE.map((status) => (
-              <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-            ))}
-          </select>
+        )}
+
+        {correcting ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              {isDone ? 'Reabrir en' : 'Corregir a'}
+            </span>
+            {isDone ? (
+              <>
+                <select
+                  value={reopenTarget}
+                  onChange={(e) => setReopenTarget(e.target.value as WorkOrderStatus)}
+                  disabled={busy}
+                  className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+                >
+                  {reopenOptions.map((status) => (
+                    <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => onChange(reopenTarget)}
+                  disabled={busy}
+                  className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep hover:underline"
+                >
+                  Confirmar
+                </button>
+              </>
+            ) : (
+              <select
+                value={order.status}
+                onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
+                disabled={busy}
+                className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+              >
+                {STATUS_SEQUENCE.map((status) => (
+                  <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => setCorrecting(false)}
+              className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-text"
+            >
+              {isDone ? 'Cancelar' : 'Listo'}
+            </button>
+          </div>
+        ) : (
           <button
-            onClick={() => setCorrecting(false)}
-            className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-text"
+            onClick={() => setCorrecting(true)}
+            className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-accent-deep hover:underline"
           >
-            Listo
+            {isDone ? 'Reabrir orden' : 'Corregir estado'}
           </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setCorrecting(true)}
-          className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-accent-deep hover:underline"
-        >
-          Corregir estado
-        </button>
+        )}
+      </div>
+
+      {isDone && correcting && invoice && (
+        <p className="mt-3 border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
+          Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida.
+          Reabrirla no anula ni actualiza esa factura: si hace falta corregirla, hacelo aparte.
+        </p>
       )}
     </div>
   );
