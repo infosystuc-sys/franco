@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Copy, Send, Receipt } from 'lucide-react';
+import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
-import { Button, PageHeader, Panel, SectionHeader, StateStrip, trackingLink } from '@/src/components/ui';
+import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
 import { fetchEmployees, type Employee } from '@/src/lib/employees';
@@ -329,8 +329,6 @@ export function WorkOrderDetails() {
         )}
       </Panel>
 
-      {isAdmin && <ShareTracking order={order} />}
-
       {history.length > 1 && (
         <div className="mb-6">
           <StatusHistory history={history} />
@@ -457,66 +455,6 @@ function StatusControls({
         </button>
       )}
     </div>
-  );
-}
-
-/**
- * Link de seguimiento para mandarle al cliente. Lleva el token aleatorio de
- * la orden, así que no se puede adivinar el de otra.
- */
-function ShareTracking({ order }: { order: WorkOrderDetail }) {
-  const [copiado, setCopiado] = useState(false);
-  const link = trackingLink(order.publicToken);
-
-  const mensaje =
-    `Hola, le compartimos el seguimiento de su reparación en el taller.\n\n` +
-    `Orden ${order.number}` +
-    (order.component ? ` · ${order.component}` : '') +
-    `\n\nPuede ver el avance en tiempo real acá:\n${link}`;
-
-  async function copiar() {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2500);
-    } catch {
-      // Sin permiso de portapapeles queda el campo de texto para copiar a mano.
-    }
-  }
-
-  return (
-    <Panel className="mb-6 p-5">
-      <SectionHeader title="Seguimiento para el cliente" />
-
-      <p className="mb-3 text-xs text-text-soft">
-        El cliente ve el vehículo, la etapa en la que está y las fechas. No ve
-        importes, ni su CUIT, ni datos de otras órdenes.
-      </p>
-
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <input
-          readOnly
-          value={link}
-          onFocus={(e) => e.currentTarget.select()}
-          className="flex-1 border border-line bg-panel-alt px-3 py-2 font-mono text-xs text-text-soft"
-        />
-        <div className="flex gap-2">
-          <Button type="button" variant="ghost" onClick={copiar}>
-            {copiado ? <Check size={16} /> : <Copy size={16} />}
-            {copiado ? 'Copiado' : 'Copiar'}
-          </Button>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(mensaje)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Button type="button">
-              <Send size={16} /> WhatsApp
-            </Button>
-          </a>
-        </div>
-      </div>
-    </Panel>
   );
 }
 
