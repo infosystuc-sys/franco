@@ -220,7 +220,33 @@ $$;
 -- Misma llamada con ?diagnostico=1: informa a qué servidor intenta llegar y si
 -- la instancia está vinculada, sin revelar la clave.
 -- Ver el resultado en net._http_response.
-create or replace function public.diagnosticar_whatsapp() returns bigint ...;
+--
+-- El "..." que había acá antes no era abreviatura de estilo: era SQL
+-- inválido, faltaba el cuerpo entero. Se completa con la definición real,
+-- leída de la base viva (26/08/2026), no reconstruida de memoria.
+create or replace function public.diagnosticar_whatsapp()
+returns bigint
+language plpgsql
+security definer
+set search_path = public, net, vault
+as $$
+declare
+  v_secreto text;
+  v_id bigint;
+begin
+  select decrypted_secret into v_secreto
+  from vault.decrypted_secrets where name = 'cron_secret';
+
+  select net.http_post(
+    url := 'https://mnoqdqjhsylohlvuekfh.supabase.co/functions/v1/despachar-whatsapp?diagnostico=1',
+    headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', v_secreto),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 25000
+  ) into v_id;
+
+  return v_id;
+end;
+$$;
 
 revoke execute on function public.despachar_whatsapp() from public, anon, authenticated;
 revoke execute on function public.diagnosticar_whatsapp() from public, anon, authenticated;
