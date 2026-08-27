@@ -20,6 +20,8 @@ export interface Supplier extends FiscalEntity {
   articles: SupplierArticle[];
   /** Plazo de pago en dias. Propone el vencimiento al cargar una compra. 0 = contado. */
   paymentTermsDays: number;
+  /** Prefijo de 2 letras para los artículos que se dan de alta solos al importar su lista. */
+  codePrefix: string | null;
 }
 
 /**
@@ -29,12 +31,14 @@ export interface Supplier extends FiscalEntity {
  */
 export interface SupplierInput extends FiscalEntityInput {
   paymentTermsDays: number;
+  codePrefix: string | null;
 }
 
 function mapSupplier(row: any): Supplier {
   return {
     ...mapFiscalEntity(row),
     paymentTermsDays: Number(row.payment_terms_days ?? 30),
+    codePrefix: row.code_prefix ?? null,
     articles: (row.links ?? []).map((link: any) => ({
       id: link.article?.id ?? link.id,
       code: link.article?.code ?? '—',
@@ -55,6 +59,7 @@ function toRow(input: SupplierInput) {
   return {
     ...fiscalEntityToRow(input),
     payment_terms_days: input.paymentTermsDays,
+    code_prefix: input.codePrefix,
   };
 }
 
@@ -95,6 +100,12 @@ export async function deleteSupplier(id: string): Promise<void> {
 
 /** Traduce errores de base a mensajes accionables para el usuario. */
 export function describeSupplierError(message: string): string {
+  if (message.includes('suppliers_code_prefix_key')) {
+    return 'Ya existe otro proveedor con ese prefijo de código.';
+  }
+  if (message.includes('suppliers_code_prefix_length')) {
+    return 'El prefijo de código tiene que tener exactamente 2 caracteres.';
+  }
   if (message.includes('suppliers_tax_id_key') || message.includes('duplicate key')) {
     return 'Ya existe otro proveedor con ese CUIT/CUIL.';
   }

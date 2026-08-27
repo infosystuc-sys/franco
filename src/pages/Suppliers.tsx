@@ -205,9 +205,13 @@ function SupplierModal({
 }) {
   const [form, setForm] = React.useState<SupplierInput>(
     supplier
-      ? { ...fiscalEntityToForm(supplier), paymentTermsDays: supplier.paymentTermsDays }
+      ? {
+          ...fiscalEntityToForm(supplier),
+          paymentTermsDays: supplier.paymentTermsDays,
+          codePrefix: supplier.codePrefix,
+        }
       // Un proveedor normalmente factura, así que por defecto es Resp. Inscripto.
-      : { ...EMPTY_FISCAL_FORM, taxCondition: 'RESPONSABLE_INSCRIPTO', paymentTermsDays: 30 }
+      : { ...EMPTY_FISCAL_FORM, taxCondition: 'RESPONSABLE_INSCRIPTO', paymentTermsDays: 30, codePrefix: null }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -264,27 +268,46 @@ function SupplierModal({
           />
 
           {/* Condiciones comerciales: de acá sale el vencimiento que se
-              propone al cargar una factura de compra de este proveedor. */}
+              propone al cargar una factura de compra, y el prefijo con el
+              que se numeran los artículos que se dan de alta solos al
+              importar la lista de precios de este proveedor. */}
           <div className="space-y-3 border-t border-line pt-4">
             <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
               <CalendarClock size={14} /> Condiciones comerciales
             </h3>
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft sm:w-1/2">
-              Plazo de pago (días)
-              <input
-                type="number"
-                min="0"
-                max="365"
-                value={form.paymentTermsDays}
-                onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
-                className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
-              />
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
-                {form.paymentTermsDays === 0
-                  ? 'Contado: la factura vence el mismo día que se emite.'
-                  : `Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
-              </span>
-            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+                Plazo de pago (días)
+                <input
+                  type="number"
+                  min="0"
+                  max="365"
+                  value={form.paymentTermsDays}
+                  onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
+                  className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
+                />
+                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  {form.paymentTermsDays === 0
+                    ? 'Contado: la factura vence el mismo día que se emite.'
+                    : `Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
+                </span>
+              </label>
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+                Prefijo de código
+                <input
+                  value={form.codePrefix ?? ''}
+                  onChange={(e) => patch({ codePrefix: e.target.value.toUpperCase().slice(0, 2) || null })}
+                  maxLength={2}
+                  className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm uppercase normal-case focus:border-accent-deep focus:outline-none"
+                  placeholder="DE"
+                />
+                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  {form.codePrefix
+                    ? `Los artículos nuevos de este proveedor van a llevar el código ${form.codePrefix}-00000001, ${form.codePrefix}-00000002...`
+                    : 'Sin prefijo no se puede importar el catálogo de este proveedor.'}
+                </span>
+              </label>
+            </div>
           </div>
 
           {supplier && <SupplierArticlesSection supplier={supplier} />}
