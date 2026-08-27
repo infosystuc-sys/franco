@@ -9,6 +9,10 @@ interface AuthState {
   role: UserRole | null;
   /** Permiso de pantalla: ver el listado histórico de comprobantes (Facturación, Cobranzas, Pagos, Compras, Tesorería). No es una guarda de datos, ver profiles-can-view-history.sql. */
   canViewHistory: boolean;
+  /** true hasta que el usuario cambie la contraseña inicial (1234) que se le asigna al crearlo. */
+  mustChangePassword: boolean;
+  /** Confirma el cambio de contraseña ya hecho: apaga el flag en la base y en el estado local. */
+  markPasswordChanged: () => Promise<void>;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -19,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [role, setRole] = React.useState<UserRole | null>(null);
   const [canViewHistory, setCanViewHistory] = React.useState(true);
+  const [mustChangePassword, setMustChangePassword] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -27,12 +32,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async function loadRole(userId: string) {
       const { data } = await supabase
         .from('profiles')
-        .select('role, can_view_history')
+        .select('role, can_view_history, must_change_password')
         .eq('id', userId)
         .maybeSingle();
       if (cancelled) return;
       setRole((data?.role as UserRole) ?? null);
       setCanViewHistory(data?.can_view_history ?? true);
+      setMustChangePassword(data?.must_change_password ?? false);
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setRole(null);
         setCanViewHistory(true);
+        setMustChangePassword(false);
       }
     });
 
@@ -63,8 +70,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const markPasswordChanged = React.useCallback(async () => {
+    const { error } = await supabase.rpc('mark_password_changed');
+    if (error) throw error;
+    setMustChangePassword(false);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ session, role, canViewHistory, loading, signOut }}>
+    <AuthContext.Provider
+      value={{ session, role, canViewHistory, mustChangePassword, markPasswordChanged, loading, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

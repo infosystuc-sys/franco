@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 /*
-  Alta de usuarios de empleados, cambio de contraseña y cambio de cargo,
+  Alta de usuarios en un solo paso, cambio de contraseña y cambio de cargo,
   hecho desde el servidor.
 
   Crear un usuario en Supabase Auth, cambiarle la contraseña o tocar
@@ -71,10 +71,49 @@ async function verificarAdmin(req: Request): Promise<Autorizacion> {
   return perfil.role === 'admin' ? { estado: 'admin', userId: user.id } : { estado: 'sin-permiso' };
 }
 
+/** Contraseña inicial única para todo alta: se obliga a cambiarla en el primer login (profiles.must_change_password). */
+const PASSWORD_INICIAL = '1234';
+
+/** Sin tildes ni ñ ni espacios: lo que puede llevar el usuario de login. */
+function normalizar(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/** "Carlos Méndez" -> "mendezc": apellido (última palabra) + inicial del nombre (primera palabra). */
+function usuarioDesdeNombre(nombre: string): string {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean).map(normalizar).filter(Boolean);
+  if (partes.length === 0) return 'usuario';
+  if (partes.length === 1) return partes[0];
+  const apellido = partes[partes.length - 1];
+  const inicial = partes[0][0] ?? '';
+  return `${apellido}${inicial}`;
+}
+
 /** Arma el identificador de Auth: sin arroba, el empleado no necesita casilla real. */
 function emailDesdeUsuario(usuario: string): string {
   const limpio = usuario.trim();
   return limpio.includes('@') ? limpio : `${limpio}@taller.local`;
+}
+
+/** Primer usuario libre a partir de la base: si "mendezc" ya existe, prueba "mendezc2", "mendezc3"... */
+async function usuarioLibre(base: string): Promise<string> {
+  let candidato = base;
+  let n = 2;
+  // No hay carrera real acá: solo un admin a la vez pasa por este flujo en la práctica.
+  for (;;) {
+    const { data } = await db
+      .from('profiles')
+      .select('id')
+      .eq('email', emailDesdeUsuario(candidato))
+      .maybeSingle();
+    if (!data) return candidato;
+    candidato = `${base}${n}`;
+    n++;
+  }
 }
 
 /** Traduce los errores más comunes de Auth a un mensaje que sirva en pantalla. */
@@ -90,75 +129,158 @@ function describirFalla(mensaje: string): string {
 
 type Cargo = 'operario' | 'administrativo' | 'dueño';
 const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño'];
+type Workplace = 'Laboratorio 1' | 'Laboratorio 2' | 'Playa';
+const WORKPLACES: Workplace[] = ['Laboratorio 1', 'Laboratorio 2', 'Playa'];
 
 /** operario -> role 'operario'; administrativo y dueño -> 'admin', mismo nivel de acceso, solo cambia el cargo mostrado. */
 function rolDesdeCargo(cargo: Cargo): 'admin' | 'operario' {
   return cargo === 'operario' ? 'operario' : 'admin';
 }
 
-async function crear(body: Record<string, unknown>): Promise<Response> {
-  const employeeId = String(body.employeeId ?? '');
-  const usuario = String(body.usuario ?? '');
-  const password = String(body.password ?? '');
-  const cargo = (body.cargo as Cargo) ?? 'operario';
-  if (!employeeId || !usuario || !password) {
-    return json({ error: 'Faltan employeeId, usuario o password.' }, 400);
-  }
-  if (!CARGOS.includes(cargo)) {
-    return json({ error: `Cargo inválido: ${cargo}` }, 400);
-  }
+interface DatosAcceso {
+  cargo: Cargo;
+  verHistorial?: boolean;
+  workplace?: Workplace | null;
+}
 
-  const { data: empleado, error: errorEmpleado } = await db
-    .from('employees')
-    .select('id, profile_id')
-    .eq('id', employeeId)
-    .single();
-
-  if (errorEmpleado || !empleado) {
-    return json({ error: 'No se encontró el empleado.' }, 404);
+function leerDatosAcceso(body: Record<string, unknown>): DatosAcceso | { error: string } {
+  const cargo = body.cargo as Cargo;
+  if (!cargo || !CARGOS.includes(cargo)) {
+    return { error: `Cargo inválido: ${String(cargo)}` };
   }
-  if (empleado.profile_id) {
-    return json({ error: 'Ese empleado ya tiene acceso.' }, 409);
+  const workplace = body.workplace ? (body.workplace as Workplace) : null;
+  if (workplace && !WORKPLACES.includes(workplace)) {
+    return { error: `Lugar de trabajo inválido: ${workplace}` };
   }
+  const verHistorial = typeof body.verHistorial === 'boolean' ? body.verHistorial : undefined;
+  return { cargo, verHistorial, workplace };
+}
 
+/**
+ * Crea el usuario de Auth para un empleado que ya existe (sin acceso
+ * todavía) y lo deja listo: perfil con el cargo elegido, contraseña inicial
+ * 1234, obligado a cambiarla en el primer login. Si algo falla a mitad de
+ * camino, deshace lo que ya se llegó a crear — no debe quedar ni un usuario
+ * de Auth huérfano ni un empleado a medio vincular.
+ */
+async function otorgarAcceso(
+  employeeId: string,
+  nombre: string,
+  datos: DatosAcceso
+): Promise<{ usuario: string } | { error: string; status: number }> {
+  const base = usuarioDesdeNombre(nombre);
+  const usuario = await usuarioLibre(base);
   const email = emailDesdeUsuario(usuario);
 
   const { data: creado, error: errorCrear } = await db.auth.admin.createUser({
     email,
-    password,
-    email_confirm: true, // el disparador on_auth_user_created arma el profile con role 'operario'; lo ajustamos abajo si el cargo es otro
+    password: PASSWORD_INICIAL,
+    email_confirm: true, // el disparador on_auth_user_created arma el profile; lo completamos abajo
   });
 
   if (errorCrear || !creado.user) {
-    return json({ error: describirFalla(errorCrear?.message ?? 'No se pudo crear el usuario.') }, 400);
+    return { error: describirFalla(errorCrear?.message ?? 'No se pudo crear el usuario.'), status: 400 };
   }
 
-  // El trigger ya insertó el profile con role='operario' y position='operario'
-  // por default. Si el cargo elegido es otro, lo actualizamos en el mismo paso.
-  const { error: errorCargo } = await db
+  const { error: errorPerfil } = await db
     .from('profiles')
-    .update({ role: rolDesdeCargo(cargo), position: cargo })
+    .update({
+      role: rolDesdeCargo(datos.cargo),
+      position: datos.cargo,
+      ...(datos.verHistorial !== undefined ? { can_view_history: datos.verHistorial } : {}),
+    })
     .eq('id', creado.user.id);
 
-  if (errorCargo) {
+  if (errorPerfil) {
     await db.auth.admin.deleteUser(creado.user.id);
-    return json({ error: `No se pudo asignar el cargo: ${errorCargo.message}` }, 500);
+    return { error: `No se pudo terminar de configurar el usuario: ${errorPerfil.message}`, status: 500 };
   }
 
   const { error: errorVinculo } = await db
     .from('employees')
-    .update({ profile_id: creado.user.id })
+    .update({ profile_id: creado.user.id, workplace: datos.workplace })
     .eq('id', employeeId);
 
   if (errorVinculo) {
-    // El usuario de Auth quedó creado pero sin vincular al empleado: mejor
-    // borrarlo que dejar un usuario huérfano que nadie puede usar ni
-    // reintentar crear (el email ya estaría tomado).
+    // El usuario de Auth quedó creado pero sin vincular: mejor borrarlo que
+    // dejar un usuario huérfano que nadie puede usar ni reintentar crear
+    // (el email ya estaría tomado).
     await db.auth.admin.deleteUser(creado.user.id);
-    return json({ error: `No se pudo vincular el usuario: ${errorVinculo.message}` }, 500);
+    return { error: `No se pudo vincular el usuario: ${errorVinculo.message}`, status: 500 };
   }
 
-  return json({ estado: 'ok', email });
+  return { usuario };
+}
+
+/**
+ * Alta en un solo paso: crea el empleado y le da acceso en el mismo llamado.
+ * Es el camino normal para un usuario nuevo — antes eran dos pasos (crear
+ * el empleado, después "dar acceso" por separado).
+ */
+async function crearUsuario(body: Record<string, unknown>): Promise<Response> {
+  const name = String(body.name ?? '').trim();
+  if (!name) {
+    return json({ error: 'Falta el nombre.' }, 400);
+  }
+  const datos = leerDatosAcceso(body);
+  if ('error' in datos) return json(datos, 400);
+
+  const { data: empleado, error: errorEmpleado } = await db
+    .from('employees')
+    .insert({
+      name,
+      role: String(body.role ?? ''),
+      phone: String(body.phone ?? ''),
+      active: body.active !== false,
+    })
+    .select('id')
+    .single();
+
+  if (errorEmpleado || !empleado) {
+    return json({ error: `No se pudo crear el usuario: ${errorEmpleado?.message}` }, 500);
+  }
+
+  const resultado = await otorgarAcceso(empleado.id, name, datos);
+  if ('error' in resultado) {
+    // El empleado quedó creado sin acceso: se borra para no dejar un
+    // registro a medias que el admin no pidió.
+    await db.from('employees').delete().eq('id', empleado.id);
+    return json({ error: resultado.error }, resultado.status);
+  }
+
+  return json({ estado: 'ok', usuario: resultado.usuario });
+}
+
+/**
+ * Da de alta el acceso de un empleado que YA existe pero todavía no lo
+ * tiene (caso raro hoy: la creación normal ya incluye el acceso). Queda
+ * como camino de recuperación desde la pantalla de edición.
+ */
+async function crear(body: Record<string, unknown>): Promise<Response> {
+  const employeeId = String(body.employeeId ?? '');
+  if (!employeeId) {
+    return json({ error: 'Falta employeeId.' }, 400);
+  }
+  const datos = leerDatosAcceso(body);
+  if ('error' in datos) return json(datos, 400);
+
+  const { data: empleado, error: errorEmpleado } = await db
+    .from('employees')
+    .select('id, name, profile_id')
+    .eq('id', employeeId)
+    .single();
+
+  if (errorEmpleado || !empleado) {
+    return json({ error: 'No se encontró el usuario.' }, 404);
+  }
+  if (empleado.profile_id) {
+    return json({ error: 'Ese usuario ya tiene acceso.' }, 409);
+  }
+
+  const resultado = await otorgarAcceso(employeeId, empleado.name, datos);
+  if ('error' in resultado) return json({ error: resultado.error }, resultado.status);
+
+  return json({ estado: 'ok', usuario: resultado.usuario });
 }
 
 async function cambiarClave(body: Record<string, unknown>): Promise<Response> {
@@ -175,7 +297,7 @@ async function cambiarClave(body: Record<string, unknown>): Promise<Response> {
     .single();
 
   if (errorEmpleado || !empleado?.profile_id) {
-    return json({ error: 'Ese empleado todavía no tiene acceso creado.' }, 404);
+    return json({ error: 'Ese usuario todavía no tiene acceso creado.' }, 404);
   }
 
   const { error: errorClave } = await db.auth.admin.updateUserById(empleado.profile_id, { password });
@@ -202,6 +324,10 @@ async function cambiarCargo(body: Record<string, unknown>, llamadoPor: string): 
   if (!CARGOS.includes(cargo)) {
     return json({ error: `Cargo inválido: ${cargo}` }, 400);
   }
+  const workplace = body.workplace ? (body.workplace as Workplace) : null;
+  if (workplace && !WORKPLACES.includes(workplace)) {
+    return json({ error: `Lugar de trabajo inválido: ${workplace}` }, 400);
+  }
 
   const { data: empleado, error: errorEmpleado } = await db
     .from('employees')
@@ -210,7 +336,7 @@ async function cambiarCargo(body: Record<string, unknown>, llamadoPor: string): 
     .single();
 
   if (errorEmpleado || !empleado?.profile_id) {
-    return json({ error: 'Ese empleado todavía no tiene acceso creado.' }, 404);
+    return json({ error: 'Ese usuario todavía no tiene acceso creado.' }, 404);
   }
 
   const rolNuevo = rolDesdeCargo(cargo);
@@ -257,6 +383,13 @@ async function cambiarCargo(body: Record<string, unknown>, llamadoPor: string): 
     return json({ error: errorUpdate.message }, 500);
   }
 
+  // El lugar de trabajo solo tiene sentido para operario: si el cargo
+  // cambia a administrativo/dueño, se limpia en el mismo paso.
+  await db
+    .from('employees')
+    .update({ workplace: cargo === 'operario' ? workplace : null })
+    .eq('id', employeeId);
+
   return json({ estado: 'ok' });
 }
 
@@ -285,6 +418,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Cuerpo inválido: se esperaba JSON.' }, 400);
   }
 
+  if (body.accion === 'crearUsuario') return crearUsuario(body);
   if (body.accion === 'crear') return crear(body);
   if (body.accion === 'clave') return cambiarClave(body);
   if (body.accion === 'cargo') return cambiarCargo(body, autorizacion.userId);

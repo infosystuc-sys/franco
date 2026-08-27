@@ -8,7 +8,7 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   cambiarCargo,
   cambiarClave,
-  createEmployee,
+  crearUsuario,
   darAcceso,
   deleteEmployee,
   describeEmployeeError,
@@ -16,9 +16,12 @@ import {
   updateEmployee,
   CARGO_LABELS,
   CARGOS,
+  WORKPLACES,
   type Cargo,
   type Employee,
   type EmployeeInput,
+  type NewUserInput,
+  type Workplace,
 } from '@/src/lib/employees';
 
 const EMPTY_FORM: EmployeeInput = { name: '', role: '', phone: '', active: true };
@@ -76,7 +79,7 @@ export function Users() {
     <div className="max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Usuarios"
-        subtitle="Quién trabaja en el taller, quién tiene usuario para entrar al sistema y con qué cargo."
+        subtitle="Quién trabaja en el taller, con qué cargo y qué ve en el sistema."
         actions={
           <Button onClick={() => setEditing('new')}>
             <Plus size={16} /> Nuevo usuario
@@ -108,17 +111,18 @@ export function Users() {
                 <th className="p-3 font-semibold w-36">Teléfono</th>
                 <th className="p-3 font-semibold w-52">Usuario</th>
                 <th className="p-3 font-semibold w-32">Cargo</th>
+                <th className="p-3 font-semibold w-32">Lugar</th>
                 <th className="p-3 font-semibold w-20 text-center">Estado</th>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={7} className="p-6 text-center text-text-soft">Cargando...</td></tr>
+                <tr><td colSpan={8} className="p-6 text-center text-text-soft">Cargando...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-text-soft">
+                  <td colSpan={8} className="p-6 text-center text-text-soft">
                     {search ? 'Ningún usuario coincide con la búsqueda.' : 'No hay usuarios cargados.'}
                   </td>
                 </tr>
@@ -148,6 +152,9 @@ export function Users() {
                   </td>
                   <td data-label="Cargo" className="p-3 text-text-soft">
                     {employee.cargo ? CARGO_LABELS[employee.cargo] : <span className="text-text-faint">—</span>}
+                  </td>
+                  <td data-label="Lugar" className="p-3 text-text-soft">
+                    {employee.workplace ?? <span className="text-text-faint">—</span>}
                   </td>
                   <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
@@ -187,6 +194,69 @@ export function Users() {
   );
 }
 
+/** El desplegable de cargo, con el select de lugar de trabajo o el tilde de historial según corresponda. */
+function CargoFields({
+  cargo,
+  onCargoChange,
+  verHistorial,
+  onVerHistorialChange,
+  workplace,
+  onWorkplaceChange,
+}: {
+  cargo: Cargo;
+  onCargoChange: (cargo: Cargo) => void;
+  verHistorial: boolean;
+  onVerHistorialChange: (value: boolean) => void;
+  workplace: Workplace | '';
+  onWorkplaceChange: (value: Workplace | '') => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Label>
+        Cargo
+        <select
+          value={cargo}
+          onChange={(e) => onCargoChange(e.target.value as Cargo)}
+          className={fieldClass(false, 'font-normal normal-case bg-panel')}
+        >
+          {CARGOS.map((c) => (
+            <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+          ))}
+        </select>
+        <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+          Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta.
+        </span>
+      </Label>
+
+      {cargo === 'operario' ? (
+        <Label>
+          Lugar de trabajo
+          <select
+            value={workplace}
+            onChange={(e) => onWorkplaceChange(e.target.value as Workplace | '')}
+            className={fieldClass(false, 'font-normal normal-case bg-panel')}
+          >
+            <option value="">Sin asignar</option>
+            {WORKPLACES.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </Label>
+      ) : (
+        <label className="flex items-center gap-2 text-sm text-text cursor-pointer self-end pb-2.5">
+          <input
+            type="checkbox"
+            checked={verHistorial}
+            onChange={(e) => onVerHistorialChange(e.target.checked)}
+            className="w-4 h-4 accent-accent-deep"
+          />
+          Ve el historial de comprobantes (Facturación, Cobranzas, Pagos, Compras, Tesorería)
+        </label>
+      )}
+    </div>
+  );
+}
+
 function UserModal({
   employee,
   onClose,
@@ -206,17 +276,21 @@ function UserModal({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Datos de acceso para el alta nueva (un solo paso: no hay employeeId
+  // todavía, así que no se puede llamar a la Edge Function hasta enviar
+  // este mismo formulario).
+  const [newCargo, setNewCargo] = React.useState<Cargo>('operario');
+  const [newVerHistorial, setNewVerHistorial] = React.useState(true);
+  const [newWorkplace, setNewWorkplace] = React.useState<Workplace | ''>('');
+  const [createdSummary, setCreatedSummary] = React.useState<string | null>(null);
+
   // El vínculo puede crearse dentro de este mismo modal (botón "Dar acceso"),
   // así que se sigue localmente: esperar a que el padre recargue la lista y
-  // vuelva a pasar `employee` dejaría el botón mostrando el estado viejo.
+  // vuelva a pasar `employee` dejaría el estado mostrando lo viejo.
   const [hasAccess, setHasAccess] = React.useState(!!employee?.profileId);
-  const [accessUsuario, setAccessUsuario] = React.useState('');
-  const [accessPassword, setAccessPassword] = React.useState('');
   const [accessCargo, setAccessCargo] = React.useState<Cargo>('operario');
-  // Oculta por defecto: el modal queda abierto un rato largo (el admin arma
-  // el usuario, lo piensa, a veces lo corrige) y un taller no es una oficina
-  // cerrada — cualquiera que pase por atrás o una captura de pantalla la vería.
-  const [showAccessPassword, setShowAccessPassword] = React.useState(false);
+  const [accessVerHistorial, setAccessVerHistorial] = React.useState(true);
+  const [accessWorkplace, setAccessWorkplace] = React.useState<Workplace | ''>('');
   const [grantingAccess, setGrantingAccess] = React.useState(false);
   const [accessError, setAccessError] = React.useState<string | null>(null);
   const [accessSuccess, setAccessSuccess] = React.useState<string | null>(null);
@@ -228,27 +302,28 @@ function UserModal({
   const [changeError, setChangeError] = React.useState<string | null>(null);
   const [changeSuccess, setChangeSuccess] = React.useState(false);
 
-  // El cargo actual se sigue localmente por el mismo motivo que hasAccess:
-  // cambiarlo no espera a que el padre recargue la lista.
+  // El cargo actual se sigue localmente por el mismo motivo que hasAccess.
   const [cargo, setCargo] = React.useState<Cargo | null>(employee?.cargo ?? null);
+  const [workplace, setWorkplace] = React.useState<Workplace | null>(employee?.workplace ?? null);
   const [editingCargo, setEditingCargo] = React.useState(false);
   const [cargoDraft, setCargoDraft] = React.useState<Cargo>(employee?.cargo ?? 'operario');
+  const [workplaceDraft, setWorkplaceDraft] = React.useState<Workplace | ''>(employee?.workplace ?? '');
   const [savingCargo, setSavingCargo] = React.useState(false);
   const [cargoError, setCargoError] = React.useState<string | null>(null);
 
   async function handleGrantAccess() {
     if (!employee) return;
-    if (!accessUsuario.trim() || !accessPassword) {
-      setAccessError('Completá usuario y contraseña.');
-      return;
-    }
     setGrantingAccess(true);
     setAccessError(null);
     try {
-      await darAcceso(employee.id, accessUsuario.trim(), accessPassword, accessCargo);
+      const { usuario } = await darAcceso(employee.id, accessCargo, {
+        verHistorial: accessCargo === 'operario' ? undefined : accessVerHistorial,
+        workplace: accessCargo === 'operario' ? (accessWorkplace || null) : null,
+      });
       setHasAccess(true);
       setCargo(accessCargo);
-      setAccessSuccess(`Acceso creado con usuario "${accessUsuario.trim()}". Comunicale la contraseña al empleado.`);
+      setWorkplace(accessCargo === 'operario' ? (accessWorkplace || null) : null);
+      setAccessSuccess(`Usuario creado: ${usuario} / contraseña inicial 1234. Se la pide cambiar en el primer ingreso.`);
       onAccessChanged();
     } catch (err) {
       setAccessError(getErrorMessage(err));
@@ -283,8 +358,9 @@ function UserModal({
     setSavingCargo(true);
     setCargoError(null);
     try {
-      await cambiarCargo(employee.id, cargoDraft);
+      await cambiarCargo(employee.id, cargoDraft, cargoDraft === 'operario' ? (workplaceDraft || null) : null);
       setCargo(cargoDraft);
+      setWorkplace(cargoDraft === 'operario' ? (workplaceDraft || null) : null);
       setEditingCargo(false);
       onAccessChanged();
     } catch (err) {
@@ -307,9 +383,19 @@ function UserModal({
     setSaving(true);
     setError(null);
     try {
-      if (employee) await updateEmployee(employee.id, form);
-      else await createEmployee(form);
-      onSaved();
+      if (employee) {
+        await updateEmployee(employee.id, form);
+        onSaved();
+      } else {
+        const input: NewUserInput = {
+          ...form,
+          cargo: newCargo,
+          verHistorial: newCargo === 'operario' ? undefined : newVerHistorial,
+          workplace: newCargo === 'operario' ? (newWorkplace || null) : null,
+        };
+        const { usuario } = await crearUsuario(input);
+        setCreatedSummary(`Usuario creado: ${usuario} / contraseña inicial 1234. Anotalo — se lo tenés que dar al empleado, y se la va a pedir cambiar en el primer ingreso.`);
+      }
     } catch (err) {
       setError(describeEmployeeError(getErrorMessage(err)));
     } finally {
@@ -329,6 +415,20 @@ function UserModal({
           </button>
         </div>
 
+        {createdSummary ? (
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-state-done">{createdSummary}</p>
+            <div className="flex justify-end border-t border-line pt-4">
+              <button
+                type="button"
+                onClick={onSaved}
+                className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
           {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
 
@@ -373,6 +473,25 @@ function UserModal({
             Activo (disponible para asignar a órdenes de trabajo)
           </label>
 
+          {!employee && (
+            <div className="border-t border-line pt-4 space-y-3">
+              <span className="block font-semibold uppercase tracking-wider text-[11px] text-text-faint">
+                Acceso al sistema
+              </span>
+              <CargoFields
+                cargo={newCargo}
+                onCargoChange={setNewCargo}
+                verHistorial={newVerHistorial}
+                onVerHistorialChange={setNewVerHistorial}
+                workplace={newWorkplace}
+                onWorkplaceChange={setNewWorkplace}
+              />
+              <p className="text-[10px] font-normal normal-case text-text-soft">
+                El usuario y la contraseña inicial (1234) los arma el sistema. Se muestran al terminar de crear.
+              </p>
+            </div>
+          )}
+
           {employee && (
             <div className="border-t border-line pt-4 space-y-3">
               <span className="block font-semibold uppercase tracking-wider text-[11px] text-text-faint">
@@ -380,7 +499,7 @@ function UserModal({
               </span>
 
               {!hasAccess && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-xs text-text-soft">
                     Sin acceso: este usuario no tiene con qué entrar a la app.
                   </p>
@@ -391,52 +510,14 @@ function UserModal({
                     <p className="text-xs text-state-done">{accessSuccess}</p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <Label>
-                          Usuario
-                          <input
-                            value={accessUsuario}
-                            onChange={(e) => setAccessUsuario(e.target.value)}
-                            className={fieldClass(false, 'font-normal normal-case')}
-                            placeholder="carlos"
-                          />
-                        </Label>
-                        <Label>
-                          Contraseña inicial
-                          <div className="relative">
-                            <input
-                              type={showAccessPassword ? 'text' : 'password'}
-                              value={accessPassword}
-                              onChange={(e) => setAccessPassword(e.target.value)}
-                              className={fieldClass(false, 'font-normal normal-case pr-9')}
-                              placeholder="Mínimo 6 caracteres"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowAccessPassword((v) => !v)}
-                              title={showAccessPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-soft hover:text-text"
-                            >
-                              {showAccessPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          </div>
-                        </Label>
-                      </div>
-                      <Label>
-                        Cargo
-                        <select
-                          value={accessCargo}
-                          onChange={(e) => setAccessCargo(e.target.value as Cargo)}
-                          className={fieldClass(false, 'font-normal normal-case bg-panel')}
-                        >
-                          {CARGOS.map((c) => (
-                            <option key={c} value={c}>{CARGO_LABELS[c]}</option>
-                          ))}
-                        </select>
-                        <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
-                          Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta que se muestra.
-                        </span>
-                      </Label>
+                      <CargoFields
+                        cargo={accessCargo}
+                        onCargoChange={setAccessCargo}
+                        verHistorial={accessVerHistorial}
+                        onVerHistorialChange={setAccessVerHistorial}
+                        workplace={accessWorkplace}
+                        onWorkplaceChange={setAccessWorkplace}
+                      />
                       <button
                         type="button"
                         onClick={handleGrantAccess}
@@ -456,36 +537,50 @@ function UserModal({
                     {employee.email ?? 'Tiene usuario, pero no vemos su email desde acá.'}
                   </p>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-text-soft">Cargo:</span>
-                    {!editingCargo ? (
-                      <>
-                        <span className="text-xs font-semibold text-text">
-                          {cargo ? CARGO_LABELS[cargo] : '—'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCargoDraft(cargo ?? 'operario');
-                            setCargoError(null);
-                            setEditingCargo(true);
-                          }}
-                          className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
-                        >
-                          Cambiar
-                        </button>
-                      </>
-                    ) : (
-                      <>
+                  {!editingCargo ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-text-soft">Cargo:</span>
+                      <span className="text-xs font-semibold text-text">
+                        {cargo ? CARGO_LABELS[cargo] : '—'}
+                        {cargo === 'operario' && workplace && ` · ${workplace}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCargoDraft(cargo ?? 'operario');
+                          setWorkplaceDraft(workplace ?? '');
+                          setCargoError(null);
+                          setEditingCargo(true);
+                        }}
+                        className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
+                      >
+                        Cambiar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 border border-line p-3">
+                      <select
+                        value={cargoDraft}
+                        onChange={(e) => setCargoDraft(e.target.value as Cargo)}
+                        className="border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
+                      >
+                        {CARGOS.map((c) => (
+                          <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+                        ))}
+                      </select>
+                      {cargoDraft === 'operario' && (
                         <select
-                          value={cargoDraft}
-                          onChange={(e) => setCargoDraft(e.target.value as Cargo)}
-                          className="border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
+                          value={workplaceDraft}
+                          onChange={(e) => setWorkplaceDraft(e.target.value as Workplace | '')}
+                          className="ml-2 border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
                         >
-                          {CARGOS.map((c) => (
-                            <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+                          <option value="">Sin asignar</option>
+                          {WORKPLACES.map((w) => (
+                            <option key={w} value={w}>{w}</option>
                           ))}
                         </select>
+                      )}
+                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={handleChangeCargo}
@@ -501,9 +596,9 @@ function UserModal({
                         >
                           Cancelar
                         </button>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  )}
                   {cargoError && (
                     <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{cargoError}</div>
                   )}
@@ -581,10 +676,11 @@ function UserModal({
               disabled={saving}
               className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
-              {saving ? 'Guardando...' : 'Guardar'}
+              {saving ? 'Guardando...' : employee ? 'Guardar' : 'Crear usuario'}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

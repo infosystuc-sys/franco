@@ -11,6 +11,11 @@ export const CARGO_LABELS: Record<Cargo, string> = {
 
 export const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño'];
 
+/** Lugar de trabajo del operario. Solo tiene sentido para cargo='operario'. */
+export type Workplace = 'Laboratorio 1' | 'Laboratorio 2' | 'Playa';
+
+export const WORKPLACES: Workplace[] = ['Laboratorio 1', 'Laboratorio 2', 'Playa'];
+
 export interface Employee {
   id: string;
   name: string;
@@ -21,6 +26,7 @@ export interface Employee {
   email: string | null;
   /** Cargo del acceso al sistema. null si todavía no tiene acceso creado. */
   cargo: Cargo | null;
+  workplace: Workplace | null;
 }
 
 export interface EmployeeInput {
@@ -30,9 +36,17 @@ export interface EmployeeInput {
   active: boolean;
 }
 
-// La política de fila de profiles solo deja ver el propio perfil (auth.uid() = id):
-// un admin mirando a otro empleado recibe profile.email en null aunque el vínculo
-// exista. Por eso el acceso se decide con profileId, nunca con email.
+/** Lo que se pide al dar de alta un usuario: el registro y el acceso, en un solo paso. */
+export interface NewUserInput extends EmployeeInput {
+  cargo: Cargo;
+  /** Solo aplica si cargo !== 'operario'. Sin especificar, la base lo deja en true. */
+  verHistorial?: boolean;
+  /** Solo aplica si cargo === 'operario'. */
+  workplace?: Workplace | null;
+}
+
+// La política de fila de profiles deja ver todos los perfiles a un admin
+// (además del propio): ver profiles-position.sql, "admin read all profiles".
 function mapEmployee(row: any): Employee {
   return {
     id: row.id,
@@ -43,10 +57,11 @@ function mapEmployee(row: any): Employee {
     profileId: row.profile_id,
     email: row.profile?.email ?? null,
     cargo: (row.profile?.position as Cargo) ?? null,
+    workplace: (row.workplace as Workplace) ?? null,
   };
 }
 
-const SELECT = 'id, name, role, phone, active, profile_id, profile:profiles(email, position)';
+const SELECT = 'id, name, role, phone, active, profile_id, workplace, profile:profiles(email, position)';
 
 export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
   let query = supabase.from('employees').select(SELECT).order('name');
@@ -57,14 +72,16 @@ export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
   return (data ?? []).map(mapEmployee);
 }
 
-export async function createEmployee(input: EmployeeInput): Promise<Employee> {
+/** Solo los operarios activos: es lo que puede asignarse a una orden de trabajo. */
+export async function fetchOperarios(): Promise<Employee[]> {
   const { data, error } = await supabase
     .from('employees')
-    .insert(input)
-    .select(SELECT)
-    .single();
+    .select('id, name, role, phone, active, profile_id, workplace, profile:profiles!inner(email, position)')
+    .eq('active', true)
+    .eq('profile.position', 'operario')
+    .order('name');
   if (error) throw error;
-  return mapEmployee(data);
+  return (data ?? []).map(mapEmployee);
 }
 
 export async function updateEmployee(id: string, input: EmployeeInput): Promise<Employee> {
@@ -84,24 +101,36 @@ export async function deleteEmployee(id: string): Promise<void> {
 }
 
 /**
- * Da de alta el acceso al sistema de un empleado que todavía no lo tiene.
- * Crear el usuario necesita la clave de servicio, que no puede viajar al
- * navegador: por eso lo hace la Edge Function `gestionar-empleado` del lado
- * del servidor, usando la sesión del admin que invoca.
+ * Alta en un solo paso: crea el usuario y le da acceso al sistema en el
+ * mismo llamado. Usuario y contraseña inicial los arma el servidor (ver
+ * gestionar-empleado) — acá solo se manda lo que el admin eligió.
+ */
+export async function crearUsuario(input: NewUserInput): Promise<{ usuario: string }> {
+  const { data, error } = await supabase.functions.invoke('gestionar-empleado', {
+    body: { accion: 'crearUsuario', ...input },
+  });
+  if (error) throw new Error(await describeFunctionError(error));
+  return data as { usuario: string };
+}
+
+/**
+ * Da de alta el acceso al sistema de un usuario que ya existe pero todavía
+ * no lo tiene (caso raro: la creación normal ya incluye el acceso). Queda
+ * como camino de recuperación desde la pantalla de edición.
  */
 export async function darAcceso(
   employeeId: string,
-  usuario: string,
-  password: string,
-  cargo: Cargo
-): Promise<void> {
-  const { error } = await supabase.functions.invoke('gestionar-empleado', {
-    body: { accion: 'crear', employeeId, usuario, password, cargo },
+  cargo: Cargo,
+  options?: { verHistorial?: boolean; workplace?: Workplace | null }
+): Promise<{ usuario: string }> {
+  const { data, error } = await supabase.functions.invoke('gestionar-empleado', {
+    body: { accion: 'crear', employeeId, cargo, ...options },
   });
   if (error) throw new Error(await describeFunctionError(error));
+  return data as { usuario: string };
 }
 
-/** Cambia la contraseña de un empleado que ya tiene acceso creado. */
+/** Cambia la contraseña de un usuario que ya tiene acceso creado. */
 export async function cambiarClave(employeeId: string, password: string): Promise<void> {
   const { error } = await supabase.functions.invoke('gestionar-empleado', {
     body: { accion: 'clave', employeeId, password },
@@ -110,12 +139,13 @@ export async function cambiarClave(employeeId: string, password: string): Promis
 }
 
 /**
- * Cambia el cargo (y con eso el rol) de un empleado que ya tiene acceso.
- * La propia función rechaza dejar el sistema sin ningún admin.
+ * Cambia el cargo (y con eso el rol) de un usuario que ya tiene acceso, y
+ * de paso su lugar de trabajo si el cargo nuevo es operario. La propia
+ * función rechaza dejar el sistema sin ningún admin.
  */
-export async function cambiarCargo(employeeId: string, cargo: Cargo): Promise<void> {
+export async function cambiarCargo(employeeId: string, cargo: Cargo, workplace?: Workplace | null): Promise<void> {
   const { error } = await supabase.functions.invoke('gestionar-empleado', {
-    body: { accion: 'cargo', employeeId, cargo },
+    body: { accion: 'cargo', employeeId, cargo, workplace },
   });
   if (error) throw new Error(await describeFunctionError(error));
 }

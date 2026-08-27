@@ -7,7 +7,7 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
-import { fetchEmployees, type Employee } from '@/src/lib/employees';
+import { fetchOperarios, type Employee } from '@/src/lib/employees';
 import {
   fetchInvoiceForWorkOrder,
   INVOICE_TYPE_LABELS,
@@ -93,11 +93,12 @@ export function WorkOrderDetails() {
   }, [isAdmin]);
 
   // Solo el admin asigna: al operario le alcanza con ver el nombre, así que
-  // no vale la pena traer la lista de empleados para su sesión.
+  // no vale la pena traer la lista de empleados para su sesión. Solo se
+  // ofrecen operarios: el dueño o un administrativo no se asignan a una OT.
   React.useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
-    fetchEmployees(true)
+    fetchOperarios()
       .then((data) => !cancelled && setEmployees(data))
       .catch(() => {/* si falla, el selector queda vacío y se puede reintentar recargando */});
     return () => {
@@ -276,7 +277,9 @@ export function WorkOrderDetails() {
             >
               <option value="">Sin asignar</option>
               {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>{employee.name}</option>
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}{employee.workplace ? ` — ${employee.workplace}` : ''}
+                </option>
               ))}
             </select>
           ) : (
