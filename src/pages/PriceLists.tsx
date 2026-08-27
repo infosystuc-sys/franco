@@ -250,7 +250,8 @@ function ImportSection({
     setParsed(null);
     setGrid(null);
     setMapping(null);
-    if (file && id) loadForFile(file, id);
+    const nextSupplier = suppliers.find((s) => s.id === id);
+    if (file && id && nextSupplier?.codePrefix) loadForFile(file, id);
   }
 
   async function handleEditMapping() {
@@ -280,6 +281,10 @@ function ImportSection({
 
   async function handleImport() {
     if (!supplierId || !parsed || !file) return;
+    if (!supplier?.codePrefix) {
+      onError('Este proveedor no tiene prefijo de código. Definilo en Proveedores antes de importar.');
+      return;
+    }
     setImporting(true);
     try {
       const result = await importSupplierPrices(supplierId, file.name, parsed.rows);
@@ -348,9 +353,15 @@ function ImportSection({
           initialMapping={mapping}
           saving={savingMapping}
           onSave={handleSaveMapping}
-          onCancel={() => {
+          onCancel={async () => {
             setGrid(null);
-            if (!mapping) {
+            if (mapping && file) {
+              try {
+                setParsed(await parseWithMapping(file, mapping));
+              } catch (err) {
+                onError(getErrorMessage(err));
+              }
+            } else {
               setFile(null);
               if (inputRef.current) inputRef.current.value = '';
             }

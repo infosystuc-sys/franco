@@ -92,12 +92,26 @@ drop table if exists unmatched_supplier_prices;
 -- Pasa a ser security definer porque ahora escribe article_code_sequences,
 -- que no tiene política de escritura (mismo motivo que invoice_sequences).
 -- Sigue revisando is_admin() como primera línea, igual que antes.
+--
+-- Corregido en la revisión final del branch (dos hallazgos "Important"):
+--   - statement_timeout propio en 120s: el rol authenticated tiene 8s por
+--     defecto, y la reimportación de recuperación de las 4116 filas
+--     descartadas (ver más arriba) puede superarlo ampliamente.
+--   - Se saca el cálculo manual de unit_price: estaba duplicado contra
+--     compute_sale_price()/effective_markup() (la misma fórmula, a mano),
+--     no era NULL-safe si faltaba la fila default_markup_percent en
+--     app_settings, y era código muerto — el trigger
+--     article_suppliers_recalc_price (AFTER INSERT en article_suppliers)
+--     ya pisa unit_price con el valor correcto apenas se inserta el
+--     sinónimo. Se inserta el artículo con unit_price en 0 y se deja que
+--     el trigger haga su trabajo, igual que cualquier otro artículo.
 
 create or replace function public.import_supplier_prices(p_supplier_id uuid, p_file_name text, p_rows jsonb)
 returns table(total_rows int, matched_rows int, unmatched_rows int, import_id uuid)
 language plpgsql
 security definer
 set search_path to 'public'
+set statement_timeout to '120s'
 as $function$
 declare
   v_total int := 0;
@@ -106,13 +120,11 @@ declare
   v_import_id uuid;
   v_prefix text;
   v_supplier_name text;
-  v_markup numeric;
   r record;
   v_article_id uuid;
   v_number int;
   v_code text;
   v_description text;
-  v_unit_price numeric;
 begin
   if not public.is_admin() then
     raise exception 'No autorizado: se requiere rol admin.';
@@ -127,9 +139,6 @@ begin
   if v_prefix is null then
     raise exception 'Este proveedor no tiene prefijo de código configurado. Definilo en Proveedores antes de importar.';
   end if;
-
-  select coalesce((value)::numeric, 0) into v_markup
-  from app_settings where key = 'default_markup_percent';
 
   for r in
     select
@@ -159,10 +168,14 @@ begin
 
       v_code := v_prefix || '-' || lpad(v_number::text, 8, '0');
       v_description := coalesce(r.description, 'Sin descripción — importado de ' || v_supplier_name);
-      v_unit_price := round(r.price * (1 + v_markup / 100), 2);
 
+      -- unit_price arranca en 0: article_suppliers_recalc_price (AFTER
+      -- INSERT en article_suppliers, más abajo) lo recalcula solo con
+      -- compute_sale_price(), la misma fórmula que usa el resto del
+      -- sistema. Calcularlo acá también sería código muerto que además
+      -- rompía si faltaba la fila default_markup_percent en app_settings.
       insert into articles (code, description, brand, unit_price, tracks_stock, stock_quantity, active)
-      values (v_code, v_description, r.brand, v_unit_price, false, 0, true)
+      values (v_code, v_description, r.brand, 0, false, 0, true)
       returning id into v_article_id;
 
       insert into article_suppliers (article_id, supplier_id, supplier_code, supplier_description, purchase_price, is_preferred)
