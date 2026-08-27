@@ -19,7 +19,6 @@ import {
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   getErrorMessage,
-  nextStatus,
   saveWorkOrderItems,
   STATUS_LABELS,
   STATUS_SEQUENCE,
@@ -400,14 +399,11 @@ function InvoiceAction({
 }
 
 /**
- * Avance del estado de la OT. El botón principal sigue el flujo natural;
- * el desplegable permite corregir a cualquier otro estado si alguien se pasó.
- *
- * Terminada, "Corregir estado" pasa a llamarse "Reabrir orden": misma
- * mecánica (elegís el destino en el desplegable), pero con su propio rótulo
- * porque acá el volver atrás es la acción principal, no una corrección
- * excepcional. Si ya hay factura emitida, se avisa pero no se bloquea: la
- * factura no se actualiza sola.
+ * Cambio de estado de la OT: un desplegable único con todos los estados,
+ * aplica apenas se elige uno distinto. Reemplaza al viejo botón de "avanzar
+ * al siguiente paso" — cualquier salto, adelante o atrás, es la misma
+ * acción. Si la orden ya está terminada y facturada, avisa que cambiar el
+ * estado no anula ni actualiza esa factura, pero no lo bloquea.
  */
 function StatusControls({
   order,
@@ -420,86 +416,35 @@ function StatusControls({
   busy: boolean;
   onChange: (status: WorkOrderStatus) => void;
 }) {
-  const [correcting, setCorrecting] = useState(false);
-  const following = nextStatus(order.status);
   const isDone = order.status === 'TERMINADO';
-  const reopenOptions = STATUS_SEQUENCE.filter((status) => status !== 'TERMINADO');
-  const [reopenTarget, setReopenTarget] = useState<WorkOrderStatus>(
-    reopenOptions[reopenOptions.length - 1]
-  );
 
   return (
     <div className="mt-7 border-t border-line pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {following ? (
-          <Button onClick={() => onChange(following)} disabled={busy}>
-            {busy ? 'Actualizando…' : `Avanzar a ${STATUS_LABELS[following]}`}
-            <ArrowRight size={16} />
-          </Button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-done">
-            <Check size={16} /> Orden terminada
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          Estado
+        </span>
+        <select
+          value={order.status}
+          onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
+          disabled={busy}
+          className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+        >
+          {STATUS_SEQUENCE.map((status) => (
+            <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+          ))}
+        </select>
+        {busy && (
+          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            Actualizando…
           </span>
-        )}
-
-        {correcting ? (
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-              {isDone ? 'Reabrir en' : 'Corregir a'}
-            </span>
-            {isDone ? (
-              <>
-                <select
-                  value={reopenTarget}
-                  onChange={(e) => setReopenTarget(e.target.value as WorkOrderStatus)}
-                  disabled={busy}
-                  className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
-                >
-                  {reopenOptions.map((status) => (
-                    <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => onChange(reopenTarget)}
-                  disabled={busy}
-                  className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep hover:underline"
-                >
-                  Confirmar
-                </button>
-              </>
-            ) : (
-              <select
-                value={order.status}
-                onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
-                disabled={busy}
-                className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
-              >
-                {STATUS_SEQUENCE.map((status) => (
-                  <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={() => setCorrecting(false)}
-              className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-text"
-            >
-              {isDone ? 'Cancelar' : 'Listo'}
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setCorrecting(true)}
-            className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-accent-deep hover:underline"
-          >
-            {isDone ? 'Reabrir orden' : 'Corregir estado'}
-          </button>
         )}
       </div>
 
-      {isDone && correcting && invoice && (
+      {isDone && invoice && (
         <p className="mt-3 border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
           Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida.
-          Reabrirla no anula ni actualiza esa factura: si hace falta corregirla, hacelo aparte.
+          Si cambiás el estado, esa factura no se anula ni se actualiza sola.
         </p>
       )}
     </div>
