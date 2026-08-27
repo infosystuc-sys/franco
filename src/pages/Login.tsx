@@ -4,10 +4,21 @@ import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/lib/auth';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 
+/**
+ * El login de la mayoría de los usuarios no es un email real: gestionar-empleado
+ * arma uno falso (usuario@taller.local) porque Supabase Auth solo entiende
+ * email. Si lo que se tipeó ya tiene arroba (la cuenta del dueño, con su
+ * casilla real) se manda tal cual; si no, se completa con el mismo dominio.
+ */
+function resolveLoginEmail(input: string): string {
+  const trimmed = input.trim();
+  return trimmed.includes('@') ? trimmed : `${trimmed.toLowerCase()}@taller.local`;
+}
+
 export function Login() {
   const { session, loading } = useAuth();
   const location = useLocation();
-  const [email, setEmail] = React.useState('');
+  const [usuario, setUsuario] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -21,7 +32,10 @@ export function Login() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: resolveLoginEmail(usuario),
+      password,
+    });
     if (error) setError(error.message);
     setSubmitting(false);
   }
@@ -53,13 +67,13 @@ export function Login() {
             )}
 
             <Label>
-              Email
+              Usuario
               <input
-                type="email"
+                type="text"
                 required
                 autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
                 className={fieldClass(true, 'font-normal normal-case')}
               />
             </Label>
