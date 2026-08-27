@@ -76,8 +76,12 @@ create policy "solo admin" on article_code_sequences for select to authenticated
 -- ===========================================================================
 -- Se elimina la cola manual de códigos sin vincular
 -- ===========================================================================
--- Vacía en producción al momento de este cambio (verificado antes de
--- aplicar esta migración) — no hay datos que migrar.
+-- Al momento de aplicar esta migración la tabla NO estaba vacía: tenía 4116
+-- filas de un proveedor (Maximiliano Diesel S.R.L.), cargadas ese mismo día
+-- con el flujo viejo y todavía sin vincular a mano. Se descartaron a
+-- propósito, con aprobación explícita: se recuperan re-importando el mismo
+-- archivo fuente a través del flujo nuevo (Task 4 de este plan), que crea
+-- los artículos solo en vez de dejarlos en una cola manual.
 
 drop function if exists public.link_unmatched_price(uuid, uuid);
 drop table if exists unmatched_supplier_prices;
