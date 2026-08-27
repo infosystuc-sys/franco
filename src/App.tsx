@@ -7,7 +7,7 @@ import { AuthProvider } from './lib/auth';
 import { Customers } from './pages/Customers';
 import { Dashboard } from './pages/Dashboard';
 import { WorkOrders } from './pages/WorkOrders';
-import { Employees } from './pages/Employees';
+import { Users } from './pages/Users';
 import { ExpenseConcepts } from './pages/ExpenseConcepts';
 import { InvoiceDetails } from './pages/InvoiceDetails';
 import { InvoiceNew } from './pages/InvoiceNew';
@@ -105,7 +105,7 @@ export default function App() {
                     <Route path="/clientes" element={<Customers />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
                     <Route path="/proveedores" element={<Suppliers />} />
-                    <Route path="/empleados" element={<Employees />} />
+                    <Route path="/usuarios" element={<Users />} />
                     <Route path="/ordenes" element={<WorkOrders />} />
                     {/* Fallback */}
                     <Route path="*" element={<Dashboard />} />

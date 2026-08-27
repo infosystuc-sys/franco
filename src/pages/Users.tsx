@@ -6,6 +6,7 @@ import { Button, Label, PageHeader, Panel, fieldClass } from '@/src/components/u
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  cambiarCargo,
   cambiarClave,
   createEmployee,
   darAcceso,
@@ -13,13 +14,16 @@ import {
   describeEmployeeError,
   fetchEmployees,
   updateEmployee,
+  CARGO_LABELS,
+  CARGOS,
+  type Cargo,
   type Employee,
   type EmployeeInput,
 } from '@/src/lib/employees';
 
 const EMPTY_FORM: EmployeeInput = { name: '', role: '', phone: '', active: true };
 
-export function Employees() {
+export function Users() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
 
@@ -64,18 +68,18 @@ export function Employees() {
     }
   }
 
-  // El padrón de empleados es gestión: solo admin. El operario ni ve el ítem
+  // El padrón de usuarios es gestión: solo admin. El operario ni ve el ítem
   // en el menú (Sidebar.tsx), pero si escribe la URL a mano lo mandamos afuera.
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <PageHeader
-        title="Empleados"
-        subtitle="Quién trabaja en el taller y quién de ellos tiene usuario para entrar al sistema."
+        title="Usuarios"
+        subtitle="Quién trabaja en el taller, quién tiene usuario para entrar al sistema y con qué cargo."
         actions={
           <Button onClick={() => setEditing('new')}>
-            <Plus size={16} /> Nuevo empleado
+            <Plus size={16} /> Nuevo usuario
           </Button>
         }
       />
@@ -103,18 +107,19 @@ export function Employees() {
                 <th className="p-3 font-semibold w-40">Puesto</th>
                 <th className="p-3 font-semibold w-36">Teléfono</th>
                 <th className="p-3 font-semibold w-52">Usuario</th>
+                <th className="p-3 font-semibold w-32">Cargo</th>
                 <th className="p-3 font-semibold w-20 text-center">Estado</th>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={6} className="p-6 text-center text-text-soft">Cargando...</td></tr>
+                <tr><td colSpan={7} className="p-6 text-center text-text-soft">Cargando...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-text-soft">
-                    {search ? 'Ningún empleado coincide con la búsqueda.' : 'No hay empleados cargados.'}
+                  <td colSpan={7} className="p-6 text-center text-text-soft">
+                    {search ? 'Ningún usuario coincide con la búsqueda.' : 'No hay usuarios cargados.'}
                   </td>
                 </tr>
               )}
@@ -141,6 +146,9 @@ export function Employees() {
                       <span className="text-text-faint">Sin acceso</span>
                     )}
                   </td>
+                  <td data-label="Cargo" className="p-3 text-text-soft">
+                    {employee.cargo ? CARGO_LABELS[employee.cargo] : <span className="text-text-faint">—</span>}
+                  </td>
                   <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
                       "text-[10px] font-bold uppercase tracking-wider",
@@ -165,7 +173,7 @@ export function Employees() {
       </Panel>
 
       {editing && (
-        <EmployeeModal
+        <UserModal
           employee={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
@@ -179,7 +187,7 @@ export function Employees() {
   );
 }
 
-function EmployeeModal({
+function UserModal({
   employee,
   onClose,
   onSaved,
@@ -204,6 +212,7 @@ function EmployeeModal({
   const [hasAccess, setHasAccess] = React.useState(!!employee?.profileId);
   const [accessUsuario, setAccessUsuario] = React.useState('');
   const [accessPassword, setAccessPassword] = React.useState('');
+  const [accessCargo, setAccessCargo] = React.useState<Cargo>('operario');
   // Oculta por defecto: el modal queda abierto un rato largo (el admin arma
   // el usuario, lo piensa, a veces lo corrige) y un taller no es una oficina
   // cerrada — cualquiera que pase por atrás o una captura de pantalla la vería.
@@ -219,6 +228,14 @@ function EmployeeModal({
   const [changeError, setChangeError] = React.useState<string | null>(null);
   const [changeSuccess, setChangeSuccess] = React.useState(false);
 
+  // El cargo actual se sigue localmente por el mismo motivo que hasAccess:
+  // cambiarlo no espera a que el padre recargue la lista.
+  const [cargo, setCargo] = React.useState<Cargo | null>(employee?.cargo ?? null);
+  const [editingCargo, setEditingCargo] = React.useState(false);
+  const [cargoDraft, setCargoDraft] = React.useState<Cargo>(employee?.cargo ?? 'operario');
+  const [savingCargo, setSavingCargo] = React.useState(false);
+  const [cargoError, setCargoError] = React.useState<string | null>(null);
+
   async function handleGrantAccess() {
     if (!employee) return;
     if (!accessUsuario.trim() || !accessPassword) {
@@ -228,8 +245,9 @@ function EmployeeModal({
     setGrantingAccess(true);
     setAccessError(null);
     try {
-      await darAcceso(employee.id, accessUsuario.trim(), accessPassword);
+      await darAcceso(employee.id, accessUsuario.trim(), accessPassword, accessCargo);
       setHasAccess(true);
+      setCargo(accessCargo);
       setAccessSuccess(`Acceso creado con usuario "${accessUsuario.trim()}". Comunicale la contraseña al empleado.`);
       onAccessChanged();
     } catch (err) {
@@ -260,6 +278,22 @@ function EmployeeModal({
     }
   }
 
+  async function handleChangeCargo() {
+    if (!employee) return;
+    setSavingCargo(true);
+    setCargoError(null);
+    try {
+      await cambiarCargo(employee.id, cargoDraft);
+      setCargo(cargoDraft);
+      setEditingCargo(false);
+      onAccessChanged();
+    } catch (err) {
+      setCargoError(getErrorMessage(err));
+    } finally {
+      setSavingCargo(false);
+    }
+  }
+
   function patch(changes: Partial<EmployeeInput>) {
     setForm((prev) => ({ ...prev, ...changes }));
   }
@@ -267,7 +301,7 @@ function EmployeeModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
-      setError('El nombre del empleado es obligatorio.');
+      setError('El nombre es obligatorio.');
       return;
     }
     setSaving(true);
@@ -288,7 +322,7 @@ function EmployeeModal({
       <div className="bg-panel w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center px-5 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
-            {employee ? 'Editar empleado' : 'Nuevo empleado'}
+            {employee ? 'Editar usuario' : 'Nuevo usuario'}
           </h2>
           <button onClick={onClose} className="text-text-soft hover:text-text">
             <X size={18} />
@@ -348,7 +382,7 @@ function EmployeeModal({
               {!hasAccess && (
                 <div className="space-y-2">
                   <p className="text-xs text-text-soft">
-                    Sin acceso: este empleado no tiene usuario para entrar a la app.
+                    Sin acceso: este usuario no tiene con qué entrar a la app.
                   </p>
                   {accessError && (
                     <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{accessError}</div>
@@ -388,6 +422,21 @@ function EmployeeModal({
                           </div>
                         </Label>
                       </div>
+                      <Label>
+                        Cargo
+                        <select
+                          value={accessCargo}
+                          onChange={(e) => setAccessCargo(e.target.value as Cargo)}
+                          className={fieldClass(false, 'font-normal normal-case bg-panel')}
+                        >
+                          {CARGOS.map((c) => (
+                            <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+                          ))}
+                        </select>
+                        <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                          Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta que se muestra.
+                        </span>
+                      </Label>
                       <button
                         type="button"
                         onClick={handleGrantAccess}
@@ -406,6 +455,59 @@ function EmployeeModal({
                   <p className="text-xs text-text-soft">
                     {employee.email ?? 'Tiene usuario, pero no vemos su email desde acá.'}
                   </p>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-soft">Cargo:</span>
+                    {!editingCargo ? (
+                      <>
+                        <span className="text-xs font-semibold text-text">
+                          {cargo ? CARGO_LABELS[cargo] : '—'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCargoDraft(cargo ?? 'operario');
+                            setCargoError(null);
+                            setEditingCargo(true);
+                          }}
+                          className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
+                        >
+                          Cambiar
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          value={cargoDraft}
+                          onChange={(e) => setCargoDraft(e.target.value as Cargo)}
+                          className="border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
+                        >
+                          {CARGOS.map((c) => (
+                            <option key={c} value={c}>{CARGO_LABELS[c]}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleChangeCargo}
+                          disabled={savingCargo}
+                          className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
+                        >
+                          {savingCargo ? 'Guardando...' : 'Guardar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingCargo(false)}
+                          className="text-[11px] font-semibold uppercase tracking-wider text-text-soft hover:text-text"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {cargoError && (
+                    <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{cargoError}</div>
+                  )}
+
                   {changeSuccess && <p className="text-xs text-state-done">Contraseña actualizada.</p>}
                   {!showChangePassword ? (
                     <button

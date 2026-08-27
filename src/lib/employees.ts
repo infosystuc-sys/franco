@@ -1,5 +1,16 @@
 import { supabase } from '@/src/lib/supabase';
 
+/** Cargo dentro del sistema. No es el nivel de acceso (eso es `role`, admin/operario): administrativo y dueño acceden igual, solo cambia la etiqueta. */
+export type Cargo = 'operario' | 'administrativo' | 'dueño';
+
+export const CARGO_LABELS: Record<Cargo, string> = {
+  operario: 'Operario',
+  administrativo: 'Administrativo',
+  dueño: 'Dueño',
+};
+
+export const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño'];
+
 export interface Employee {
   id: string;
   name: string;
@@ -8,6 +19,8 @@ export interface Employee {
   active: boolean;
   profileId: string | null;
   email: string | null;
+  /** Cargo del acceso al sistema. null si todavía no tiene acceso creado. */
+  cargo: Cargo | null;
 }
 
 export interface EmployeeInput {
@@ -29,10 +42,11 @@ function mapEmployee(row: any): Employee {
     active: row.active,
     profileId: row.profile_id,
     email: row.profile?.email ?? null,
+    cargo: (row.profile?.position as Cargo) ?? null,
   };
 }
 
-const SELECT = 'id, name, role, phone, active, profile_id, profile:profiles(email)';
+const SELECT = 'id, name, role, phone, active, profile_id, profile:profiles(email, position)';
 
 export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
   let query = supabase.from('employees').select(SELECT).order('name');
@@ -75,9 +89,14 @@ export async function deleteEmployee(id: string): Promise<void> {
  * navegador: por eso lo hace la Edge Function `gestionar-empleado` del lado
  * del servidor, usando la sesión del admin que invoca.
  */
-export async function darAcceso(employeeId: string, usuario: string, password: string): Promise<void> {
+export async function darAcceso(
+  employeeId: string,
+  usuario: string,
+  password: string,
+  cargo: Cargo
+): Promise<void> {
   const { error } = await supabase.functions.invoke('gestionar-empleado', {
-    body: { accion: 'crear', employeeId, usuario, password },
+    body: { accion: 'crear', employeeId, usuario, password, cargo },
   });
   if (error) throw new Error(await describeFunctionError(error));
 }
@@ -86,6 +105,17 @@ export async function darAcceso(employeeId: string, usuario: string, password: s
 export async function cambiarClave(employeeId: string, password: string): Promise<void> {
   const { error } = await supabase.functions.invoke('gestionar-empleado', {
     body: { accion: 'clave', employeeId, password },
+  });
+  if (error) throw new Error(await describeFunctionError(error));
+}
+
+/**
+ * Cambia el cargo (y con eso el rol) de un empleado que ya tiene acceso.
+ * La propia función rechaza dejar el sistema sin ningún admin.
+ */
+export async function cambiarCargo(employeeId: string, cargo: Cargo): Promise<void> {
+  const { error } = await supabase.functions.invoke('gestionar-empleado', {
+    body: { accion: 'cargo', employeeId, cargo },
   });
   if (error) throw new Error(await describeFunctionError(error));
 }

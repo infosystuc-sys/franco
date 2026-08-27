@@ -62,7 +62,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { icon: Factory, label: 'Proveedores', path: '/proveedores', adminOnly: true },
       { icon: Package, label: 'Inventario', path: '/inventario', adminOnly: true },
       { icon: Tags, label: 'Listas de Precios', path: '/listas-precios', adminOnly: true },
-      { icon: HardHat, label: 'Empleados', path: '/empleados', adminOnly: true },
+      { icon: HardHat, label: 'Usuarios', path: '/usuarios', adminOnly: true },
       { icon: Percent, label: 'Alícuotas', path: '/alicuotas', adminOnly: true },
       { icon: ClipboardList, label: 'Conceptos de Gasto', path: '/conceptos', adminOnly: true },
       { icon: Landmark, label: 'Medios de Pago', path: '/medios-pago', adminOnly: true },
