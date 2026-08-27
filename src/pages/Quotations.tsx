@@ -9,6 +9,7 @@ import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { vehicleLabel } from '@/src/lib/vehicles';
 import {
   createQuotation,
+  defaultValidUntil,
   deleteQuotation,
   describeQuotationError,
   duplicateQuotation,
@@ -20,15 +21,6 @@ import {
   type QuotationListRow,
   type QuotationStatus,
 } from '@/src/lib/quotations';
-
-/** Validez por defecto de una cotización nueva: 15 días. */
-const DEFAULT_VALIDITY_DAYS = 15;
-
-function defaultValidUntil(): string {
-  const date = new Date();
-  date.setDate(date.getDate() + DEFAULT_VALIDITY_DAYS);
-  return date.toISOString().slice(0, 10);
-}
 
 export function Quotations() {
   const { role } = useAuth();

@@ -31,6 +31,8 @@ import { PurchaseDetails } from './pages/PurchaseDetails';
 import { PurchaseNew } from './pages/PurchaseNew';
 import { Purchases } from './pages/Purchases';
 import { Quotations } from './pages/Quotations';
+import { VehicleIntakes } from './pages/VehicleIntakes';
+import { VehicleIntakeDetails } from './pages/VehicleIntakeDetails';
 import { ReportView } from './pages/ReportView';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
@@ -77,6 +79,8 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/orden/:id" element={<WorkOrderDetails />} />
+                    <Route path="/ingresos" element={<VehicleIntakes />} />
+                    <Route path="/ingresos/:id" element={<VehicleIntakeDetails />} />
                     <Route path="/cotizaciones" element={<Quotations />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/facturas" element={<Invoices />} />

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard,
+  LogIn,
   Wrench,
   Package,
   Users,
@@ -44,6 +45,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: 'Operación',
     items: [
       { icon: LayoutDashboard, label: 'Panel', path: '/' },
+      { icon: LogIn, label: 'Ingreso de vehículos', path: '/ingresos', adminOnly: true },
       { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
       { icon: Wrench, label: 'Órdenes de Trabajo', path: '/ordenes' },
       { icon: Receipt, label: 'Facturación', path: '/facturas', adminOnly: true },

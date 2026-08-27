@@ -181,6 +181,8 @@ export interface NewQuotationInput {
   vehicleId: string;
   component: string;
   validUntil: string;
+  /** Se completa al crear desde un ingreso de vehículo: las observaciones pasan directo a las notas. */
+  notes?: string;
 }
 
 export async function createQuotation(input: NewQuotationInput) {
@@ -191,11 +193,21 @@ export async function createQuotation(input: NewQuotationInput) {
       vehicle_id: input.vehicleId,
       component: input.component || null,
       valid_until: input.validUntil || null,
+      notes: input.notes || null,
     })
     .select('id, number')
     .single();
   if (error) throw error;
   return data as { id: string; number: string };
+}
+
+const DEFAULT_VALIDITY_DAYS = 15;
+
+/** Vencimiento por defecto al crear una cotización nueva: hoy + 15 días. */
+export function defaultValidUntil(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + DEFAULT_VALIDITY_DAYS);
+  return date.toISOString().slice(0, 10);
 }
 
 export async function updateQuotationStatus(id: string, status: QuotationStatus) {
