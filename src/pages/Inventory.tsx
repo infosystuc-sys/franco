@@ -29,6 +29,7 @@ import {
 const EMPTY_FORM: ArticleInput = {
   code: '',
   description: '',
+  brand: null,
   tracksStock: false,
   stockQuantity: 0,
   active: true,
@@ -166,6 +167,9 @@ export function Inventory() {
                   <td data-primary className="p-3 font-semibold">{article.code}</td>
                   <td data-label="Descripción" className="p-3">
                     {article.description}
+                    {article.brand && (
+                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-text-soft">{article.brand}</span>
+                    )}
                     {!article.active && (
                       <span className="ml-2 text-[9px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
                     )}
@@ -266,6 +270,7 @@ function ArticleModal({
       ? {
           code: article.code,
           description: article.description,
+          brand: article.brand,
           tracksStock: article.tracksStock,
           stockQuantity: article.stockQuantity,
           active: article.active,
@@ -342,9 +347,18 @@ function ArticleModal({
               Nuestro código
               <input value={form.code} onChange={(e) => patch({ code: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="BOS-093" />
             </label>
-            <label className={cn(labelClass, 'col-span-4')}>
+            <label className={cn(labelClass, 'col-span-2')}>
               Descripción
               <input value={form.description} onChange={(e) => patch({ description: e.target.value })} className={inputClass} placeholder="Tobera Inyector Common Rail" />
+            </label>
+            <label className={cn(labelClass, 'col-span-2')}>
+              Marca
+              <input
+                value={form.brand ?? ''}
+                onChange={(e) => patch({ brand: e.target.value.trim() === '' ? null : e.target.value })}
+                className={inputClass}
+                placeholder="DENSO"
+              />
             </label>
           </div>
 
