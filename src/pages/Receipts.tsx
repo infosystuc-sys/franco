@@ -61,7 +61,7 @@ function buildAccounts(debts: CustomerDebt[], receipts: Receipt[]): CustomerAcco
 }
 
 export function Receipts() {
-  const { role } = useAuth();
+  const { role, canViewHistory } = useAuth();
   const [receipts, setReceipts] = React.useState<Receipt[]>([]);
   const [debts, setDebts] = React.useState<CustomerDebt[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -177,6 +177,8 @@ export function Receipts() {
       </section>
 
       {/* ── Recibos ─────────────────────────────────────────────────── */}
+      {canViewHistory && (
+      <>
       <SectionHeader title="Recibos" />
 
       <div className="relative sm:w-72">
@@ -294,6 +296,8 @@ export function Receipts() {
           </tbody>
         </table>
       </Panel>
+      </>
+      )}
 
       <p className="text-xs text-text-soft">
         Deber y tener a favor se muestran separados, no netos: deber $50.000 y

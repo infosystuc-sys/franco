@@ -1,0 +1,22 @@
+-- DieselPro ERP — permiso de pantalla: ocultar el historial de comprobantes
+--
+-- ⚠️ YA APLICADO en el proyecto Supabase "Ludiesel". Queda como registro
+-- del esquema.
+--
+-- Facturación, Cobranzas, Pagos, Compras y Tesorería mostraban siempre el
+-- listado histórico completo (filtros, buscador y tabla de comprobantes)
+-- debajo del resumen/cuenta corriente. Se agrega un permiso para poder
+-- ocultarlo a admins puntuales, dejando el resto de cada pantalla igual
+-- (KPIs, cuenta corriente, alta de nuevo comprobante).
+--
+-- Se edita a mano, igual que "role" hoy: no hay pantalla de gestión de
+-- usuarios en la app. Para restringir a alguien:
+--   update profiles set can_view_history = false where id = '<user-id>';
+--
+-- Es un filtro de pantalla, no una guarda de datos: hoy no existe una
+-- distinción de "admin restringido" a nivel de RLS, así que cualquier admin
+-- sigue teniendo acceso completo a invoices/receipts/payment_orders/
+-- purchases/treasury_movements si consulta la base directo con su sesión.
+-- Si en el futuro hace falta un límite real, hay que tocar las políticas
+-- de esas cinco tablas, no solo esta columna.
+alter table profiles add column can_view_history boolean not null default true;

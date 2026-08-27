@@ -37,7 +37,7 @@ import {
  * cómo se llegó a esos números.
  */
 export function Treasury() {
-  const { role } = useAuth();
+  const { role, canViewHistory } = useAuth();
   const [balances, setBalances] = React.useState<MethodBalance[]>([]);
   const [movements, setMovements] = React.useState<TreasuryMovement[]>([]);
   const [concepts, setConcepts] = React.useState<ExpenseConcept[]>([]);
@@ -180,6 +180,8 @@ export function Treasury() {
       </section>
 
       {/* ── Movimientos ─────────────────────────────────────────────── */}
+      {canViewHistory && (
+      <>
       <SectionHeader title="Movimientos" />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -320,6 +322,8 @@ export function Treasury() {
           </tbody>
         </table>
       </Panel>
+      </>
+      )}
 
       {creating && (
         <MovementModal

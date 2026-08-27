@@ -49,7 +49,7 @@ function buildAccounts(debts: SupplierDebt[], orders: PaymentOrder[]): SupplierA
 }
 
 export function PaymentOrders() {
-  const { role } = useAuth();
+  const { role, canViewHistory } = useAuth();
   const [orders, setOrders] = React.useState<PaymentOrder[]>([]);
   const [debts, setDebts] = React.useState<SupplierDebt[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -163,6 +163,8 @@ export function PaymentOrders() {
         </Panel>
       </section>
 
+      {canViewHistory && (
+      <>
       <SectionHeader title="Órdenes de pago" />
 
       <div className="relative sm:w-72">
@@ -280,6 +282,8 @@ export function PaymentOrders() {
           </tbody>
         </table>
       </Panel>
+      </>
+      )}
     </div>
   );
 }

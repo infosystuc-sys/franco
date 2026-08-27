@@ -53,7 +53,7 @@ function stripColor(doc: PurchaseListRow): string {
 }
 
 export function Purchases() {
-  const { role } = useAuth();
+  const { role, canViewHistory } = useAuth();
   const [docs, setDocs] = React.useState<PurchaseListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -171,6 +171,8 @@ export function Purchases() {
       </section>
 
       {/* ── Comprobantes ────────────────────────────────────────────── */}
+      {canViewHistory && (
+      <>
       <SectionHeader title="Comprobantes" />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -321,6 +323,8 @@ export function Purchases() {
         Los pagos todavía no se registran: el saldo de cada comprobante es su
         total. Eso lo resuelve el módulo de pagos.
       </p>
+      </>
+      )}
     </div>
   );
 }

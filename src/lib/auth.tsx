@@ -7,6 +7,8 @@ export type UserRole = 'admin' | 'operario';
 interface AuthState {
   session: Session | null;
   role: UserRole | null;
+  /** Permiso de pantalla: ver el listado histórico de comprobantes (Facturación, Cobranzas, Pagos, Compras, Tesorería). No es una guarda de datos, ver profiles-can-view-history.sql. */
+  canViewHistory: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -16,14 +18,21 @@ const AuthContext = React.createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [role, setRole] = React.useState<UserRole | null>(null);
+  const [canViewHistory, setCanViewHistory] = React.useState(true);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
 
     async function loadRole(userId: string) {
-      const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
-      if (!cancelled) setRole((data?.role as UserRole) ?? null);
+      const { data } = await supabase
+        .from('profiles')
+        .select('role, can_view_history')
+        .eq('id', userId)
+        .maybeSingle();
+      if (cancelled) return;
+      setRole((data?.role as UserRole) ?? null);
+      setCanViewHistory(data?.can_view_history ?? true);
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -40,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadRole(newSession.user.id).finally(() => !cancelled && setLoading(false));
       } else {
         setRole(null);
+        setCanViewHistory(true);
       }
     });
 
@@ -54,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, role, loading, signOut }}>
+    <AuthContext.Provider value={{ session, role, canViewHistory, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

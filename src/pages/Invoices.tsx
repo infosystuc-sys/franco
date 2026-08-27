@@ -58,7 +58,7 @@ function stripColor(invoice: InvoiceListRow): string {
 }
 
 export function Invoices() {
-  const { role } = useAuth();
+  const { role, canViewHistory } = useAuth();
   const [invoices, setInvoices] = React.useState<InvoiceListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -124,6 +124,8 @@ export function Invoices() {
 
       <PendingToInvoiceList orders={pending} loading={loading} />
 
+      {canViewHistory && (
+      <>
       <SectionHeader title="Facturas emitidas" />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -288,6 +290,8 @@ export function Invoices() {
         Los cobros todavía no se registran: el saldo de cada factura es su total.
         Eso lo resuelve el módulo de cobranzas.
       </p>
+      </>
+      )}
     </div>
   );
 }
