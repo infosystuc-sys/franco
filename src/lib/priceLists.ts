@@ -13,16 +13,6 @@ export interface ArticleSupplier {
   updatedAt: string;
 }
 
-export interface UnmatchedPrice {
-  id: string;
-  supplierId: string;
-  supplierName: string;
-  supplierCode: string;
-  description: string | null;
-  purchasePrice: number;
-  importedAt: string;
-}
-
 export interface PriceImport {
   id: string;
   supplierId: string;
@@ -30,7 +20,8 @@ export interface PriceImport {
   fileName: string | null;
   totalRows: number;
   matchedRows: number;
-  unmatchedRows: number;
+  /** Artículos nuevos dados de alta en esta importación. */
+  createdRows: number;
   importedAt: string;
 }
 
@@ -38,14 +29,24 @@ export interface PriceImport {
 export interface ImportRow {
   code: string;
   description: string;
+  brand: string | null;
   price: number;
 }
 
 export interface ImportResult {
   totalRows: number;
   matchedRows: number;
-  unmatchedRows: number;
+  /** Artículos nuevos dados de alta en esta importación. */
+  createdRows: number;
   importId: string;
+}
+
+/** Mapeo de columnas del Excel de un proveedor, guardado para reusar. */
+export interface ColumnMapping {
+  codeColumn: number;
+  priceColumn: number;
+  descriptionColumn: number | null;
+  brandColumn: number | null;
 }
 
 function mapArticleSupplier(row: any): ArticleSupplier {
@@ -148,6 +149,36 @@ export async function setPreferredSupplier(articleId: string, supplierId: string
   if (error) throw error;
 }
 
+// ===== Mapeo de columnas por proveedor =====
+
+export async function fetchSupplierImportProfile(supplierId: string): Promise<ColumnMapping | null> {
+  const { data, error } = await supabase
+    .from('supplier_import_profiles')
+    .select('code_column, description_column, brand_column, price_column')
+    .eq('supplier_id', supplierId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    codeColumn: data.code_column,
+    priceColumn: data.price_column,
+    descriptionColumn: data.description_column,
+    brandColumn: data.brand_column,
+  };
+}
+
+export async function saveSupplierImportProfile(supplierId: string, mapping: ColumnMapping): Promise<void> {
+  const { error } = await supabase.from('supplier_import_profiles').upsert({
+    supplier_id: supplierId,
+    code_column: mapping.codeColumn,
+    price_column: mapping.priceColumn,
+    description_column: mapping.descriptionColumn,
+    brand_column: mapping.brandColumn,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
+
 // ===== Importación =====
 
 export async function importSupplierPrices(
@@ -165,43 +196,9 @@ export async function importSupplierPrices(
   return {
     totalRows: Number(result.total_rows),
     matchedRows: Number(result.matched_rows),
-    unmatchedRows: Number(result.unmatched_rows),
+    createdRows: Number(result.unmatched_rows),
     importId: result.import_id,
   };
-}
-
-export async function fetchUnmatchedPrices(supplierId?: string): Promise<UnmatchedPrice[]> {
-  let query = supabase
-    .from('unmatched_supplier_prices')
-    .select('*, supplier:suppliers(name)')
-    .order('imported_at', { ascending: false });
-  if (supplierId) query = query.eq('supplier_id', supplierId);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    supplierId: row.supplier_id,
-    supplierName: row.supplier?.name ?? '—',
-    supplierCode: row.supplier_code,
-    description: row.description,
-    purchasePrice: Number(row.purchase_price),
-    importedAt: row.imported_at,
-  }));
-}
-
-/** Vincula una fila pendiente a un artículo nuestro y la quita de pendientes. */
-export async function linkUnmatchedPrice(unmatchedId: string, articleId: string): Promise<void> {
-  const { error } = await supabase.rpc('link_unmatched_price', {
-    p_unmatched_id: unmatchedId,
-    p_article_id: articleId,
-  });
-  if (error) throw error;
-}
-
-export async function discardUnmatchedPrice(id: string): Promise<void> {
-  const { error } = await supabase.from('unmatched_supplier_prices').delete().eq('id', id);
-  if (error) throw error;
 }
 
 export async function fetchPriceImports(limit = 20): Promise<PriceImport[]> {
@@ -218,7 +215,7 @@ export async function fetchPriceImports(limit = 20): Promise<PriceImport[]> {
     fileName: row.file_name,
     totalRows: row.total_rows,
     matchedRows: row.matched_rows,
-    unmatchedRows: row.unmatched_rows,
+    createdRows: row.unmatched_rows,
     importedAt: row.imported_at,
   }));
 }

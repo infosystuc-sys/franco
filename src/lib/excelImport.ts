@@ -1,16 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ImportRow } from '@/src/lib/priceLists';
-
-/**
- * Formato fijo esperado en el Excel de la lista de precios del proveedor:
- * la primera fila son encabezados y deben existir las columnas código,
- * descripción y precio. Se aceptan variantes de nombre y acentos.
- */
-const COLUMN_ALIASES = {
-  code: ['codigo', 'código', 'cod', 'code', 'articulo', 'artículo', 'sku'],
-  description: ['descripcion', 'descripción', 'detalle', 'description', 'denominacion', 'denominación'],
-  price: ['precio', 'price', 'importe', 'valor', 'preciounitario', 'precio unitario', 'precio_unitario'],
-};
+import type { ColumnMapping, ImportRow } from '@/src/lib/priceLists';
 
 export interface ParsedSheet {
   rows: ImportRow[];
@@ -19,20 +8,24 @@ export interface ParsedSheet {
   sheetName: string;
 }
 
-export class ExcelFormatError extends Error {}
-
-function normalizeHeader(value: unknown): string {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // quita acentos
-    .replace(/\s+/g, '');
+/** Primeras filas del archivo, como texto, para elegir a mano qué columna es cada dato. */
+export interface RawGrid {
+  sheetName: string;
+  rows: string[][];
+  columnCount: number;
 }
 
-function findColumn(headers: string[], aliases: string[]): number {
-  const normalizedAliases = aliases.map(normalizeHeader);
-  return headers.findIndex((header) => normalizedAliases.includes(header));
+export class ExcelFormatError extends Error {}
+
+/** 0 -> "A", 1 -> "B" ... 25 -> "Z", 26 -> "AA". Para rotular columnas en la grilla cruda. */
+export function columnLetter(index: number): string {
+  let n = index;
+  let s = '';
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return s;
 }
 
 /**
@@ -63,7 +56,7 @@ export function parsePrice(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export async function parsePriceListFile(file: File): Promise<ParsedSheet> {
+async function readMatrix(file: File): Promise<{ sheetName: string; matrix: unknown[][] }> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
 
@@ -78,41 +71,57 @@ export async function parsePriceListFile(file: File): Promise<ParsedSheet> {
     defval: '',
   });
 
-  if (matrix.length < 2) {
-    throw new ExcelFormatError('El archivo está vacío o solo tiene los encabezados.');
+  if (matrix.length === 0) {
+    throw new ExcelFormatError('El archivo está vacío.');
   }
 
-  const headers = (matrix[0] ?? []).map(normalizeHeader);
-  const codeIdx = findColumn(headers, COLUMN_ALIASES.code);
-  const descIdx = findColumn(headers, COLUMN_ALIASES.description);
-  const priceIdx = findColumn(headers, COLUMN_ALIASES.price);
+  return { sheetName, matrix: matrix as unknown[][] };
+}
 
-  const missing: string[] = [];
-  if (codeIdx === -1) missing.push('código');
-  if (priceIdx === -1) missing.push('precio');
-  if (missing.length > 0) {
-    throw new ExcelFormatError(
-      `Faltan las columnas: ${missing.join(', ')}. ` +
-      'La primera fila debe tener los encabezados "codigo", "descripcion" y "precio".'
-    );
-  }
+/**
+ * No asume encabezado en la fila 1: cada proveedor lo pone en una fila
+ * distinta, o no lo pone. Devuelve las primeras filas tal cual están para
+ * que el admin elija a mano qué columna es cada dato.
+ */
+export async function previewSheet(file: File, maxRows = 15): Promise<RawGrid> {
+  const { sheetName, matrix } = await readMatrix(file);
+  const columnCount = matrix.reduce((max, row) => Math.max(max, row.length), 0);
+  const rows = matrix.slice(0, maxRows).map((row) =>
+    Array.from({ length: columnCount }, (_, i) => String(row[i] ?? '').trim())
+  );
+  return { sheetName, rows, columnCount };
+}
+
+/**
+ * Aplica el mapeo de columnas (guardado o recién definido) a todo el
+ * archivo. Una fila de título o separadora no tiene a la vez código y
+ * precio numérico válido en las columnas mapeadas, así que queda
+ * descartada sola, sin necesidad de saber en qué fila empiezan los datos.
+ */
+export async function parseWithMapping(file: File, mapping: ColumnMapping): Promise<ParsedSheet> {
+  const { sheetName, matrix } = await readMatrix(file);
 
   const rows: ImportRow[] = [];
   const skipped: ParsedSheet['skipped'] = [];
   const seen = new Set<string>();
 
-  matrix.slice(1).forEach((raw, i) => {
-    const rowNumber = i + 2; // +1 por encabezado, +1 porque Excel empieza en 1
-    const code = String(raw[codeIdx] ?? '').trim();
-    const description = descIdx === -1 ? '' : String(raw[descIdx] ?? '').trim();
-    const price = parsePrice(raw[priceIdx]);
+  matrix.forEach((raw, i) => {
+    const rowNumber = i + 1;
+    const code = String(raw[mapping.codeColumn] ?? '').trim();
+    const description = mapping.descriptionColumn === null
+      ? ''
+      : String(raw[mapping.descriptionColumn] ?? '').trim();
+    const brand = mapping.brandColumn === null
+      ? null
+      : (String(raw[mapping.brandColumn] ?? '').trim() || null);
+    const price = parsePrice(raw[mapping.priceColumn]);
 
     if (code === '') {
       skipped.push({ row: rowNumber, reason: 'sin código' });
       return;
     }
     if (price === null) {
-      skipped.push({ row: rowNumber, reason: `precio ilegible ("${raw[priceIdx]}")` });
+      skipped.push({ row: rowNumber, reason: `precio ilegible ("${raw[mapping.priceColumn]}")` });
       return;
     }
     if (price < 0) {
@@ -127,24 +136,14 @@ export async function parsePriceListFile(file: File): Promise<ParsedSheet> {
     }
     seen.add(key);
 
-    rows.push({ code, description, price });
+    rows.push({ code, description, brand, price });
   });
 
   if (rows.length === 0) {
-    throw new ExcelFormatError('No se encontró ninguna fila válida para importar.');
+    throw new ExcelFormatError(
+      'Ninguna fila tiene a la vez código y precio válidos con este mapeo. Revisá las columnas elegidas.'
+    );
   }
 
   return { rows, skipped, sheetName };
-}
-
-/** Genera y descarga una plantilla vacía con el formato esperado. */
-export function downloadTemplate(): void {
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    ['codigo', 'descripcion', 'precio'],
-    ['BOS-093', 'Tobera Inyector Common Rail', 125.5],
-    ['BOS-201', 'Kit Reparación Bomba VP44', 310],
-  ]);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Lista de precios');
-  XLSX.writeFile(workbook, 'plantilla-lista-precios.xlsx');
 }
