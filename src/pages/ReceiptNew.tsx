@@ -37,6 +37,10 @@ type MedioOption =
 
 let nextKey = 1;
 
+/** Campo angosto para las filas de un renglón (medios de pago ya agregados). */
+const compactFieldClass =
+  'border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
+
 /**
  * Carga de un recibo de cobranza.
  *
@@ -461,115 +465,93 @@ export function ReceiptNew() {
           <p className="text-sm text-text-soft">Sin valores cargados.</p>
         )}
 
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {values.map((value) => (
-            <li key={value.key} className="border border-line bg-panel-alt p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
-                  {VALUE_KIND_LABELS[value.kind]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setValues((c) => c.filter((v) => v.key !== value.key))}
-                  aria-label="Quitar valor"
-                  className="text-text-soft transition-colors hover:text-danger"
+            <li
+              key={value.key}
+              className="flex flex-wrap items-center gap-2 border border-line bg-panel-alt px-3 py-2"
+            >
+              <span
+                title={VALUE_KIND_HELP[value.kind]}
+                className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
+              >
+                {VALUE_KIND_LABELS[value.kind]}
+              </span>
+
+              {value.kind === 'MEDIO_PAGO' && (
+                <select
+                  value={value.paymentMethodId ?? ''}
+                  onChange={(e) => patchValue(value.key, { paymentMethodId: e.target.value })}
+                  className={cn(compactFieldClass, 'bg-panel')}
                 >
-                  <Trash2 size={15} />
-                </button>
-              </div>
+                  {methods.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )}
 
-              <p className="mb-2 text-[10px] text-text-soft">{VALUE_KIND_HELP[value.kind]}</p>
-
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                <label className={labelClass}>
-                  Importe *
+              {value.kind === 'RETENCION' && (
+                <>
+                  <select
+                    value={value.taxRateId ?? ''}
+                    onChange={(e) => patchValue(value.key, { taxRateId: e.target.value })}
+                    className={cn(compactFieldClass, 'bg-panel')}
+                  >
+                    {retentions.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
                   <input
-                    type="number" step="0.01" min="0"
-                    value={value.amount || ''}
-                    onChange={(e) => patchValue(value.key, { amount: Number(e.target.value) })}
-                    className={cn(inputClass, 'font-mono', Number(value.amount) <= 0 && 'field-required')}
+                    value={value.certificateNumber ?? ''}
+                    onChange={(e) => patchValue(value.key, { certificateNumber: e.target.value })}
+                    placeholder="N° certificado"
+                    className={cn(compactFieldClass, 'w-32 font-mono')}
                   />
-                </label>
+                </>
+              )}
 
-                {value.kind === 'MEDIO_PAGO' && (
-                  <label className={cn(labelClass, 'sm:col-span-3')}>
-                    Medio
-                    <select
-                      value={value.paymentMethodId ?? ''}
-                      onChange={(e) => patchValue(value.key, { paymentMethodId: e.target.value })}
-                      className={cn(inputClass, 'bg-panel')}
-                    >
-                      {methods.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+              {value.kind === 'CHEQUE' && (
+                <>
+                  <input
+                    value={value.checkNumber ?? ''}
+                    onChange={(e) => patchValue(value.key, { checkNumber: e.target.value })}
+                    placeholder="Número"
+                    className={cn(compactFieldClass, 'w-24 font-mono', !value.checkNumber?.trim() && 'field-required')}
+                  />
+                  <input
+                    value={value.checkBank ?? ''}
+                    onChange={(e) => patchValue(value.key, { checkBank: e.target.value })}
+                    placeholder="Banco"
+                    className={cn(compactFieldClass, 'w-28', !value.checkBank?.trim() && 'field-required')}
+                  />
+                  <input
+                    type="date"
+                    value={value.checkDueDate ?? ''}
+                    onChange={(e) => patchValue(value.key, { checkDueDate: e.target.value })}
+                    className={cn(compactFieldClass, 'w-36', !value.checkDueDate && 'field-required')}
+                  />
+                </>
+              )}
 
-                {value.kind === 'RETENCION' && (
-                  <>
-                    <label className={cn(labelClass, 'sm:col-span-2')}>
-                      Alícuota
-                      <select
-                        value={value.taxRateId ?? ''}
-                        onChange={(e) => patchValue(value.key, { taxRateId: e.target.value })}
-                        className={cn(inputClass, 'bg-panel')}
-                      >
-                        {retentions.map((r) => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className={labelClass}>
-                      N° certificado
-                      <input
-                        value={value.certificateNumber ?? ''}
-                        onChange={(e) => patchValue(value.key, { certificateNumber: e.target.value })}
-                        className={cn(inputClass, 'font-mono')}
-                      />
-                    </label>
-                  </>
+              <input
+                type="number" step="0.01" min="0"
+                value={value.amount || ''}
+                onChange={(e) => patchValue(value.key, { amount: Number(e.target.value) })}
+                className={cn(
+                  compactFieldClass,
+                  'ml-auto w-28 text-right font-mono',
+                  Number(value.amount) <= 0 && 'field-required'
                 )}
+              />
 
-                {value.kind === 'CHEQUE' && (
-                  <>
-                    <label className={labelClass}>
-                      Número *
-                      <input
-                        value={value.checkNumber ?? ''}
-                        onChange={(e) => patchValue(value.key, { checkNumber: e.target.value })}
-                        className={cn(inputClass, 'font-mono', !value.checkNumber?.trim() && 'field-required')}
-                      />
-                    </label>
-                    <label className={labelClass}>
-                      Banco *
-                      <input
-                        value={value.checkBank ?? ''}
-                        onChange={(e) => patchValue(value.key, { checkBank: e.target.value })}
-                        className={cn(inputClass, !value.checkBank?.trim() && 'field-required')}
-                      />
-                    </label>
-                    <label className={labelClass}>
-                      Fecha de cobro *
-                      <input
-                        type="date"
-                        value={value.checkDueDate ?? ''}
-                        onChange={(e) => patchValue(value.key, { checkDueDate: e.target.value })}
-                        className={cn(inputClass, !value.checkDueDate && 'field-required')}
-                      />
-                    </label>
-                    <label className={cn(labelClass, 'sm:col-span-4')}>
-                      Librador
-                      <input
-                        value={value.checkDrawer ?? ''}
-                        onChange={(e) => patchValue(value.key, { checkDrawer: e.target.value })}
-                        placeholder="Quién firmó el cheque"
-                        className={inputClass}
-                      />
-                    </label>
-                  </>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setValues((c) => c.filter((v) => v.key !== value.key))}
+                aria-label="Quitar valor"
+                className="shrink-0 text-text-soft transition-colors hover:text-danger"
+              >
+                <Trash2 size={15} />
+              </button>
             </li>
           ))}
         </ul>
@@ -651,7 +633,6 @@ interface DraftCheck {
   checkNumber: string;
   checkBank: string;
   checkDueDate: string;
-  checkDrawer: string;
 }
 
 /**
@@ -669,7 +650,7 @@ function CheckModal({
   onClose: () => void;
 }) {
   const [rows, setRows] = React.useState<DraftCheck[]>([
-    { rowKey: nextCheckKey++, amount: remainingBase, checkNumber: '', checkBank: '', checkDueDate: '', checkDrawer: '' },
+    { rowKey: nextCheckKey++, amount: remainingBase, checkNumber: '', checkBank: '', checkDueDate: '' },
   ]);
 
   function patchRow(rowKey: number, patch: Partial<DraftCheck>) {
@@ -686,7 +667,6 @@ function CheckModal({
         checkNumber: '',
         checkBank: '',
         checkDueDate: '',
-        checkDrawer: '',
       },
     ]);
   }
@@ -707,7 +687,6 @@ function CheckModal({
         checkNumber: r.checkNumber,
         checkBank: r.checkBank,
         checkDueDate: r.checkDueDate,
-        checkDrawer: r.checkDrawer || undefined,
       }))
     );
   }
@@ -768,15 +747,6 @@ function CheckModal({
                     value={row.amount || ''}
                     onChange={(e) => patchRow(row.rowKey, { amount: Number(e.target.value) })}
                     className={cn(inputClass, 'font-mono', Number(row.amount) <= 0 && 'field-required')}
-                  />
-                </label>
-                <label className={cn(labelClass, 'sm:col-span-4')}>
-                  Librador
-                  <input
-                    value={row.checkDrawer}
-                    onChange={(e) => patchRow(row.rowKey, { checkDrawer: e.target.value })}
-                    placeholder="Quién firmó el cheque"
-                    className={inputClass}
                   />
                 </label>
               </div>
