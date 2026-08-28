@@ -12,6 +12,7 @@ import { ExpenseConcepts } from './pages/ExpenseConcepts';
 import { InvoiceDetails } from './pages/InvoiceDetails';
 import { InvoiceNew } from './pages/InvoiceNew';
 import { Invoices } from './pages/Invoices';
+import { InvoiceNewFree } from './pages/InvoiceNewFree';
 import { Inventory } from './pages/Inventory';
 import { Login } from './pages/Login';
 import { Notifications } from './pages/Notifications';
@@ -84,6 +85,7 @@ export default function App() {
                     <Route path="/cotizaciones" element={<Quotations />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/facturas" element={<Invoices />} />
+                    <Route path="/facturas/nueva" element={<InvoiceNewFree />} />
                     <Route path="/facturar/:otNumber" element={<InvoiceNew />} />
                     <Route path="/factura/:id" element={<InvoiceDetails />} />
                     <Route path="/compras" element={<Purchases />} />

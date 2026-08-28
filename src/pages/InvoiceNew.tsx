@@ -362,7 +362,7 @@ export function InvoiceTypeBadge({ type }: { type: InvoiceType }) {
  * Totales según la letra. En la A el IVA se discrimina, en la B va incluido y
  * en la C no existe: por eso no sirve el cuadro fijo de ItemsEditor.
  */
-function InvoiceTotals({
+export function InvoiceTotals({
   type,
   totals,
 }: {
@@ -402,8 +402,8 @@ function InvoiceTotals({
   );
 }
 
-/** Pantalla de corte: la orden no se puede facturar, y se explica por qué. */
-function Blocked({ title, children }: { title: string; children: React.ReactNode }) {
+/** Pantalla de corte: no se puede facturar, y se explica por qué. */
+export function Blocked({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="Facturar" />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Eye, AlertTriangle, Receipt, ArrowRight } from 'lucide-react';
+import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -110,6 +110,11 @@ export function Invoices() {
       <PageHeader
         title={canViewHistory ? 'Facturación' : ''}
         subtitle={canViewHistory ? 'Las facturas salen de una orden terminada, en cuenta corriente a 7 días.' : undefined}
+        actions={
+          <Link to="/facturas/nueva">
+            <Button variant="secondary"><Plus size={16} /> Nueva factura</Button>
+          </Link>
+        }
       />
 
       {error && (

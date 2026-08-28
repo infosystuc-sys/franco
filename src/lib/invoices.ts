@@ -198,7 +198,8 @@ export interface InvoiceDetail extends InvoiceListRow {
   voidedReason: string | null;
   createdAt: string;
 
-  workOrderId: string;
+  /** Null en una factura libre, sin OT ni cotización. */
+  workOrderId: string | null;
   workOrderComponent: string | null;
 
   customerLegalName: string | null;
@@ -424,6 +425,39 @@ export async function issueInvoice(
 
   // Los nombres invoice_* vienen del RETURNS TABLE de la RPC, que los usa
   // para no chocar con las columnas de la tabla dentro de la función.
+  return {
+    id: row.invoice_id,
+    fullNumber: row.invoice_full_number,
+    invoiceType: row.invoice_letter,
+    remitoFullNumber: row.remito_full_number,
+  };
+}
+
+/** Factura libre: sin OT ni cotización de por medio, directo por cliente. */
+export async function issueFreeInvoice(
+  customerId: string,
+  items: WorkOrderItemInput[],
+  notes: string,
+  emitRemito: boolean
+): Promise<IssuedInvoice> {
+  const { data, error } = await supabase.rpc('issue_free_invoice', {
+    p_customer_id: customerId,
+    p_items: items.map((item) => ({
+      article_id: item.articleId,
+      code: item.code,
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+    })),
+    p_notes: notes.trim() || null,
+    p_emit_remito: emitRemito,
+  });
+
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) throw new Error('La base no devolvió la factura emitida.');
+
   return {
     id: row.invoice_id,
     fullNumber: row.invoice_full_number,
