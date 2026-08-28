@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Search, Eye, Ban, HandCoins } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
@@ -62,6 +62,7 @@ function buildAccounts(debts: CustomerDebt[], receipts: Receipt[]): CustomerAcco
 
 export function Receipts() {
   const { role, canViewHistory } = useAuth();
+  const navigate = useNavigate();
   const [receipts, setReceipts] = React.useState<Receipt[]>([]);
   const [debts, setDebts] = React.useState<CustomerDebt[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -155,7 +156,12 @@ export function Receipts() {
               )}
               {!loading &&
                 accounts.map((account) => (
-                  <tr key={account.customerId} className="h-10 border-b border-line last:border-b-0 hover:bg-panel-alt">
+                  <tr
+                    key={account.customerId}
+                    onDoubleClick={() => navigate(`/cobranzas/nueva?cliente=${account.customerId}`)}
+                    title="Doble click para cobrar"
+                    className="h-10 cursor-pointer border-b border-line last:border-b-0 hover:bg-panel-alt"
+                  >
                     <td data-primary className="px-4 py-1 font-semibold">{account.customerName}</td>
                     <td data-label="Debe" className="px-3 py-1 text-right font-display text-base font-medium">
                       {account.debt > 0 ? (

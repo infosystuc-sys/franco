@@ -1,6 +1,6 @@
 import React from 'react';
 import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2 } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
@@ -28,6 +28,13 @@ interface DraftValue extends ValueInput {
   key: number;
 }
 
+/** Una entrada del desplegable de "Medios de pago": qué kind produce y con qué datos fijos. */
+type MedioOption =
+  | { optionKey: string; kind: 'MEDIO_PAGO'; label: string; paymentMethodId: string }
+  | { optionKey: string; kind: 'CHEQUE'; label: string }
+  | { optionKey: string; kind: 'RETENCION'; label: string; taxRateId: string }
+  | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
+
 let nextKey = 1;
 
 /**
@@ -41,6 +48,7 @@ let nextKey = 1;
 export function ReceiptNew() {
   const { role } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [methods, setMethods] = React.useState<PaymentMethod[]>([]);
@@ -59,6 +67,10 @@ export function ReceiptNew() {
   const [allocations, setAllocations] = React.useState<Record<string, string>>({});
   const [values, setValues] = React.useState<DraftValue[]>([]);
 
+  const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
+  const [draftAmount, setDraftAmount] = React.useState(0);
+  const [checkModalOpen, setCheckModalOpen] = React.useState(false);
+
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
@@ -76,6 +88,13 @@ export function ReceiptNew() {
       cancelled = true;
     };
   }, [role]);
+
+  // Doble click en "Cuenta corriente" (Cobranzas) manda para acá con el
+  // cliente ya elegido.
+  React.useEffect(() => {
+    const fromQuery = searchParams.get('cliente');
+    if (fromQuery) setCustomerId(fromQuery);
+  }, [searchParams]);
 
   // Al cambiar de cliente se recarga todo lo suyo y se limpia lo cargado: las
   // imputaciones de un cliente no tienen sentido para otro.
@@ -127,6 +146,31 @@ export function ReceiptNew() {
     [values]
   );
 
+  // El desplegable de "Medios de pago" junta en una sola lista los medios
+  // reales (efectivo/banco), el cheque y —si aplican— retención y saldo a
+  // favor, así el usuario elige de un solo lugar en vez de cuatro botones.
+  const medioOptions = React.useMemo<MedioOption[]>(() => {
+    const options: MedioOption[] = methods.map((m) => ({
+      optionKey: `medio:${m.id}`,
+      kind: 'MEDIO_PAGO',
+      label: m.name,
+      paymentMethodId: m.id,
+    }));
+    options.push({ optionKey: 'cheque', kind: 'CHEQUE', label: 'Cheque' });
+    retentions.forEach((r) =>
+      options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
+    );
+    if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
+    return options;
+  }, [methods, retentions, credit]);
+
+  // Lo que falta cubrir: lo imputado a las facturas menos lo ya agregado acá
+  // abajo. Es el número que se sugiere cada vez que se elige un medio nuevo.
+  const suggestedRemaining = React.useMemo(
+    () => Math.max(0, round2(totalAllocated - totalValues)),
+    [totalAllocated, totalValues]
+  );
+
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (loading) {
     return <div className="mx-auto max-w-5xl p-8 text-center text-text-soft">Cargando padrones…</div>;
@@ -136,17 +180,42 @@ export function ReceiptNew() {
     setValues((current) => current.map((v) => (v.key === key ? { ...v, ...patch } : v)));
   }
 
-  function addValue(kind: ReceiptValueKind) {
+  function handleSelectMedio(optionKey: string) {
+    setSelectedMedioKey(optionKey);
+    setDraftAmount(suggestedRemaining);
+  }
+
+  function handleAddMedio() {
+    const option = medioOptions.find((o) => o.optionKey === selectedMedioKey);
+    if (!option) return;
+
+    if (option.kind === 'CHEQUE') {
+      setCheckModalOpen(true);
+      return;
+    }
+
     setValues((current) => [
       ...current,
       {
         key: nextKey++,
-        kind,
-        amount: 0,
-        paymentMethodId: kind === 'MEDIO_PAGO' ? methods[0]?.id : undefined,
-        taxRateId: kind === 'RETENCION' ? retentions[0]?.id : undefined,
+        kind: option.kind,
+        amount: draftAmount,
+        paymentMethodId: option.kind === 'MEDIO_PAGO' ? option.paymentMethodId : undefined,
+        taxRateId: option.kind === 'RETENCION' ? option.taxRateId : undefined,
       },
     ]);
+    setSelectedMedioKey('');
+    setDraftAmount(0);
+  }
+
+  function handleAddChecks(checks: Omit<DraftValue, 'key' | 'kind'>[]) {
+    setValues((current) => [
+      ...current,
+      ...checks.map((check) => ({ key: nextKey++, kind: 'CHEQUE' as ReceiptValueKind, ...check })),
+    ]);
+    setCheckModalOpen(false);
+    setSelectedMedioKey('');
+    setDraftAmount(0);
   }
 
   function handleAutoAllocate() {
@@ -349,29 +418,44 @@ export function ReceiptNew() {
 
       {/* ── Valores ─────────────────────────────────────────────────── */}
       <Panel className="mb-6 p-5">
-        <SectionHeader
-          title="Con qué se cobra"
-          actions={
-            <>
-              <Button type="button" onClick={() => addValue('MEDIO_PAGO')} className="px-3">
-                <Plus size={15} /> Efectivo / banco
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => addValue('CHEQUE')} className="px-3">
-                <Plus size={15} /> Cheque
-              </Button>
-              {retentions.length > 0 && (
-                <Button type="button" variant="ghost" onClick={() => addValue('RETENCION')} className="px-3">
-                  <Plus size={15} /> Retención
-                </Button>
-              )}
-              {credit > 0 && (
-                <Button type="button" variant="ghost" onClick={() => addValue('SALDO_A_FAVOR')} className="px-3">
-                  <Plus size={15} /> Saldo a favor
-                </Button>
-              )}
-            </>
-          }
-        />
+        <SectionHeader title="Medios de pago" />
+
+        <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
+          <label className={cn(labelClass, 'sm:flex-1')}>
+            Medio
+            <select
+              value={selectedMedioKey}
+              onChange={(e) => handleSelectMedio(e.target.value)}
+              className={cn(inputClass, 'bg-panel')}
+            >
+              <option value="">Elegí un medio…</option>
+              {medioOptions.map((o) => (
+                <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {selectedMedioKey && selectedMedioKey !== 'cheque' && (
+            <label className={cn(labelClass, 'sm:w-40')}>
+              Importe
+              <input
+                type="number" step="0.01" min="0"
+                value={draftAmount || ''}
+                onChange={(e) => setDraftAmount(Number(e.target.value))}
+                className={cn(inputClass, 'font-mono')}
+              />
+            </label>
+          )}
+
+          <Button
+            type="button"
+            onClick={handleAddMedio}
+            disabled={!selectedMedioKey}
+            className="px-3 sm:mb-0"
+          >
+            <Plus size={15} /> {selectedMedioKey === 'cheque' ? 'Cargar cheques' : 'Agregar'}
+          </Button>
+        </div>
 
         {values.length === 0 && (
           <p className="text-sm text-text-soft">Sin valores cargados.</p>
@@ -491,6 +575,14 @@ export function ReceiptNew() {
         </ul>
       </Panel>
 
+      {checkModalOpen && (
+        <CheckModal
+          remainingBase={suggestedRemaining}
+          onConfirm={handleAddChecks}
+          onClose={() => setCheckModalOpen(false)}
+        />
+      )}
+
       {/* ── El cuadre ───────────────────────────────────────────────── */}
       <Panel className="mb-10 p-5">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -544,6 +636,162 @@ export function ReceiptNew() {
         <div className="mt-4 flex justify-end">
           <Button onClick={handleSave} disabled={!canSave}>
             <Save size={16} /> {saving ? 'Guardando…' : 'Registrar recibo'}
+          </Button>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+let nextCheckKey = 1;
+
+interface DraftCheck {
+  rowKey: number;
+  amount: number;
+  checkNumber: string;
+  checkBank: string;
+  checkDueDate: string;
+  checkDrawer: string;
+}
+
+/**
+ * Carga de uno o varios cheques a la vez. Cada cheque nuevo sugiere lo que
+ * falta cubrir después de descontar lo que ya llevan los cheques cargados
+ * en esta misma tanda, no solo lo de afuera del modal.
+ */
+function CheckModal({
+  remainingBase,
+  onConfirm,
+  onClose,
+}: {
+  remainingBase: number;
+  onConfirm: (checks: Omit<DraftValue, 'key' | 'kind'>[]) => void;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = React.useState<DraftCheck[]>([
+    { rowKey: nextCheckKey++, amount: remainingBase, checkNumber: '', checkBank: '', checkDueDate: '', checkDrawer: '' },
+  ]);
+
+  function patchRow(rowKey: number, patch: Partial<DraftCheck>) {
+    setRows((current) => current.map((r) => (r.rowKey === rowKey ? { ...r, ...patch } : r)));
+  }
+
+  function addRow() {
+    const used = round2(rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0));
+    setRows((current) => [
+      ...current,
+      {
+        rowKey: nextCheckKey++,
+        amount: Math.max(0, round2(remainingBase - used)),
+        checkNumber: '',
+        checkBank: '',
+        checkDueDate: '',
+        checkDrawer: '',
+      },
+    ]);
+  }
+
+  function removeRow(rowKey: number) {
+    setRows((current) => current.filter((r) => r.rowKey !== rowKey));
+  }
+
+  const valid =
+    rows.length > 0 &&
+    rows.every((r) => r.checkNumber.trim() && r.checkBank.trim() && r.checkDueDate && Number(r.amount) > 0);
+
+  function handleConfirm() {
+    if (!valid) return;
+    onConfirm(
+      rows.map((r) => ({
+        amount: Number(r.amount) || 0,
+        checkNumber: r.checkNumber,
+        checkBank: r.checkBank,
+        checkDueDate: r.checkDueDate,
+        checkDrawer: r.checkDrawer || undefined,
+      }))
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Panel className="max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-text">Cargar cheques</h3>
+
+        <ul className="mt-3 space-y-3">
+          {rows.map((row, idx) => (
+            <li key={row.rowKey} className="border border-line bg-panel-alt p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+                  Cheque {idx + 1}
+                </span>
+                {rows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.rowKey)}
+                    aria-label="Quitar cheque"
+                    className="text-text-soft transition-colors hover:text-danger"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                <label className={labelClass}>
+                  Número *
+                  <input
+                    value={row.checkNumber}
+                    onChange={(e) => patchRow(row.rowKey, { checkNumber: e.target.value })}
+                    className={cn(inputClass, 'font-mono', !row.checkNumber.trim() && 'field-required')}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Banco *
+                  <input
+                    value={row.checkBank}
+                    onChange={(e) => patchRow(row.rowKey, { checkBank: e.target.value })}
+                    className={cn(inputClass, !row.checkBank.trim() && 'field-required')}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Fecha de cobro *
+                  <input
+                    type="date"
+                    value={row.checkDueDate}
+                    onChange={(e) => patchRow(row.rowKey, { checkDueDate: e.target.value })}
+                    className={cn(inputClass, !row.checkDueDate && 'field-required')}
+                  />
+                </label>
+                <label className={labelClass}>
+                  Importe *
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={row.amount || ''}
+                    onChange={(e) => patchRow(row.rowKey, { amount: Number(e.target.value) })}
+                    className={cn(inputClass, 'font-mono', Number(row.amount) <= 0 && 'field-required')}
+                  />
+                </label>
+                <label className={cn(labelClass, 'sm:col-span-4')}>
+                  Librador
+                  <input
+                    value={row.checkDrawer}
+                    onChange={(e) => patchRow(row.rowKey, { checkDrawer: e.target.value })}
+                    placeholder="Quién firmó el cheque"
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <Button type="button" variant="ghost" onClick={addRow} className="mt-3 px-3">
+          <Plus size={15} /> Agregar otro cheque
+        </Button>
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-line pt-4">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancelar</Button>
+          <Button type="button" onClick={handleConfirm} disabled={!valid}>
+            Confirmar {rows.length > 1 ? `(${rows.length} cheques)` : ''}
           </Button>
         </div>
       </Panel>
