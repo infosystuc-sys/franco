@@ -206,6 +206,9 @@ export interface InvoiceDetail extends InvoiceListRow {
   customerTaxId: string | null;
   customerTaxCondition: TaxCondition;
   customerAddress: string | null;
+  /** Contacto vigente del cliente (no es un dato fiscal impreso, se lee en vivo). */
+  customerEmail: string | null;
+  customerPhone: string | null;
 
   issuerLegalName: string;
   issuerTaxId: string | null;
@@ -259,6 +262,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        net_amount, vat_amount, total_amount, paid_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
+       customer:customers(email, phone),
        items:invoice_items(code, description, quantity, unit_price, subtotal, line_number)`
     )
     .eq('id', id)
@@ -287,6 +291,8 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     customerTaxId: row.customer_tax_id,
     customerTaxCondition: row.customer_tax_condition,
     customerAddress: row.customer_address,
+    customerEmail: row.customer?.email ?? null,
+    customerPhone: row.customer?.phone ?? null,
 
     issuerLegalName: row.issuer_legal_name,
     issuerTaxId: row.issuer_tax_id,

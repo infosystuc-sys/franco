@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -8,6 +8,7 @@ import { labelClass, inputClass, sectionTitleClass } from '@/src/components/Fisc
 import { isValidCuit, TAX_CONDITION_LABELS, TAX_CONDITIONS, type TaxCondition } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { describeInvoiceError, invoiceTypeFor, INVOICE_TYPE_LABELS } from '@/src/lib/invoices';
+import { hasGmailCredential, setGmailCredential } from '@/src/lib/invoiceSending';
 import {
   companySettingsToForm,
   fetchCompanySettings,
@@ -44,6 +45,12 @@ export function Settings() {
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const [gmailConfigured, setGmailConfigured] = React.useState(false);
+  const [gmailPassword, setGmailPassword] = React.useState('');
+  const [gmailSaving, setGmailSaving] = React.useState(false);
+  const [gmailSaved, setGmailSaved] = React.useState(false);
+  const [gmailError, setGmailError] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     let cancelled = false;
     fetchCompanySettings()
@@ -53,6 +60,9 @@ export function Settings() {
       })
       .catch((err) => !cancelled && setError(describeInvoiceError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
+    hasGmailCredential()
+      .then((value) => !cancelled && setGmailConfigured(value))
+      .catch(() => {/* si falla la lectura del estado, se sigue viendo como "sin configurar" */});
     return () => {
       cancelled = true;
     };
@@ -83,6 +93,22 @@ export function Settings() {
       setError(describeInvoiceError(getErrorMessage(err)));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveGmail() {
+    if (!gmailPassword.trim()) return;
+    setGmailSaving(true);
+    setGmailError(null);
+    try {
+      await setGmailCredential(gmailPassword.trim());
+      setGmailPassword('');
+      setGmailConfigured(true);
+      setGmailSaved(true);
+    } catch (err) {
+      setGmailError(getErrorMessage(err));
+    } finally {
+      setGmailSaving(false);
     }
   }
 
@@ -284,6 +310,53 @@ export function Settings() {
         Estos datos se copian dentro de cada factura al emitirla. Cambiarlos acá
         no altera los comprobantes ya emitidos.
       </p>
+
+      <Panel className="space-y-4 p-5">
+        <h3 className={sectionTitleClass}><Mail size={14} /> Envío de facturas por mail</h3>
+        <p className="text-xs text-text-soft">
+          Para mandar facturas por mail hace falta una contraseña de aplicación de la
+          cuenta de Gmail de arriba ({form.email || 'sin mail cargado'}). Se guarda cifrada:
+          una vez cargada no se puede volver a ver, solo reemplazar.
+        </p>
+
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.06em]">
+          {gmailConfigured ? (
+            <span className="inline-flex items-center gap-1.5 text-state-ok"><Check size={14} /> Credencial cargada</span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-text-soft"><AlertTriangle size={14} /> Sin configurar</span>
+          )}
+        </div>
+
+        {gmailError && (
+          <div className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{gmailError}</div>
+        )}
+
+        <div className="flex flex-col gap-2 sm:max-w-sm">
+          <label className={labelClass}>
+            {gmailConfigured ? 'Reemplazar contraseña de aplicación' : 'Contraseña de aplicación'}
+            <input
+              type="password"
+              value={gmailPassword}
+              onChange={(e) => {
+                setGmailPassword(e.target.value);
+                setGmailSaved(false);
+              }}
+              className={inputClass}
+              placeholder="xxxx xxxx xxxx xxxx"
+              autoComplete="off"
+            />
+          </label>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleSaveGmail}
+            disabled={gmailSaving || !gmailPassword.trim()}
+          >
+            {gmailSaved && !gmailSaving ? <Check size={16} /> : <Save size={16} />}
+            {gmailSaving ? 'Guardando…' : gmailSaved ? 'Guardada' : 'Guardar credencial'}
+          </Button>
+        </div>
+      </Panel>
     </div>
   );
 }

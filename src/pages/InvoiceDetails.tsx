@@ -1,11 +1,12 @@
 import React from 'react';
-import { XCircle, Printer, Ban, AlertTriangle, Wrench } from 'lucide-react';
+import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
+import { sendInvoiceByEmail, sendInvoiceByWhatsapp } from '@/src/lib/invoiceSending';
 import {
   balanceOf,
   daysUntilDue,
@@ -36,6 +37,8 @@ export function InvoiceDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -160,6 +163,16 @@ export function InvoiceDetails() {
                 <Printer size={16} /> Imprimir
               </Button>
               {!voided && (
+                <>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                    <Mail size={16} /> Enviar por mail
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </Button>
+                </>
+              )}
+              {!voided && (
                 <Button variant="danger" type="button" onClick={handleVoid} disabled={voiding}>
                   <Ban size={16} /> {voiding ? 'Anulando…' : 'Anular'}
                 </Button>
@@ -212,8 +225,124 @@ export function InvoiceDetails() {
         )}
       </div>
 
-      <InvoiceDocument invoice={invoice} />
-      {remito && <RemitoDocument remito={remito} />}
+      <div ref={documentRef}>
+        <InvoiceDocument invoice={invoice} />
+        {remito && <RemitoDocument remito={remito} />}
+      </div>
+
+      {sendModal && (
+        <SendInvoiceModal
+          channel={sendModal}
+          invoice={invoice}
+          documentRef={documentRef}
+          onClose={() => setSendModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * El PDF se arma recién al confirmar el envío (no antes): así el destinatario
+ * se puede corregir sin pagar el costo de renderizar de nuevo, y el
+ * documento que se manda es siempre el que está en pantalla en ese momento.
+ */
+function SendInvoiceModal({
+  channel,
+  invoice,
+  documentRef,
+  onClose,
+}: {
+  channel: 'email' | 'whatsapp';
+  invoice: InvoiceDetail;
+  documentRef: React.RefObject<HTMLDivElement>;
+  onClose: () => void;
+}) {
+  const isEmail = channel === 'email';
+  const [destino, setDestino] = React.useState(
+    (isEmail ? invoice.customerEmail : invoice.customerPhone) ?? ''
+  );
+  const [sending, setSending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [sent, setSent] = React.useState(false);
+
+  async function handleSend() {
+    if (!destino.trim() || !documentRef.current) return;
+    setSending(true);
+    setError(null);
+    try {
+      const { renderElementToPdfBase64 } = await import('@/src/lib/pdf');
+      const pdfBase64 = await renderElementToPdfBase64(documentRef.current);
+      const fileName = `${invoice.fullNumber}.pdf`;
+      if (isEmail) {
+        await sendInvoiceByEmail({
+          to: destino.trim(),
+          fileName,
+          pdfBase64,
+          subject: `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber}`,
+          text: `Adjuntamos la ${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} por $ ${formatMoney(invoice.totalAmount)}.`,
+        });
+      } else {
+        await sendInvoiceByWhatsapp({
+          phone: destino.trim(),
+          fileName,
+          pdfBase64,
+          caption: `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} — $ ${formatMoney(invoice.totalAmount)}`,
+        });
+      }
+      setSent(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Panel className="w-full max-w-sm p-5">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-text">
+          {isEmail ? 'Enviar por mail' : 'Enviar por WhatsApp'}
+        </h3>
+
+        {sent ? (
+          <>
+            <p className="mt-3 text-sm text-text-soft">
+              {isEmail ? 'Mail enviado.' : 'Mensaje de WhatsApp enviado.'}
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button type="button" onClick={onClose}>Cerrar</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-text-soft">
+              {isEmail ? 'Mail del cliente' : 'Teléfono del cliente'}
+              <input
+                type={isEmail ? 'email' : 'tel'}
+                value={destino}
+                onChange={(e) => setDestino(e.target.value)}
+                placeholder={isEmail ? 'cliente@mail.com' : '5493511234567'}
+                className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+                autoFocus
+              />
+            </label>
+
+            {error && (
+              <p className="mt-3 text-xs text-danger">{error}</p>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" type="button" onClick={onClose} disabled={sending}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSend} disabled={sending || !destino.trim()}>
+                {sending ? 'Enviando…' : 'Enviar'}
+              </Button>
+            </div>
+          </>
+        )}
+      </Panel>
     </div>
   );
 }
