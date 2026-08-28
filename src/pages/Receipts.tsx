@@ -109,8 +109,8 @@ export function Receipts() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Cobranzas"
-        subtitle="Los recibos con que se cancelan las facturas de venta."
+        title={canViewHistory ? 'Cobranzas' : ''}
+        subtitle={canViewHistory ? 'Los recibos con que se cancelan las facturas de venta.' : undefined}
         actions={
           <Link to="/cobranzas/nueva">
             <Button><Plus size={16} /> Nueva cobranza</Button>
@@ -122,11 +122,13 @@ export function Receipts() {
         <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
+      {canViewHistory && (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Kpi label="Por cobrar" value={`$ ${formatMoney(totals.deuda)}`} danger={totals.deuda > 0} />
         <Kpi label="Saldos a favor" value={`$ ${formatMoney(totals.credito)}`} />
         <Kpi label="Cobrado" value={`$ ${formatMoney(totals.cobrado)}`} />
       </div>
+      )}
 
       {/* ── Cuenta corriente ────────────────────────────────────────── */}
       <section>

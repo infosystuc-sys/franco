@@ -108,19 +108,21 @@ export function Invoices() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Facturación"
-        subtitle="Las facturas salen de una orden terminada, en cuenta corriente a 7 días."
+        title={canViewHistory ? 'Facturación' : ''}
+        subtitle={canViewHistory ? 'Las facturas salen de una orden terminada, en cuenta corriente a 7 días.' : undefined}
       />
 
       {error && (
         <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
+      {canViewHistory && (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Kpi label="Facturas emitidas" value={String(totals.emitidas)} />
         <Kpi label="Por cobrar" value={`$ ${formatMoney(totals.porCobrar)}`} />
         <Kpi label="Vencido" value={`$ ${formatMoney(totals.vencido)}`} danger={totals.vencido > 0} />
       </div>
+      )}
 
       <PendingToInvoiceList orders={pending} loading={loading} />
 

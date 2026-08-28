@@ -97,8 +97,8 @@ export function PaymentOrders() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Pagos"
-        subtitle="Las órdenes con que se cancelan los comprobantes de compra."
+        title={canViewHistory ? 'Pagos' : ''}
+        subtitle={canViewHistory ? 'Las órdenes con que se cancelan los comprobantes de compra.' : undefined}
         actions={
           <Link to="/pagos/nueva">
             <Button><Plus size={16} /> Nueva orden de pago</Button>
@@ -110,11 +110,13 @@ export function PaymentOrders() {
         <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
+      {canViewHistory && (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Kpi label="Por pagar" value={`$ ${formatMoney(totals.deuda)}`} danger={totals.deuda > 0} />
         <Kpi label="Saldos a favor" value={`$ ${formatMoney(totals.credito)}`} />
         <Kpi label="Pagado" value={`$ ${formatMoney(totals.pagado)}`} />
       </div>
+      )}
 
       <section>
         <SectionHeader title="Cuenta corriente por proveedor" />

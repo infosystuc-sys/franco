@@ -98,8 +98,8 @@ export function Purchases() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="Compras"
-        subtitle="Comprobantes recibidos de proveedores y lo que se les debe."
+        title={canViewHistory ? 'Compras' : ''}
+        subtitle={canViewHistory ? 'Comprobantes recibidos de proveedores y lo que se les debe.' : undefined}
         actions={
           <>
             <Link to="/compras/nueva/articulos">
@@ -116,11 +116,13 @@ export function Purchases() {
         <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
+      {canViewHistory && (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Kpi label="Deuda total" value={`$ ${formatMoney(totals.deuda)}`} />
         <Kpi label="Vencido" value={`$ ${formatMoney(totals.vencido)}`} danger={totals.vencido > 0} />
         <Kpi label="Comprobantes" value={String(totals.comprobantes)} />
       </div>
+      )}
 
       {/* ── Cuenta corriente ────────────────────────────────────────── */}
       <section>
