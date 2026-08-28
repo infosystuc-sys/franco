@@ -20,6 +20,7 @@ import {
   voidInvoice,
   type InvoiceDetail,
 } from '@/src/lib/invoices';
+import { fetchRemitoByInvoice, type Remito } from '@/src/lib/remitos';
 
 /**
  * La factura emitida. Es a la vez el documento que se imprime: las reglas de
@@ -31,6 +32,7 @@ export function InvoiceDetails() {
   const { id } = useParams();
 
   const [invoice, setInvoice] = React.useState<InvoiceDetail | null>(null);
+  const [remito, setRemito] = React.useState<Remito | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
@@ -40,7 +42,10 @@ export function InvoiceDetails() {
     setLoading(true);
     setError(null);
     try {
-      setInvoice(await fetchInvoiceById(id));
+      const data = await fetchInvoiceById(id);
+      setInvoice(data);
+      // El remito es opcional: si falla la consulta, la factura se sigue viendo igual.
+      setRemito(data ? await fetchRemitoByInvoice(data.id).catch(() => null) : null);
     } catch (err) {
       setError(describeInvoiceError(getErrorMessage(err)));
     } finally {
@@ -126,15 +131,23 @@ export function InvoiceDetails() {
             )
           }
           subtitle={
-            invoice.workOrderNumber ? (
-              <Link
-                to={`/orden/${invoice.workOrderNumber}`}
-                className="inline-flex items-center gap-1.5 text-accent-deep hover:underline"
-              >
-                <Wrench size={14} /> Sale de la orden {invoice.workOrderNumber}
-                {invoice.workOrderComponent ? ` · ${invoice.workOrderComponent}` : ''}
-              </Link>
-            ) : null
+            <>
+              {invoice.workOrderNumber && (
+                <Link
+                  to={`/orden/${invoice.workOrderNumber}`}
+                  className="inline-flex items-center gap-1.5 text-accent-deep hover:underline"
+                >
+                  <Wrench size={14} /> Sale de la orden {invoice.workOrderNumber}
+                  {invoice.workOrderComponent ? ` · ${invoice.workOrderComponent}` : ''}
+                </Link>
+              )}
+              {remito && (
+                <span className="mt-1 block text-text-soft">
+                  Con remito {remito.fullNumber}
+                  {remito.status === 'ANULADO' && ' (anulado)'}
+                </span>
+              )}
+            </>
           }
           actions={
             <>
@@ -200,6 +213,73 @@ export function InvoiceDetails() {
       </div>
 
       <InvoiceDocument invoice={invoice} />
+      {remito && <RemitoDocument remito={remito} />}
+    </div>
+  );
+}
+
+/**
+ * El remito: mismos renglones que la factura, sin precios. Se imprime junto
+ * con la factura (comparte la clase print-document) porque en la práctica
+ * viajan juntos con la mercadería.
+ */
+function RemitoDocument({ remito }: { remito: Remito }) {
+  const voided = remito.status === 'ANULADO';
+  return (
+    <div className="print-document relative mt-6 border border-line bg-panel p-6 md:p-8">
+      {voided && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+        >
+          <span className="rotate-[-20deg] border-4 border-danger/40 px-8 py-3 font-display text-6xl font-medium uppercase tracking-[0.1em] text-danger/30">
+            Anulado
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-start justify-between border-b-2 border-ink pb-4">
+        <div>
+          <h3 className="font-display text-xl uppercase tracking-[0.08em] text-text-faint">Remito</h3>
+          <p className="mt-1 font-mono text-lg font-semibold text-text">{remito.fullNumber}</p>
+        </div>
+        <p className="text-[11px] text-text-soft">Fecha de emisión: {formatDate(remito.issueDate)}</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[12px] sm:grid-cols-2">
+        <Field label="Señor(es)" value={remito.customerLegalName || remito.customerName} />
+        <Field
+          label="CUIT / CUIL"
+          value={remito.customerTaxId ? formatCuit(remito.customerTaxId) : '—'}
+          mono
+        />
+        <Field label="Domicilio" value={remito.customerAddress || '—'} />
+      </div>
+
+      <div className="overflow-x-auto py-4">
+        <table className="w-full text-left text-[12px]">
+          <thead className="border-b-2 border-line-strong text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <tr>
+              <th className="w-24 py-1.5 pr-2">Código</th>
+              <th className="py-1.5 pr-2">Descripción</th>
+              <th className="w-20 py-1.5 text-right">Cantidad</th>
+            </tr>
+          </thead>
+          <tbody>
+            {remito.items.map((item, idx) => (
+              <tr key={idx} className="border-b border-line">
+                <td className="py-1.5 pr-2 font-mono text-text-soft">{item.code ?? ''}</td>
+                <td className="py-1.5 pr-2">{item.description}</td>
+                <td className="py-1.5 text-right">{item.quantity.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {voided && remito.voidedReason && (
+        <p className="mt-3 border-t border-line pt-3 text-[11px] text-text-soft">{remito.voidedReason}</p>
+      )}
     </div>
   );
 }

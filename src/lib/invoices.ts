@@ -394,12 +394,15 @@ export interface IssuedInvoice {
   id: string;
   fullNumber: string;
   invoiceType: InvoiceType;
+  /** Número del remito emitido junto con la factura. Null si no se pidió. */
+  remitoFullNumber: string | null;
 }
 
 export async function issueInvoice(
   workOrderId: string,
   items: WorkOrderItemInput[],
-  notes: string
+  notes: string,
+  emitRemito: boolean
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_invoice', {
     p_work_order_id: workOrderId,
@@ -411,6 +414,7 @@ export async function issueInvoice(
       unit_price: item.unitPrice,
     })),
     p_notes: notes.trim() || null,
+    p_emit_remito: emitRemito,
   });
 
   if (error) throw error;
@@ -424,6 +428,7 @@ export async function issueInvoice(
     id: row.invoice_id,
     fullNumber: row.invoice_full_number,
     invoiceType: row.invoice_letter,
+    remitoFullNumber: row.remito_full_number,
   };
 }
 

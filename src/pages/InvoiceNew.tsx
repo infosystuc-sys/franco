@@ -53,6 +53,7 @@ export function InvoiceNew() {
   const [existing, setExisting] = React.useState<WorkOrderInvoiceRef | null>(null);
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
+  const [emitRemito, setEmitRemito] = React.useState(false);
   const [articles, setArticles] = React.useState<Article[]>([]);
 
   const [loading, setLoading] = React.useState(true);
@@ -194,7 +195,7 @@ export function InvoiceNew() {
     setIssuing(true);
     setError(null);
     try {
-      const issued = await issueInvoice(order.id, items, notes);
+      const issued = await issueInvoice(order.id, items, notes, emitRemito);
       navigate(`/factura/${issued.id}`);
     } catch (err) {
       setError(describeInvoiceError(getErrorMessage(err)));
@@ -317,6 +318,15 @@ export function InvoiceNew() {
           placeholder="Texto que sale impreso en el comprobante. Opcional."
           className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
+        <label className="mt-3 flex items-center gap-2 text-sm text-text cursor-pointer">
+          <input
+            type="checkbox"
+            checked={emitRemito}
+            onChange={(e) => setEmitRemito(e.target.checked)}
+            className="w-4 h-4 accent-accent-deep"
+          />
+          Emitir remito junto con la factura
+        </label>
       </Panel>
 
       <div className="mb-10 flex flex-wrap items-center justify-between gap-3 border border-line bg-panel-alt px-5 py-4">
