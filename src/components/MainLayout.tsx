@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { CategoryRail } from './CategoryRail';
 import { TopNavBar } from './TopNavBar';
 
 interface MainLayoutProps {
@@ -19,7 +19,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <div className="min-h-screen bg-surface text-text selection:bg-accent selection:text-accent-ink">
       <TopNavBar onMenuClick={() => setMenuOpen((open) => !open)} menuOpen={menuOpen} />
-      <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <CategoryRail open={menuOpen} onClose={() => setMenuOpen(false)} />
 
       <main
         className="print-area px-5 py-6 pb-16 md:ml-60"

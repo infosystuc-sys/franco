@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { Button, Panel, PageHeader, SectionHeader, StateStrip } from '@/src/components/ui';
 import { NewWorkOrderModal } from '@/src/components/NewWorkOrderModal';
+import { MenuHome } from '@/src/pages/MenuHome';
 import {
   fetchDashboardData,
   getErrorMessage,
@@ -23,7 +24,19 @@ import {
   type WorkOrderListRow,
 } from '@/src/lib/workOrders';
 
+/**
+ * El admin entra al menú estilo Tango (MenuHome): ese reemplaza al panel de
+ * control como pantalla de inicio. El operario no tiene nada que hacer ahí
+ * —no ve casi ninguna categoría— así que sigue entrando directo a sus
+ * órdenes asignadas, que es lo único que le compete.
+ */
 export function Dashboard() {
+  const { role } = useAuth();
+  if (role === 'admin') return <MenuHome />;
+  return <WorkOrderPanel />;
+}
+
+function WorkOrderPanel() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [orders, setOrders] = React.useState<WorkOrderListRow[]>([]);
