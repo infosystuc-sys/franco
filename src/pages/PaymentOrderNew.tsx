@@ -24,14 +24,24 @@ import {
   signOfDoc,
   type OpenPurchaseDoc,
   type PaymentValueInput,
-  type PaymentValueKind,
 } from '@/src/lib/paymentOrders';
 
 interface DraftValue extends PaymentValueInput {
   key: number;
 }
 
+/** Una entrada del desplegable de "Medios de pago": qué kind produce y con qué datos fijos. */
+type MedioOption =
+  | { optionKey: string; kind: 'MEDIO_PAGO'; label: string; paymentMethodId: string }
+  | { optionKey: string; kind: 'CHEQUE_ENDOSADO'; label: string; checkId: string; amount: number }
+  | { optionKey: string; kind: 'RETENCION'; label: string; taxRateId: string }
+  | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
+
 let nextKey = 1;
+
+/** Campo angosto para las filas de un renglón (medios de pago ya agregados). */
+const compactFieldClass =
+  'border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -66,6 +76,9 @@ export function PaymentOrderNew() {
   const [loadingSupplier, setLoadingSupplier] = React.useState(false);
   const [allocations, setAllocations] = React.useState<Record<string, string>>({});
   const [values, setValues] = React.useState<DraftValue[]>([]);
+
+  const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
+  const [draftAmount, setDraftAmount] = React.useState(0);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
@@ -132,6 +145,41 @@ export function PaymentOrderNew() {
     [values]
   );
 
+  // El desplegable de "Medios de pago" junta en una sola lista los medios
+  // reales, cada cheque libre de la cartera (para endosar), retención y
+  // saldo a favor, así se elige de un solo lugar en vez de varios botones.
+  const medioOptions = React.useMemo<MedioOption[]>(() => {
+    const options: MedioOption[] = methods.map((m) => ({
+      optionKey: `medio:${m.id}`,
+      kind: 'MEDIO_PAGO',
+      label: m.name,
+      paymentMethodId: m.id,
+    }));
+    walletChecks
+      .filter((c) => !values.some((v) => v.checkId === c.id))
+      .forEach((c) =>
+        options.push({
+          optionKey: `cheque:${c.id}`,
+          kind: 'CHEQUE_ENDOSADO',
+          label: `Cheque ${c.number} — ${c.bankName} — $ ${formatMoney(c.amount)}`,
+          checkId: c.id,
+          amount: c.amount,
+        })
+      );
+    retentions.forEach((r) =>
+      options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
+    );
+    if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
+    return options;
+  }, [methods, walletChecks, values, retentions, credit]);
+
+  // Lo que falta cubrir: lo imputado a comprobantes menos lo ya agregado.
+  // Un cheque endosado no lo usa: se entrega por su importe completo.
+  const suggestedRemaining = React.useMemo(
+    () => Math.max(0, round2(totalApplied - totalValues)),
+    [totalApplied, totalValues]
+  );
+
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (loading) {
     return <div className="mx-auto max-w-5xl p-8 text-center text-text-soft">Cargando padrones…</div>;
@@ -141,22 +189,29 @@ export function PaymentOrderNew() {
     setValues((current) => current.map((v) => (v.key === key ? { ...v, ...patch } : v)));
   }
 
-  function addValue(kind: PaymentValueKind) {
-    const firstFree = walletChecks.find(
-      (c) => !values.some((v) => v.checkId === c.id)
-    );
+  function handleSelectMedio(optionKey: string) {
+    setSelectedMedioKey(optionKey);
+    const option = medioOptions.find((o) => o.optionKey === optionKey);
+    setDraftAmount(option?.kind === 'CHEQUE_ENDOSADO' ? option.amount : suggestedRemaining);
+  }
+
+  function handleAddMedio() {
+    const option = medioOptions.find((o) => o.optionKey === selectedMedioKey);
+    if (!option) return;
+
     setValues((current) => [
       ...current,
       {
         key: nextKey++,
-        kind,
-        // Un cheque se endosa por su importe completo: el campo no se edita.
-        amount: kind === 'CHEQUE_ENDOSADO' ? (firstFree?.amount ?? 0) : 0,
-        paymentMethodId: kind === 'MEDIO_PAGO' ? methods[0]?.id : undefined,
-        taxRateId: kind === 'RETENCION' ? retentions[0]?.id : undefined,
-        checkId: kind === 'CHEQUE_ENDOSADO' ? firstFree?.id : undefined,
+        kind: option.kind,
+        amount: option.kind === 'CHEQUE_ENDOSADO' ? option.amount : draftAmount,
+        paymentMethodId: option.kind === 'MEDIO_PAGO' ? option.paymentMethodId : undefined,
+        taxRateId: option.kind === 'RETENCION' ? option.taxRateId : undefined,
+        checkId: option.kind === 'CHEQUE_ENDOSADO' ? option.checkId : undefined,
       },
     ]);
+    setSelectedMedioKey('');
+    setDraftAmount(0);
   }
 
   function handleAutoAllocate() {
@@ -205,6 +260,7 @@ export function PaymentOrderNew() {
 
   const onAccount = round2(totalValues - totalApplied);
   const canSave = problems.length === 0 && !saving;
+  const selectedOption = medioOptions.find((o) => o.optionKey === selectedMedioKey);
 
   async function handleSave() {
     if (!canSave) return;
@@ -364,136 +420,138 @@ export function PaymentOrderNew() {
 
       {/* ── Valores ─────────────────────────────────────────────────── */}
       <Panel className="mb-6 p-5">
-        <SectionHeader
-          title="Con qué se paga"
-          actions={
-            <>
-              <Button type="button" onClick={() => addValue('MEDIO_PAGO')} className="px-3">
-                <Plus size={15} /> Efectivo / banco
-              </Button>
-              {walletChecks.length > 0 && (
-                <Button type="button" variant="ghost" onClick={() => addValue('CHEQUE_ENDOSADO')} className="px-3">
-                  <Plus size={15} /> Endosar cheque
-                </Button>
-              )}
-              {retentions.length > 0 && (
-                <Button type="button" variant="ghost" onClick={() => addValue('RETENCION')} className="px-3">
-                  <Plus size={15} /> Retención
-                </Button>
-              )}
-              {credit > 0 && (
-                <Button type="button" variant="ghost" onClick={() => addValue('SALDO_A_FAVOR')} className="px-3">
-                  <Plus size={15} /> Saldo a favor
-                </Button>
-              )}
-            </>
-          }
-        />
+        <SectionHeader title="Medios de pago" />
+
+        <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
+          <label className={cn(labelClass, 'sm:flex-1')}>
+            Medio
+            <select
+              value={selectedMedioKey}
+              onChange={(e) => handleSelectMedio(e.target.value)}
+              className={cn(inputClass, 'bg-panel')}
+            >
+              <option value="">Elegí un medio…</option>
+              {medioOptions.map((o) => (
+                <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+
+          {selectedMedioKey && selectedOption?.kind === 'CHEQUE_ENDOSADO' && (
+            <div className={cn(labelClass, 'sm:w-40')}>
+              Importe
+              <p className="mt-1 flex items-center gap-1.5 py-2 font-mono text-sm text-text">
+                <FileCheck size={13} className="text-text-soft" /> $ {formatMoney(selectedOption.amount)}
+              </p>
+            </div>
+          )}
+
+          {selectedMedioKey && selectedOption?.kind !== 'CHEQUE_ENDOSADO' && (
+            <label className={cn(labelClass, 'sm:w-40')}>
+              Importe
+              <input
+                type="number" step="0.01" min="0"
+                value={draftAmount || ''}
+                onChange={(e) => setDraftAmount(Number(e.target.value))}
+                className={cn(inputClass, 'font-mono')}
+              />
+            </label>
+          )}
+
+          <Button type="button" onClick={handleAddMedio} disabled={!selectedMedioKey} className="px-3 sm:mb-0">
+            <Plus size={15} /> Agregar
+          </Button>
+        </div>
 
         {values.length === 0 && <p className="text-sm text-text-soft">Sin valores cargados.</p>}
 
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {values.map((value) => (
-            <li key={value.key} className="border border-line bg-panel-alt p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
-                  {PAYMENT_VALUE_LABELS[value.kind]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setValues((c) => c.filter((v) => v.key !== value.key))}
-                  aria-label="Quitar valor"
-                  className="text-text-soft transition-colors hover:text-danger"
+            <li
+              key={value.key}
+              className="flex flex-wrap items-center gap-2 border border-line bg-panel-alt px-3 py-2"
+            >
+              <span
+                title={PAYMENT_VALUE_HELP[value.kind]}
+                className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
+              >
+                {PAYMENT_VALUE_LABELS[value.kind]}
+              </span>
+
+              {value.kind === 'MEDIO_PAGO' && (
+                <select
+                  value={value.paymentMethodId ?? ''}
+                  onChange={(e) => patchValue(value.key, { paymentMethodId: e.target.value })}
+                  className={cn(compactFieldClass, 'bg-panel')}
                 >
-                  <Trash2 size={15} />
-                </button>
-              </div>
+                  {methods.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )}
 
-              <p className="mb-2 text-[10px] text-text-soft">{PAYMENT_VALUE_HELP[value.kind]}</p>
+              {value.kind === 'RETENCION' && (
+                <>
+                  <select
+                    value={value.taxRateId ?? ''}
+                    onChange={(e) => patchValue(value.key, { taxRateId: e.target.value })}
+                    className={cn(compactFieldClass, 'bg-panel')}
+                  >
+                    {retentions.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={value.certificateNumber ?? ''}
+                    onChange={(e) => patchValue(value.key, { certificateNumber: e.target.value })}
+                    placeholder="N° certificado"
+                    className={cn(compactFieldClass, 'w-32 font-mono')}
+                  />
+                </>
+              )}
 
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                {value.kind === 'CHEQUE_ENDOSADO' ? (
-                  <label className={cn(labelClass, 'sm:col-span-4')}>
-                    Cheque de la cartera
-                    <select
-                      value={value.checkId ?? ''}
-                      onChange={(e) => {
-                        const check = walletChecks.find((c) => c.id === e.target.value);
-                        patchValue(value.key, {
-                          checkId: e.target.value,
-                          // El importe lo fija el cheque: se endosa completo.
-                          amount: check?.amount ?? 0,
-                        });
-                      }}
-                      className={cn(inputClass, 'bg-panel', !value.checkId && 'field-required')}
-                    >
-                      <option value="">Elegí un cheque</option>
-                      {walletChecks
-                        .filter((c) => c.id === value.checkId || !values.some((v) => v.checkId === c.id))
-                        .map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.number} — {c.bankName} — $ {formatMoney(c.amount)} — vence {formatDate(c.dueDate)}
-                          </option>
-                        ))}
-                    </select>
-                    <span className="mt-1 flex items-center gap-1.5 text-[10px] font-normal normal-case text-text-soft">
-                      <FileCheck size={11} /> Se entrega por su importe completo: $ {formatMoney(Number(value.amount) || 0)}
-                    </span>
-                  </label>
-                ) : (
-                  <>
-                    <label className={labelClass}>
-                      Importe *
-                      <input
-                        type="number" step="0.01" min="0"
-                        value={value.amount || ''}
-                        onChange={(e) => patchValue(value.key, { amount: Number(e.target.value) })}
-                        className={cn(inputClass, 'font-mono', Number(value.amount) <= 0 && 'field-required')}
-                      />
-                    </label>
+              {value.kind === 'CHEQUE_ENDOSADO' && (
+                <select
+                  value={value.checkId ?? ''}
+                  onChange={(e) => {
+                    const check = walletChecks.find((c) => c.id === e.target.value);
+                    // El importe lo fija el cheque: se endosa completo.
+                    patchValue(value.key, { checkId: e.target.value, amount: check?.amount ?? 0 });
+                  }}
+                  className={cn(compactFieldClass, 'bg-panel', !value.checkId && 'field-required')}
+                >
+                  <option value="">Elegí un cheque</option>
+                  {walletChecks
+                    .filter((c) => c.id === value.checkId || !values.some((v) => v.checkId === c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.number} — {c.bankName} — vence {formatDate(c.dueDate)}
+                      </option>
+                    ))}
+                </select>
+              )}
 
-                    {value.kind === 'MEDIO_PAGO' && (
-                      <label className={cn(labelClass, 'sm:col-span-3')}>
-                        Medio
-                        <select
-                          value={value.paymentMethodId ?? ''}
-                          onChange={(e) => patchValue(value.key, { paymentMethodId: e.target.value })}
-                          className={cn(inputClass, 'bg-panel')}
-                        >
-                          {methods.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-
-                    {value.kind === 'RETENCION' && (
-                      <>
-                        <label className={cn(labelClass, 'sm:col-span-2')}>
-                          Alícuota
-                          <select
-                            value={value.taxRateId ?? ''}
-                            onChange={(e) => patchValue(value.key, { taxRateId: e.target.value })}
-                            className={cn(inputClass, 'bg-panel')}
-                          >
-                            {retentions.map((r) => (
-                              <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className={labelClass}>
-                          N° certificado
-                          <input
-                            value={value.certificateNumber ?? ''}
-                            onChange={(e) => patchValue(value.key, { certificateNumber: e.target.value })}
-                            className={cn(inputClass, 'font-mono')}
-                          />
-                        </label>
-                      </>
-                    )}
-                  </>
+              <input
+                type="number" step="0.01" min="0"
+                value={value.amount || ''}
+                onChange={(e) => patchValue(value.key, { amount: Number(e.target.value) })}
+                disabled={value.kind === 'CHEQUE_ENDOSADO'}
+                className={cn(
+                  compactFieldClass,
+                  'ml-auto w-28 text-right font-mono',
+                  Number(value.amount) <= 0 && 'field-required',
+                  value.kind === 'CHEQUE_ENDOSADO' && 'bg-panel-head text-text-soft'
                 )}
-              </div>
+              />
+
+              <button
+                type="button"
+                onClick={() => setValues((c) => c.filter((v) => v.key !== value.key))}
+                aria-label="Quitar valor"
+                className="shrink-0 text-text-soft transition-colors hover:text-danger"
+              >
+                <Trash2 size={15} />
+              </button>
             </li>
           ))}
         </ul>
