@@ -33,7 +33,6 @@ export function VehicleIntakeDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [component, setComponent] = React.useState('');
   const [observations, setObservations] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
@@ -46,7 +45,6 @@ export function VehicleIntakeDetails() {
     try {
       const data = await fetchVehicleIntake(id);
       setIntake(data);
-      setComponent(data?.component ?? '');
       setObservations(data?.observations ?? '');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -64,7 +62,7 @@ export function VehicleIntakeDetails() {
     setSaving(true);
     setError(null);
     try {
-      await updateVehicleIntake(intake.id, { component, observations });
+      await updateVehicleIntake(intake.id, { observations });
       await load();
     } catch (err) {
       setError(describeVehicleIntakeError(getErrorMessage(err)));
@@ -143,18 +141,6 @@ export function VehicleIntakeDetails() {
 
       <Panel className="p-5 space-y-4">
         <SectionHeader title="Datos del ingreso" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <label className="text-xs font-bold uppercase tracking-wider text-text-soft">
-            Componente
-            <input
-              value={component}
-              onChange={(e) => setComponent(e.target.value)}
-              disabled={!isAdmin}
-              className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
-              placeholder="Ej: Bomba de Inyección Common Rail"
-            />
-          </label>
-        </div>
         <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
           Observaciones
           <textarea

@@ -49,7 +49,7 @@ export function VehicleIntakes() {
     const term = search.trim().toLowerCase();
     if (!term) return intakes;
     return intakes.filter((i) =>
-      [i.number, i.customerName, i.vehicleLabel, i.component]
+      [i.number, i.customerName, i.vehicleLabel]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term))
     );
@@ -78,7 +78,7 @@ export function VehicleIntakes() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Número, cliente, vehículo, componente..."
+          placeholder="Número, cliente o vehículo..."
           className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
         />
       </div>
@@ -90,7 +90,6 @@ export function VehicleIntakes() {
               <th className="px-4 py-1 w-32">Ingreso</th>
               <th className="px-3 py-1">Cliente</th>
               <th className="px-3 py-1">Vehículo / Equipo</th>
-              <th className="px-3 py-1">Componente</th>
               <th className="px-3 py-1 w-20 text-center">Fotos</th>
               <th className="px-3 py-1 w-20 text-center">Piezas</th>
               <th className="px-3 py-1 w-40">Estado</th>
@@ -99,12 +98,12 @@ export function VehicleIntakes() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-text-soft">Cargando ingresos…</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-text-soft">Cargando ingresos…</td></tr>
             )}
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-text-soft">
+                <td colSpan={7} className="px-4 py-10 text-center text-text-soft">
                   {intakes.length === 0 ? (
                     <span className="flex flex-col items-center gap-2">
                       <ClipboardList size={24} className="text-text-faint" />
@@ -130,9 +129,6 @@ export function VehicleIntakes() {
                   </td>
                   <td data-label="Cliente" className="px-3 py-1">{intake.customerName}</td>
                   <td data-label="Vehículo" className="px-3 py-1 text-text-soft">{intake.vehicleLabel}</td>
-                  <td data-label="Componente" className="px-3 py-1 text-text-soft">
-                    {intake.component || <span className="text-text-faint">—</span>}
-                  </td>
                   <td data-label="Fotos" className="px-3 py-1 text-center text-text-soft">
                     {intake.photoCount > 0 ? (
                       <span className="inline-flex items-center gap-1"><Camera size={13} /> {intake.photoCount}</span>
@@ -191,7 +187,6 @@ function NewVehicleIntakeModal({
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
   const [customerId, setCustomerId] = React.useState('');
   const [vehicleId, setVehicleId] = React.useState('');
-  const [component, setComponent] = React.useState('');
   const [observations, setObservations] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -227,7 +222,7 @@ function NewVehicleIntakeModal({
     setSaving(true);
     setError(null);
     try {
-      const created = await createVehicleIntake({ customerId, vehicleId, component, observations });
+      const created = await createVehicleIntake({ customerId, vehicleId, observations });
       onCreated(created.id);
     } catch (err) {
       setError(describeVehicleIntakeError(getErrorMessage(err)));
@@ -301,11 +296,6 @@ function NewVehicleIntakeModal({
                   + Nuevo
                 </button>
               </div>
-            </label>
-
-            <label className={cn(labelClass, 'block')}>
-              Componente
-              <input value={component} onChange={(e) => setComponent(e.target.value)} className={inputClass} placeholder="Ej: Bomba de Inyección Common Rail" />
             </label>
 
             <label className={cn(labelClass, 'block')}>

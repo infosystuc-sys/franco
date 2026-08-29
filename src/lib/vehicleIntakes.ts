@@ -32,7 +32,6 @@ export interface VehicleIntakeListRow {
   id: string;
   number: string;
   status: VehicleIntakeStatus;
-  component: string | null;
   customerName: string;
   vehicleLabel: string;
   quotationNumber: string | null;
@@ -49,7 +48,6 @@ export interface VehicleIntakeDetail {
   vehicleId: string;
   customerName: string;
   vehicleLabel: string;
-  component: string | null;
   observations: string | null;
   quotationId: string | null;
   quotationNumber: string | null;
@@ -61,12 +59,11 @@ export interface VehicleIntakeDetail {
 export interface NewVehicleIntakeInput {
   customerId: string;
   vehicleId: string;
-  component: string;
   observations: string;
 }
 
 const LIST_SELECT = `
-  id, number, status, component, created_at,
+  id, number, status, created_at,
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
   quotation:quotations(number),
@@ -90,7 +87,6 @@ export async function fetchVehicleIntakes(): Promise<VehicleIntakeListRow[]> {
     id: row.id,
     number: row.number,
     status: row.status,
-    component: row.component,
     customerName: row.customer?.name ?? '—',
     vehicleLabel: vehicleLabelOf(row.vehicle),
     quotationNumber: row.quotation?.number ?? null,
@@ -101,7 +97,7 @@ export async function fetchVehicleIntakes(): Promise<VehicleIntakeListRow[]> {
 }
 
 const DETAIL_SELECT = `
-  id, number, status, component, observations, quotation_id, created_at,
+  id, number, status, observations, quotation_id, created_at,
   customer_id, vehicle_id,
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
@@ -127,7 +123,6 @@ export async function fetchVehicleIntake(id: string): Promise<VehicleIntakeDetai
     vehicleId: row.vehicle_id,
     customerName: row.customer?.name ?? '—',
     vehicleLabel: vehicleLabelOf(row.vehicle),
-    component: row.component,
     observations: row.observations,
     quotationId: row.quotation_id,
     quotationNumber: row.quotation?.number ?? null,
@@ -147,7 +142,6 @@ export async function createVehicleIntake(input: NewVehicleIntakeInput): Promise
     .insert({
       customer_id: input.customerId,
       vehicle_id: input.vehicleId,
-      component: input.component || null,
       observations: input.observations || null,
     })
     .select('id, number')
@@ -158,11 +152,11 @@ export async function createVehicleIntake(input: NewVehicleIntakeInput): Promise
 
 export async function updateVehicleIntake(
   id: string,
-  values: { component: string; observations: string }
+  values: { observations: string }
 ): Promise<void> {
   const { error } = await supabase
     .from('vehicle_intakes')
-    .update({ component: values.component || null, observations: values.observations || null })
+    .update({ observations: values.observations || null })
     .eq('id', id);
   if (error) throw error;
 }
@@ -255,7 +249,7 @@ export async function convertIntakeToQuotation(
   const quotation = await createQuotation({
     customerId: intake.customerId,
     vehicleId: intake.vehicleId,
-    component: intake.component ?? '',
+    component: '',
     notes: intake.observations ?? '',
     validUntil: defaultValidUntil(),
   });
