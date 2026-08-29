@@ -84,7 +84,7 @@ export function TaxRates() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {loading && <p className="text-center text-text-soft">Cargando alícuotas…</p>}
@@ -101,7 +101,7 @@ export function TaxRates() {
                 {TAX_KIND_HELP[kind]}
               </p>
 
-              <Panel className="overflow-x-auto">
+              <Panel className="overflow-x-auto overflow-y-hidden">
                 <table className="table-stack w-full text-left text-[13px]">
                   <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     <tr>
@@ -136,7 +136,7 @@ export function TaxRates() {
                         <td data-primary className="px-4 py-1 font-semibold">
                           {rate.name}
                           {!rate.active && (
-                            <span className="ml-2 bg-panel-head px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                               Inactiva
                             </span>
                           )}

@@ -101,13 +101,13 @@ export function PurchaseDetails() {
           }
           meta={
             voided ? (
-              <span className="inline-flex items-center gap-1.5 bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulado
               </span>
             ) : (
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]',
+                  'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]',
                   overdue ? 'bg-danger-soft text-danger' : 'bg-panel-head text-text-soft'
                 )}
               >
@@ -123,7 +123,7 @@ export function PurchaseDetails() {
               {doc.kind === 'ARTICULOS' && (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]',
+                    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]',
                     doc.movesStock ? 'bg-panel-head text-text-soft' : 'bg-panel-alt text-text-faint'
                   )}
                 >
@@ -155,11 +155,11 @@ export function PurchaseDetails() {
         />
 
         {error && (
-          <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
         )}
 
         {voided && (
-          <div className="mb-6 flex items-start gap-2 border border-line bg-panel-head px-4 py-3 text-sm">
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
             <Ban size={16} className="mt-0.5 shrink-0 text-text-soft" />
             <span>
               Anulado el {formatDate(doc.voidedAt?.slice(0, 10) ?? null)}

@@ -151,7 +151,7 @@ export function PriceLists() {
       />
 
       {/* Historial */}
-      <section className="border border-line bg-panel">
+      <section className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="p-4 border-b border-line bg-panel-head">
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
             <History size={14} /> Últimas importaciones

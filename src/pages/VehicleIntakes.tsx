@@ -70,7 +70,7 @@ export function VehicleIntakes() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <div className="relative max-w-sm">
@@ -79,11 +79,11 @@ export function VehicleIntakes() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Número, cliente, vehículo, componente..."
-          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
         />
       </div>
 
-      <Panel className="overflow-x-auto">
+      <Panel className="overflow-x-auto overflow-y-hidden">
         <table className="table-stack w-full text-left text-[13px]">
           <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>

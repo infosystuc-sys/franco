@@ -11,7 +11,7 @@ import {
 
 export const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
 export const inputClass =
-  'mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case ' +
+  'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case ' +
   'focus:border-accent-deep focus:outline-none';
 export const sectionTitleClass = 'text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
 

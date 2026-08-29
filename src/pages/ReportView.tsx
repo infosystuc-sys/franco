@@ -114,7 +114,7 @@ export function ReportView() {
         />
 
         {error && (
-          <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
@@ -159,7 +159,7 @@ export function ReportView() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Filtrar en el resultado…"
-                  className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+                  className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
                 />
               </div>
             )}
@@ -192,7 +192,7 @@ export function ReportView() {
             )}
           </div>
 
-          <Panel className="overflow-x-auto">
+          <Panel className="overflow-x-auto overflow-y-hidden">
             <table className="w-full text-left text-[12px]">
               <thead className="h-9 bg-panel-head text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>

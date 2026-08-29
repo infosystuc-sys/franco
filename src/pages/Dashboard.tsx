@@ -109,7 +109,7 @@ function WorkOrderPanel() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
           No se pudo conectar con Supabase: {error}
         </div>
       )}

@@ -86,7 +86,7 @@ export function WorkOrders() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -118,7 +118,7 @@ export function WorkOrders() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Número, cliente, vehículo o empleado…"
-          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
         />
       </div>
 

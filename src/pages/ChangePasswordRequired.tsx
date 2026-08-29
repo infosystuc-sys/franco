@@ -82,7 +82,7 @@ export function ChangePasswordRequired() {
               type={showPassword ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+              className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
             />
             {noCoinciden && <span className="mt-1 block text-[10px] font-normal normal-case text-danger">No coincide.</span>}
           </label>

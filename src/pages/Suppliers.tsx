@@ -98,11 +98,11 @@ export function Suppliers() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar por nombre, CUIT, email..."
-          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
         />
       </div>
 
-      <div className="border border-line bg-panel">
+      <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
           <table className="table-stack w-full text-left text-[13px]">
             <thead>

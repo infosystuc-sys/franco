@@ -208,7 +208,7 @@ export function WorkOrderDetails() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -272,7 +272,7 @@ export function WorkOrderDetails() {
               value={order.employee?.id ?? ''}
               onChange={(e) => handleAssignEmployee(e.target.value || null)}
               disabled={assigningEmployee}
-              className="w-full border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+              className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
             >
               <option value="">Sin asignar</option>
               {employees.map((employee) => (
@@ -428,7 +428,7 @@ function StatusControls({
           value={order.status}
           onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
           disabled={busy}
-          className="border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+          className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
         >
           {STATUS_SEQUENCE.map((status) => (
             <option key={status} value={status}>{STATUS_LABELS[status]}</option>
@@ -442,7 +442,7 @@ function StatusControls({
       </div>
 
       {isDone && invoice && (
-        <p className="mt-3 border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
+        <p className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
           Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida.
           Si cambiás el estado, esa factura no se anula ni se actualiza sola.
         </p>

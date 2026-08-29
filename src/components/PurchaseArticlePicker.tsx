@@ -49,7 +49,7 @@ export function PurchaseArticlePicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por código o descripción…"
-              className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+              className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
             />
           </div>
         </div>

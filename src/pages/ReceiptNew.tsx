@@ -39,7 +39,7 @@ let nextKey = 1;
 
 /** Campo angosto para las filas de un renglón (medios de pago ya agregados). */
 const compactFieldClass =
-  'border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
+  'rounded border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
 
 /**
  * Carga de un recibo de cobranza.
@@ -304,7 +304,7 @@ export function ReceiptNew() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {/* ── Cliente ─────────────────────────────────────────────────── */}
@@ -365,7 +365,7 @@ export function ReceiptNew() {
         )}
 
         {invoices.length > 0 && (
-          <div className="overflow-x-auto border border-line">
+          <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
             <table className="table-stack w-full text-left text-[13px]">
               <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
@@ -406,7 +406,7 @@ export function ReceiptNew() {
                           }
                           placeholder="0,00"
                           className={cn(
-                            'w-full border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
+                            'w-full rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
                             excess && 'border-danger bg-danger-soft'
                           )}
                         />

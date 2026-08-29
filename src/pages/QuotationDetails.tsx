@@ -154,7 +154,7 @@ export function QuotationDetails() {
               {QUOTATION_STATUS_LABELS[quotation.status]}
             </span>
             {expired && (
-              <span className="inline-flex items-center gap-1.5 border border-state-wait px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-wait">
+              <span className="inline-flex items-center gap-1.5 rounded border border-state-wait px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-wait">
                 <AlertTriangle size={13} /> Vencida
               </span>
             )}

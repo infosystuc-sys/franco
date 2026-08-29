@@ -100,11 +100,11 @@ export function ReceiptDetails() {
           }
           meta={
             voided ? (
-              <span className="inline-flex items-center gap-1.5 bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulado
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 Recibo de cobranza
               </span>
             )
@@ -128,13 +128,13 @@ export function ReceiptDetails() {
         />
 
         {error && (
-          <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
         {voided && (
-          <div className="mb-6 flex items-start gap-2 border border-line bg-panel-head px-4 py-3 text-sm">
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
             <Ban size={16} className="mt-0.5 shrink-0 text-text-soft" />
             <span>
               Anulado el {formatDate(receipt.voidedAt?.slice(0, 10) ?? null)}

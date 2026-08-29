@@ -116,13 +116,13 @@ export function InvoiceDetails() {
           }
           meta={
             voided ? (
-              <span className="inline-flex items-center gap-1.5 bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulada
               </span>
             ) : (
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]',
+                  'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]',
                   overdue ? 'bg-danger-soft text-danger' : 'bg-panel-head text-text-soft'
                 )}
               >
@@ -182,13 +182,13 @@ export function InvoiceDetails() {
         />
 
         {error && (
-          <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
         {voided && (
-          <div className="mb-6 flex items-start gap-2 border border-line bg-panel-head px-4 py-3 text-sm">
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
             <Ban size={16} className="mt-0.5 shrink-0 text-text-soft" />
             <span>
               Anulada el {formatDate(invoice.voidedAt?.slice(0, 10) ?? null)}
@@ -323,7 +323,7 @@ function SendInvoiceModal({
                 value={destino}
                 onChange={(e) => setDestino(e.target.value)}
                 placeholder={isEmail ? 'cliente@mail.com' : '5493511234567'}
-                className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+                className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
                 autoFocus
               />
             </label>

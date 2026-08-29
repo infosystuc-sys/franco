@@ -68,7 +68,7 @@ export function SupplierColumnMapper({
       <select
         value={values[field] ?? ''}
         onChange={(e) => setters[field](e.target.value === '' ? null : Number(e.target.value))}
-        className="mt-1 w-full border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+        className="mt-1 w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
       >
         <option value="">{required ? 'Elegí una columna...' : '— sin mapear —'}</option>
         {Array.from({ length: grid.columnCount }, (_, i) => (
@@ -79,7 +79,7 @@ export function SupplierColumnMapper({
   }
 
   return (
-    <div className="border border-line overflow-hidden">
+    <div className="rounded-md border border-line overflow-hidden">
       <div className="bg-panel-alt px-3 py-2 text-xs text-text-soft">
         Hoja <strong>{grid.sheetName}</strong> · indicá en qué columna está cada dato. Se guarda para
         que las próximas importaciones de este proveedor lo reconozcan solas.

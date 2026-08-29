@@ -102,7 +102,7 @@ export function ExpenseConcepts() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <Panel className="p-4">
@@ -111,7 +111,7 @@ export function ExpenseConcepts() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Nombre del concepto nuevo…"
-            className="flex-1 border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+            className="flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
           />
           <Button type="submit" disabled={busy || newName.trim() === ''}>
             <Plus size={16} /> Agregar
@@ -125,11 +125,11 @@ export function ExpenseConcepts() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar concepto…"
-          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none sm:w-72"
+          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none sm:w-72"
         />
       </div>
 
-      <Panel className="overflow-x-auto">
+      <Panel className="overflow-x-auto overflow-y-hidden">
         <table className="table-stack w-full text-left text-[13px]">
           <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
@@ -187,7 +187,7 @@ export function ExpenseConcepts() {
                       onClick={() => handleToggleActive(concept)}
                       disabled={busy}
                       className={cn(
-                        'px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
+                        'rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
                         concept.active
                           ? 'bg-green-100 text-green-700 hover:bg-green-200'
                           : 'bg-panel-head text-text-soft hover:bg-line'

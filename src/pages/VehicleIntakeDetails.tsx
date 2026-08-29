@@ -133,7 +133,7 @@ export function VehicleIntakeDetails() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <Panel className="p-5 space-y-4">
@@ -145,7 +145,7 @@ export function VehicleIntakeDetails() {
               value={component}
               onChange={(e) => setComponent(e.target.value)}
               disabled={!isAdmin}
-              className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
+              className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
               placeholder="Ej: Bomba de Inyección Common Rail"
             />
           </label>
@@ -157,7 +157,7 @@ export function VehicleIntakeDetails() {
             onChange={(e) => setObservations(e.target.value)}
             disabled={!isAdmin}
             rows={3}
-            className="mt-1 w-full resize-y border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
+            className="mt-1 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
           />
         </label>
         {isAdmin && (

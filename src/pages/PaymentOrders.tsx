@@ -108,7 +108,7 @@ export function PaymentOrders() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {canViewHistory && (
@@ -121,7 +121,7 @@ export function PaymentOrders() {
 
       <section>
         <SectionHeader title="Cuenta corriente por proveedor" />
-        <Panel className="overflow-x-auto">
+        <Panel className="overflow-x-auto overflow-y-hidden">
           <table className="table-stack w-full text-left text-[13px]">
             <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
@@ -181,11 +181,11 @@ export function PaymentOrders() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Número o proveedor…"
-          className="h-9 w-full border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
         />
       </div>
 
-      <Panel className="overflow-x-auto">
+      <Panel className="overflow-x-auto overflow-y-hidden">
         <table className="table-stack w-full text-left text-[13px]">
           <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
@@ -235,7 +235,7 @@ export function PaymentOrders() {
                         {order.fullNumber}
                       </Link>
                       {voided && (
-                        <span className="ml-2 bg-panel-head px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulada
                         </span>
                       )}

@@ -87,13 +87,13 @@ export function PaymentMethods() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {/* Las transferencias son movimientos sobre una cuenta bancaria, no un
           medio en sí. Sin ninguna cuenta cargada no hay dónde registrarlas. */}
       {!loading && !hasBank && (
-        <div className="flex items-start gap-2 border border-accent bg-accent/10 px-4 py-3 text-sm text-text">
+        <div className="flex items-start gap-2 rounded-md border border-accent bg-accent/10 px-4 py-3 text-sm text-text">
           <Info size={16} className="mt-0.5 shrink-0 text-accent-deep" />
           <span>
             No hay ninguna cuenta bancaria cargada. Las transferencias —tanto las
@@ -119,7 +119,7 @@ export function PaymentMethods() {
                 {PAYMENT_METHOD_KIND_HELP[kind]}
               </p>
 
-              <Panel className="overflow-x-auto">
+              <Panel className="overflow-x-auto overflow-y-hidden">
                 <table className="table-stack w-full text-left text-[13px]">
                   <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     <tr>
@@ -156,7 +156,7 @@ export function PaymentMethods() {
                             {method.name}
                           </span>
                           {!method.active && (
-                            <span className="ml-2 bg-panel-head px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                               Inactivo
                             </span>
                           )}

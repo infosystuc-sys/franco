@@ -41,7 +41,7 @@ let nextKey = 1;
 
 /** Campo angosto para las filas de un renglón (medios de pago ya agregados). */
 const compactFieldClass =
-  'border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
+  'rounded border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -299,7 +299,7 @@ export function PaymentOrderNew() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <Panel className="mb-6 p-5">
@@ -359,7 +359,7 @@ export function PaymentOrderNew() {
         )}
 
         {docs.length > 0 && (
-          <div className="overflow-x-auto border border-line">
+          <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
             <table className="table-stack w-full text-left text-[13px]">
               <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
@@ -404,7 +404,7 @@ export function PaymentOrderNew() {
                           onChange={(e) => setAllocations((c) => ({ ...c, [doc.id]: e.target.value }))}
                           placeholder={isCredit ? '−0,00' : '0,00'}
                           className={cn(
-                            'w-full border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
+                            'w-full rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
                             (wrongSign || excess) && 'border-danger bg-danger-soft'
                           )}
                         />

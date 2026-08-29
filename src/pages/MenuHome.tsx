@@ -133,7 +133,7 @@ function MenuCardTile({
 }) {
   return (
     <div
-      className="flex items-center gap-2 border-l-4 bg-panel-alt py-3 pl-4 pr-2 transition-colors hover:bg-panel-head"
+      className="flex items-center gap-2 rounded-lg border-l-4 bg-panel-alt py-3 pl-4 pr-2 transition-colors hover:bg-panel-head"
       style={{ borderLeftColor: SECTION_COLORS[color] }}
     >
       <Link to={card.path} className="flex flex-1 items-center gap-3 text-text">

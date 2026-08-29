@@ -81,7 +81,7 @@ export function ItemsEditor({
         }
       />
 
-      <div className="overflow-x-auto border border-line">
+      <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
         <table className="table-stack w-full text-left text-[13px]">
           <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>

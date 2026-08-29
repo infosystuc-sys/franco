@@ -96,7 +96,7 @@ export function PaymentOrderDetails() {
             </span>
           }
           meta={
-            <span className="inline-flex items-center gap-1.5 bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+            <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
               {voided && <Ban size={14} />}
               {voided ? 'Anulada' : 'Orden de pago'}
             </span>
@@ -120,13 +120,13 @@ export function PaymentOrderDetails() {
         />
 
         {error && (
-          <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
 
         {voided && (
-          <div className="mb-6 flex items-start gap-2 border border-line bg-panel-head px-4 py-3 text-sm">
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
             <Ban size={16} className="mt-0.5 shrink-0 text-text-soft" />
             <span>
               Anulada el {formatDate(order.voidedAt?.slice(0, 10) ?? null)}

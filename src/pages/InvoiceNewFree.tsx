@@ -130,7 +130,7 @@ export function InvoiceNewFree() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       <Panel className="mb-6 p-5">
@@ -139,7 +139,7 @@ export function InvoiceNewFree() {
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
-            className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+            className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
           >
             <option value="">Elegí un cliente...</option>
             {customers.map((c) => (
@@ -183,7 +183,7 @@ export function InvoiceNewFree() {
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           placeholder="Texto que sale impreso en el comprobante. Opcional."
-          className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
         <label className="mt-3 flex items-center gap-2 text-sm text-text cursor-pointer">
           <input

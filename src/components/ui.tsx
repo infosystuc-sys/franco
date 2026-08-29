@@ -82,7 +82,7 @@ export function Button({
     <button
       {...props}
       className={cn(
-        'inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]',
+        'inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]',
         'transition-colors disabled:opacity-45 disabled:cursor-not-allowed',
         BUTTON_VARIANTS[variant],
         className
@@ -109,7 +109,7 @@ export function Label({
 
 /** Control de formulario. `required` dibuja la barra roja al costado. */
 export const inputClass =
-  'mt-1 w-full border border-line bg-panel px-3 py-2 text-sm text-text ' +
+  'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm text-text ' +
   'placeholder:text-text-faint focus:border-accent-deep focus:outline-none';
 
 export function fieldClass(required?: boolean, extra?: string) {
@@ -123,7 +123,7 @@ export function Panel({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div {...props} className={cn('border border-line bg-panel', className)}>
+    <div {...props} className={cn('rounded-lg border border-line bg-panel', className)}>
       {children}
     </div>
   );

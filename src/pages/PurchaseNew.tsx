@@ -246,7 +246,7 @@ export function PurchaseNew() {
       <PageHeader
         title={isArticles ? 'Compra de artículos' : 'Compra de conceptos'}
         meta={
-          <span className="inline-flex items-center gap-1.5 border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+          <span className="inline-flex items-center gap-1.5 rounded border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
             {isArticles ? <Boxes size={14} /> : <Package size={14} />}
             {isArticles ? 'Mueve stock' : 'Sin stock'}
           </span>
@@ -269,7 +269,7 @@ export function PurchaseNew() {
       />
 
       {error && (
-        <div className="mb-6 border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {/* ── ENCABEZADO ─────────────────────────────────────────────── */}
@@ -438,7 +438,7 @@ export function PurchaseNew() {
           }
         />
 
-        <div className="overflow-x-auto border border-line">
+        <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
           <table className="table-stack w-full text-left text-[13px]">
             <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
@@ -636,7 +636,7 @@ export function PurchaseNew() {
                             current.map((t, i) => (i === idx ? { ...t, amount: Number(e.target.value) } : t))
                           )
                         }
-                        className="w-28 border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none"
+                        className="w-28 rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none"
                       />
                       <button
                         type="button"
@@ -739,7 +739,7 @@ export function PurchaseNew() {
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="Notas internas sobre este comprobante. Opcional."
-          className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
 
         <div className="mt-4 flex justify-end border-t border-line pt-4">

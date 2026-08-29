@@ -130,11 +130,11 @@ export function Settings() {
       />
 
       {error && (
-        <div className="border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
       {form.legalName.trim() === '' && (
-        <div className="flex items-start gap-2 border border-accent bg-accent/10 px-4 py-3 text-sm text-text">
+        <div className="flex items-start gap-2 rounded-md border border-accent bg-accent/10 px-4 py-3 text-sm text-text">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-accent-deep" />
           <span>
             Todavía no cargaste la razón social. Sin ella no se puede emitir ninguna factura.
