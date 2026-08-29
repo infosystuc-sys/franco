@@ -18,16 +18,21 @@ import {
   ClipboardList,
   BarChart3,
   MessageSquare,
-  Microscope,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
+import { REPORTS } from '@/src/lib/reports';
 
 /**
  * El menú de inicio (estilo Tango): un riel de categorías a la izquierda y,
  * dentro de cada una, tarjetas agrupadas en secciones de color. Esta es la
  * única fuente de verdad de esa estructura — el riel y la grilla la leen de
  * acá, así agregar o mover un módulo es un cambio en un solo lugar.
+ *
+ * Los informes no tienen categoría propia: cada uno vive en la sección
+ * "Informes" de la categoría a la que pertenece (Ventas, Compras...), igual
+ * que en Tango. reportCard() los toma del catálogo real (reports.ts) por id,
+ * así que si un informe cambia de nombre ahí, acá se actualiza solo.
  */
 
 export type SectionColor = 'comprobantes' | 'padrones' | 'operaciones' | 'informes';
@@ -68,6 +73,13 @@ export interface MenuCategory {
   sections: MenuSection[];
 }
 
+/** Tarjeta de un informe del catálogo (reports.ts), por su id. */
+function reportCard(id: string): MenuCard {
+  const report = REPORTS.find((r) => r.id === id);
+  if (!report) throw new Error(`El informe "${id}" no existe en el catálogo (reports.ts).`);
+  return { icon: BarChart3, label: report.name, path: `/informe/${report.id}`, adminOnly: true };
+}
+
 export const MENU_CATEGORIES: MenuCategory[] = [
   {
     key: 'ventas',
@@ -90,6 +102,16 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Truck, label: 'Vehículos', path: '/vehiculos', adminOnly: true },
         ],
       },
+      {
+        color: 'informes',
+        cards: [
+          reportCard('ventas-periodo'),
+          reportCard('ranking-clientes'),
+          reportCard('articulos-vendidos'),
+          reportCard('ventas-mensual'),
+          reportCard('libro-iva-ventas'),
+        ],
+      },
     ],
   },
   {
@@ -104,6 +126,10 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'padrones',
         cards: [{ icon: Factory, label: 'Proveedores', path: '/proveedores', adminOnly: true }],
+      },
+      {
+        color: 'informes',
+        cards: [reportCard('libro-iva-compras')],
       },
     ],
   },
@@ -123,6 +149,16 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'operaciones',
         cards: [{ icon: FileCheck, label: 'Cheques', path: '/cheques', adminOnly: true }],
       },
+      {
+        color: 'informes',
+        cards: [
+          reportCard('saldos-clientes'),
+          reportCard('antiguedad-clientes'),
+          reportCard('saldos-proveedores'),
+          reportCard('antiguedad-proveedores'),
+          reportCard('cheques-cartera'),
+        ],
+      },
     ],
   },
   {
@@ -136,6 +172,10 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Package, label: 'Inventario', path: '/inventario', adminOnly: true },
           { icon: Tags, label: 'Listas de precios', path: '/listas-precios', adminOnly: true },
         ],
+      },
+      {
+        color: 'informes',
+        cards: [reportCard('stock-valorizado'), reportCard('stock-sin-movimiento')],
       },
     ],
   },
@@ -151,6 +191,10 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', adminOnly: true },
         ],
       },
+      {
+        color: 'informes',
+        cards: [reportCard('libro-caja'), reportCard('arqueo')],
+      },
     ],
   },
   {
@@ -165,20 +209,9 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: ClipboardList, label: 'Conceptos de gasto', path: '/conceptos', adminOnly: true },
         ],
       },
-    ],
-  },
-  {
-    key: 'informes',
-    label: 'Informes',
-    icon: BarChart3,
-    sections: [
       {
         color: 'informes',
-        cards: [
-          { icon: BarChart3, label: 'Informes', path: '/informes', adminOnly: true },
-          { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
-          { icon: Microscope, label: 'Diagnósticos', path: '/diagnosticos' },
-        ],
+        cards: [reportCard('retenciones-sufridas'), reportCard('retenciones-practicadas')],
       },
     ],
   },
@@ -187,6 +220,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
 /** Enlaces directos, fuera de la grilla — igual que Configuración/Aplicaciones en Tango. */
 export const MENU_DIRECT_LINKS: MenuCard[] = [
   { icon: Users, label: 'Usuarios', path: '/usuarios', adminOnly: true },
+  { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
   { icon: Settings, label: 'Configuración', path: '/configuracion', adminOnly: true },
 ];
 
