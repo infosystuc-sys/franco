@@ -21,6 +21,13 @@ export interface VehicleIntakePhoto {
   createdAt: string;
 }
 
+export interface VehicleIntakePart {
+  id: string;
+  name: string;
+  serialNumber: string;
+  createdAt: string;
+}
+
 export interface VehicleIntakeListRow {
   id: string;
   number: string;
@@ -30,6 +37,7 @@ export interface VehicleIntakeListRow {
   vehicleLabel: string;
   quotationNumber: string | null;
   photoCount: number;
+  partsCount: number;
   createdAt: string;
 }
 
@@ -46,6 +54,7 @@ export interface VehicleIntakeDetail {
   quotationId: string | null;
   quotationNumber: string | null;
   photos: VehicleIntakePhoto[];
+  parts: VehicleIntakePart[];
   createdAt: string;
 }
 
@@ -61,7 +70,8 @@ const LIST_SELECT = `
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
   quotation:quotations(number),
-  photos:vehicle_intake_photos(id)
+  photos:vehicle_intake_photos(id),
+  parts:vehicle_intake_parts(id)
 `;
 
 function vehicleLabelOf(vehicle: { brand: string | null; model: string; license_plate: string | null } | null): string {
@@ -85,6 +95,7 @@ export async function fetchVehicleIntakes(): Promise<VehicleIntakeListRow[]> {
     vehicleLabel: vehicleLabelOf(row.vehicle),
     quotationNumber: row.quotation?.number ?? null,
     photoCount: row.photos?.length ?? 0,
+    partsCount: row.parts?.length ?? 0,
     createdAt: row.created_at,
   }));
 }
@@ -95,7 +106,8 @@ const DETAIL_SELECT = `
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
   quotation:quotations(number),
-  photos:vehicle_intake_photos(id, storage_path, created_at)
+  photos:vehicle_intake_photos(id, storage_path, created_at),
+  parts:vehicle_intake_parts(id, name, serial_number, created_at)
 `;
 
 export async function fetchVehicleIntake(id: string): Promise<VehicleIntakeDetail | null> {
@@ -122,6 +134,9 @@ export async function fetchVehicleIntake(id: string): Promise<VehicleIntakeDetai
     photos: (row.photos ?? [])
       .map((p: any) => ({ id: p.id, storagePath: p.storage_path, createdAt: p.created_at }))
       .sort((a: VehicleIntakePhoto, b: VehicleIntakePhoto) => a.createdAt.localeCompare(b.createdAt)),
+    parts: (row.parts ?? [])
+      .map((p: any) => ({ id: p.id, name: p.name, serialNumber: p.serial_number, createdAt: p.created_at }))
+      .sort((a: VehicleIntakePart, b: VehicleIntakePart) => a.createdAt.localeCompare(b.createdAt)),
     createdAt: row.created_at,
   };
 }
@@ -186,6 +201,40 @@ export async function deleteIntakePhoto(photo: VehicleIntakePhoto): Promise<void
   const { error } = await supabase.from('vehicle_intake_photos').delete().eq('id', photo.id);
   if (error) throw error;
   await supabase.storage.from(BUCKET).remove([photo.storagePath]);
+}
+
+/**
+ * Piezas del ingreso (inyector, bomba...), identificadas por N° de serie.
+ * No hace falta cargarlas al recibir el vehículo: se agregan, editan o
+ * borran en cualquier momento desde el detalle del ingreso.
+ */
+export async function addIntakePart(
+  intakeId: string,
+  values: { name: string; serialNumber: string }
+): Promise<VehicleIntakePart> {
+  const { data, error } = await supabase
+    .from('vehicle_intake_parts')
+    .insert({ intake_id: intakeId, name: values.name, serial_number: values.serialNumber })
+    .select('id, name, serial_number, created_at')
+    .single();
+  if (error) throw error;
+  return { id: data.id, name: data.name, serialNumber: data.serial_number, createdAt: data.created_at };
+}
+
+export async function updateIntakePart(
+  id: string,
+  values: { name: string; serialNumber: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('vehicle_intake_parts')
+    .update({ name: values.name, serial_number: values.serialNumber })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteIntakePart(id: string): Promise<void> {
+  const { error } = await supabase.from('vehicle_intake_parts').delete().eq('id', id);
+  if (error) throw error;
 }
 
 /** El bucket es privado: se muestra con una URL firmada, nunca con getPublicUrl. */

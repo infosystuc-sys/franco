@@ -1,20 +1,25 @@
 import React from 'react';
-import { XCircle, Camera, Trash2, Receipt, ArrowRight, ImageOff } from 'lucide-react';
+import { XCircle, Camera, Trash2, Receipt, ArrowRight, ImageOff, Plus, Check } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { cn } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  addIntakePart,
   convertIntakeToQuotation,
+  deleteIntakePart,
   deleteIntakePhoto,
   describeVehicleIntakeError,
   fetchVehicleIntake,
   getIntakePhotoUrl,
+  updateIntakePart,
   updateVehicleIntake,
   uploadIntakePhoto,
   VEHICLE_INTAKE_STATUS_LABELS,
   VEHICLE_INTAKE_STATUS_STRIP,
   type VehicleIntakeDetail,
+  type VehicleIntakePart,
   type VehicleIntakePhoto,
 } from '@/src/lib/vehicleIntakes';
 
@@ -169,8 +174,183 @@ export function VehicleIntakeDetails() {
         )}
       </Panel>
 
+      <PartsSection intake={intake} isAdmin={isAdmin} onChanged={load} onError={setError} />
+
       <PhotosSection intake={intake} isAdmin={isAdmin} onChanged={load} onError={setError} />
     </div>
+  );
+}
+
+/**
+ * Piezas del ingreso (inyector, bomba...), identificadas por N° de serie.
+ * No hace falta cargarlas al recibir el vehículo: se agregan, corrigen o
+ * borran en cualquier momento desde acá.
+ */
+function PartsSection({
+  intake,
+  isAdmin,
+  onChanged,
+  onError,
+}: {
+  intake: VehicleIntakeDetail;
+  isAdmin: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [name, setName] = React.useState('');
+  const [serialNumber, setSerialNumber] = React.useState('');
+  const [adding, setAdding] = React.useState(false);
+
+  async function handleAdd() {
+    if (!name.trim() || !serialNumber.trim()) return;
+    setAdding(true);
+    onError('');
+    try {
+      await addIntakePart(intake.id, { name: name.trim(), serialNumber: serialNumber.trim() });
+      setName('');
+      setSerialNumber('');
+      onChanged();
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <Panel className="p-5 space-y-4">
+      <SectionHeader title={`Piezas${intake.parts.length > 0 ? ` (${intake.parts.length})` : ''}`} />
+
+      {isAdmin && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex-1 text-xs font-bold uppercase tracking-wider text-text-soft">
+            Pieza
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Inyector, Bomba"
+              className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+            />
+          </label>
+          <label className="flex-1 text-xs font-bold uppercase tracking-wider text-text-soft">
+            N° de serie
+            <input
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="Ej: A1B2C3"
+              className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-mono focus:border-accent-deep focus:outline-none"
+            />
+          </label>
+          <Button
+            type="button"
+            onClick={handleAdd}
+            disabled={adding || !name.trim() || !serialNumber.trim()}
+          >
+            <Plus size={15} /> {adding ? 'Agregando…' : 'Agregar'}
+          </Button>
+        </div>
+      )}
+
+      {intake.parts.length === 0 ? (
+        <p className="py-4 text-center text-sm text-text-soft">Todavía no hay piezas cargadas.</p>
+      ) : (
+        <ul className="space-y-2">
+          {intake.parts.map((part) => (
+            <PartRow key={part.id} part={part} isAdmin={isAdmin} onChanged={onChanged} onError={onError} />
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function PartRow({
+  part,
+  isAdmin,
+  onChanged,
+  onError,
+}: {
+  part: VehicleIntakePart;
+  isAdmin: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [name, setName] = React.useState(part.name);
+  const [serialNumber, setSerialNumber] = React.useState(part.serialNumber);
+  const [saving, setSaving] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
+  const dirty = name !== part.name || serialNumber !== part.serialNumber;
+  const fieldClass =
+    'flex-1 min-w-[8rem] rounded border border-transparent bg-transparent px-2 py-1 text-sm ' +
+    'focus:border-accent-deep focus:bg-panel focus:outline-none disabled:text-text-soft';
+
+  async function handleSave() {
+    if (!name.trim() || !serialNumber.trim() || !dirty) return;
+    setSaving(true);
+    onError('');
+    try {
+      await updateIntakePart(part.id, { name: name.trim(), serialNumber: serialNumber.trim() });
+      onChanged();
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm('¿Eliminar esta pieza?')) return;
+    setDeleting(true);
+    onError('');
+    try {
+      await deleteIntakePart(part.id);
+      onChanged();
+    } catch (err) {
+      onError(getErrorMessage(err));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel-alt px-3 py-2">
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        disabled={!isAdmin}
+        className={fieldClass}
+      />
+      <input
+        value={serialNumber}
+        onChange={(e) => setSerialNumber(e.target.value)}
+        disabled={!isAdmin}
+        className={cn(fieldClass, 'font-mono')}
+      />
+      {isAdmin && (
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {dirty && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              title="Guardar cambios"
+              className="text-text-soft transition-colors hover:text-accent-deep"
+            >
+              <Check size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Eliminar pieza"
+            className="text-text-soft transition-colors hover:text-danger"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 

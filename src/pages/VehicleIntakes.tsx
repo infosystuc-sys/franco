@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, X, Search, ClipboardList, Camera } from 'lucide-react';
+import { Plus, X, Search, ClipboardList, Camera, Wrench } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, StateStrip } from '@/src/components/ui';
@@ -92,18 +92,19 @@ export function VehicleIntakes() {
               <th className="px-3 py-1">Vehículo / Equipo</th>
               <th className="px-3 py-1">Componente</th>
               <th className="px-3 py-1 w-20 text-center">Fotos</th>
+              <th className="px-3 py-1 w-20 text-center">Piezas</th>
               <th className="px-3 py-1 w-40">Estado</th>
               <th className="px-3 py-1 w-28">Fecha</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-text-soft">Cargando ingresos…</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-text-soft">Cargando ingresos…</td></tr>
             )}
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-text-soft">
+                <td colSpan={8} className="px-4 py-10 text-center text-text-soft">
                   {intakes.length === 0 ? (
                     <span className="flex flex-col items-center gap-2">
                       <ClipboardList size={24} className="text-text-faint" />
@@ -135,6 +136,13 @@ export function VehicleIntakes() {
                   <td data-label="Fotos" className="px-3 py-1 text-center text-text-soft">
                     {intake.photoCount > 0 ? (
                       <span className="inline-flex items-center gap-1"><Camera size={13} /> {intake.photoCount}</span>
+                    ) : (
+                      <span className="text-text-faint">—</span>
+                    )}
+                  </td>
+                  <td data-label="Piezas" className="px-3 py-1 text-center text-text-soft">
+                    {intake.partsCount > 0 ? (
+                      <span className="inline-flex items-center gap-1"><Wrench size={13} /> {intake.partsCount}</span>
                     ) : (
                       <span className="text-text-faint">—</span>
                     )}
