@@ -41,6 +41,7 @@ import { Suppliers } from './pages/Suppliers';
 import { TaxRates } from './pages/TaxRates';
 import { Vehicles } from './pages/Vehicles';
 import { WorkOrderDetails } from './pages/WorkOrderDetails';
+import { WorkOrderStatuses } from './pages/WorkOrderStatuses';
 import { ClientPortal } from './pages/ClientPortal';
 
 /**
@@ -110,6 +111,7 @@ export default function App() {
                     <Route path="/mensajes" element={<Notifications />} />
                     <Route path="/clientes" element={<Customers />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
+                    <Route path="/estados-ot" element={<WorkOrderStatuses />} />
                     <Route path="/proveedores" element={<Suppliers />} />
                     <Route path="/usuarios" element={<Users />} />
                     <Route path="/ordenes" element={<WorkOrders />} />

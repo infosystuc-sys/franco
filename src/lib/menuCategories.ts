@@ -100,6 +100,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         cards: [
           { icon: Users, label: 'Clientes', path: '/clientes', adminOnly: true },
           { icon: Truck, label: 'Vehículos', path: '/vehiculos', adminOnly: true },
+          { icon: Wrench, label: 'Estados de OT', path: '/estados-ot', adminOnly: true },
         ],
       },
       {

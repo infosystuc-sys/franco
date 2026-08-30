@@ -19,20 +19,18 @@ import {
   deleteWorkOrderPhoto,
   fetchStatusHistory,
   fetchWorkOrderByNumber,
+  fetchWorkOrderStatuses,
   getErrorMessage,
   getWorkOrderPhotoUrl,
   saveWorkOrderItems,
-  STATUS_LABELS,
-  STATUS_SEQUENCE,
-  STATUS_STRIP,
-  updateWorkOrderStatus,
+  setWorkOrderStatus,
   uploadWorkOrderPhoto,
   type StatusChange,
   type WorkOrderDetail,
   type WorkOrderItemInput,
   type WorkOrderPhoto,
+  type WorkOrderStatusDef,
 } from '@/src/lib/workOrders';
-import type { WorkOrderStatus } from '@/src/types';
 
 export function WorkOrderDetails() {
   const { role } = useAuth();
@@ -49,6 +47,7 @@ export function WorkOrderDetails() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assigningEmployee, setAssigningEmployee] = useState(false);
   const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
+  const [statuses, setStatuses] = useState<WorkOrderStatusDef[]>([]);
 
   const loadOrder = React.useCallback(async () => {
     if (!id) return;
@@ -84,6 +83,18 @@ export function WorkOrderDetails() {
     loadOrder();
   }, [loadOrder]);
 
+  // El avance visual y el desplegable de cambio de estado los ve cualquiera
+  // que entra a la ficha, no solo el admin (que además puede cambiarlo).
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchWorkOrderStatuses(true)
+      .then((data) => !cancelled && setStatuses(data))
+      .catch(() => {/* si falla, el avance queda vacío; el resto de la ficha sigue andando */});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   React.useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
@@ -109,12 +120,12 @@ export function WorkOrderDetails() {
     };
   }, [isAdmin]);
 
-  async function handleStatusChange(status: WorkOrderStatus) {
+  async function handleStatusChange(statusId: string) {
     if (!order) return;
     setChangingStatus(true);
     setError(null);
     try {
-      await updateWorkOrderStatus(order.id, status);
+      await setWorkOrderStatus(order.id, statusId);
       await loadOrder();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -166,7 +177,7 @@ export function WorkOrderDetails() {
     );
   }
 
-  const statusIndex = STATUS_SEQUENCE.indexOf(order.status);
+  const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -177,9 +188,9 @@ export function WorkOrderDetails() {
             <span
               aria-hidden
               className="inline-block h-2.5 w-2.5"
-              style={{ backgroundColor: STATUS_STRIP[order.status] }}
+              style={{ backgroundColor: order.status.color }}
             />
-            {STATUS_LABELS[order.status]}
+            {order.status.label}
           </span>
         }
         subtitle={
@@ -293,48 +304,51 @@ export function WorkOrderDetails() {
       </div>
 
       {/* Avance del trabajo */}
-      <Panel className="mb-6 px-5 py-6">
-        <div className="relative flex items-start justify-between">
-          <div className="absolute left-0 top-3 z-0 h-[3px] w-full bg-line" />
-          <div
-            className="absolute left-0 top-3 z-0 h-[3px] bg-accent transition-all duration-300"
-            style={{ width: `${(statusIndex / (STATUS_SEQUENCE.length - 1)) * 100}%` }}
-          />
+      {statuses.length > 0 && (
+        <Panel className="mb-6 px-5 py-6">
+          <div className="relative flex items-start justify-between">
+            <div className="absolute left-0 top-3 z-0 h-[3px] w-full bg-line" />
+            <div
+              className="absolute left-0 top-3 z-0 h-[3px] bg-accent transition-all duration-300"
+              style={{ width: `${statuses.length > 1 ? (Math.max(statusIndex, 0) / (statuses.length - 1)) * 100 : 0}%` }}
+            />
 
-          {STATUS_SEQUENCE.map((status, idx) => (
-            <div key={status} className="relative z-10 flex w-24 flex-col items-center gap-2">
-              {idx === statusIndex ? (
-                <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
-                  <span className="h-2 w-2 bg-accent" />
-                </span>
-              ) : idx < statusIndex ? (
-                <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center bg-accent text-accent-ink">
-                  <Check size={14} strokeWidth={3} />
-                </span>
-              ) : (
-                <span className="mt-[1px] flex h-5 w-5 items-center justify-center border border-line-strong bg-panel-alt" />
-              )}
-              <span
-                className={cn(
-                  'text-center text-[10px] font-semibold uppercase leading-tight tracking-[0.05em]',
-                  idx === statusIndex ? 'text-text' : 'text-text-faint'
+            {statuses.map((status, idx) => (
+              <div key={status.id} className="relative z-10 flex w-24 flex-col items-center gap-2">
+                {idx === statusIndex ? (
+                  <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
+                    <span className="h-2 w-2 bg-accent" />
+                  </span>
+                ) : idx < statusIndex ? (
+                  <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center bg-accent text-accent-ink">
+                    <Check size={14} strokeWidth={3} />
+                  </span>
+                ) : (
+                  <span className="mt-[1px] flex h-5 w-5 items-center justify-center border border-line-strong bg-panel-alt" />
                 )}
-              >
-                {STATUS_LABELS[status]}
-              </span>
-            </div>
-          ))}
-        </div>
+                <span
+                  className={cn(
+                    'text-center text-[10px] font-semibold uppercase leading-tight tracking-[0.05em]',
+                    idx === statusIndex ? 'text-text' : 'text-text-faint'
+                  )}
+                >
+                  {status.label}
+                </span>
+              </div>
+            ))}
+          </div>
 
-        {isAdmin && (
-          <StatusControls
-            order={order}
-            invoice={invoice}
-            busy={changingStatus}
-            onChange={handleStatusChange}
-          />
-        )}
-      </Panel>
+          {isAdmin && (
+            <StatusControls
+              order={order}
+              statuses={statuses}
+              invoice={invoice}
+              busy={changingStatus}
+              onChange={handleStatusChange}
+            />
+          )}
+        </Panel>
+      )}
 
       {history.length > 1 && (
         <div className="mb-6">
@@ -520,13 +534,13 @@ function InvoiceAction({
     );
   }
 
-  if (order.status !== 'TERMINADO') {
+  if (!order.status.isTerminal) {
     return (
       <Button
         type="button"
         variant="ghost"
         disabled
-        title={`Se factura cuando la orden está terminada. Ahora está en ${STATUS_LABELS[order.status]}.`}
+        title={`Se factura cuando la orden está terminada. Ahora está en ${order.status.label}.`}
       >
         <Receipt size={16} /> Facturar
       </Button>
@@ -551,16 +565,25 @@ function InvoiceAction({
  */
 function StatusControls({
   order,
+  statuses,
   invoice,
   busy,
   onChange,
 }: {
   order: WorkOrderDetail;
+  statuses: WorkOrderStatusDef[];
   invoice: WorkOrderInvoiceRef | null;
   busy: boolean;
-  onChange: (status: WorkOrderStatus) => void;
+  onChange: (statusId: string) => void;
 }) {
-  const isDone = order.status === 'TERMINADO';
+  const isDone = order.status.isTerminal;
+  // Si el estado actual de la OT se desactivó desde el ABM después de
+  // asignarse, igual tiene que aparecer en la lista — si no, el
+  // desplegable arranca mostrando otra cosa distinta de lo que la OT
+  // realmente tiene.
+  const options = statuses.some((s) => s.id === order.status.id)
+    ? statuses
+    : [order.status, ...statuses];
 
   return (
     <div className="mt-7 border-t border-line pt-4">
@@ -569,13 +592,13 @@ function StatusControls({
           Estado
         </span>
         <select
-          value={order.status}
-          onChange={(e) => onChange(e.target.value as WorkOrderStatus)}
+          value={order.status.id}
+          onChange={(e) => onChange(e.target.value)}
           disabled={busy}
           className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
         >
-          {STATUS_SEQUENCE.map((status) => (
-            <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+          {options.map((status) => (
+            <option key={status.id} value={status.id}>{status.label}</option>
           ))}
         </select>
         {busy && (
@@ -609,15 +632,15 @@ function StatusHistory({ history }: { history: StatusChange[] }) {
             key={change.id}
             className="relative flex flex-wrap items-center justify-between gap-3 py-2.5 pl-5 pr-5 text-[13px]"
           >
-            <StateStrip color={STATUS_STRIP[change.toStatus]} />
+            <StateStrip color={change.toStatus.color} />
             <span className="flex items-center gap-2">
               {change.fromStatus && (
                 <>
-                  <span className="text-text-soft">{STATUS_LABELS[change.fromStatus]}</span>
+                  <span className="text-text-soft">{change.fromStatus.label}</span>
                   <ArrowRight size={13} className="text-text-faint" />
                 </>
               )}
-              <span className="font-semibold text-text">{STATUS_LABELS[change.toStatus]}</span>
+              <span className="font-semibold text-text">{change.toStatus.label}</span>
               {!change.fromStatus && (
                 <span className="text-[10px] uppercase tracking-[0.08em] text-text-faint">apertura</span>
               )}

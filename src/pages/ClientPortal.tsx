@@ -14,15 +14,13 @@ import { cn } from '@/src/lib/utils';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { PageHeader } from '@/src/components/ui';
-import type { WorkOrderStatus } from '@/src/types';
 import {
   fetchPublicStatusHistory,
   fetchPublicWorkOrder,
+  fetchWorkOrderStatuses,
   getErrorMessage,
   type PublicWorkOrder,
-  STATUS_DESCRIPTIONS,
-  STATUS_LABELS,
-  STATUS_SEQUENCE,
+  type WorkOrderStatusDef,
 } from '@/src/lib/workOrders';
 
 /**
@@ -37,7 +35,8 @@ export function ClientPortal() {
   const { session } = useAuth();
   const { id: token } = useParams();
   const [order, setOrder] = React.useState<PublicWorkOrder | null>(null);
-  const [history, setHistory] = React.useState<{ toStatus: WorkOrderStatus; changedAt: string }[]>([]);
+  const [statuses, setStatuses] = React.useState<WorkOrderStatusDef[]>([]);
+  const [history, setHistory] = React.useState<{ toStatusId: string; changedAt: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -45,10 +44,11 @@ export function ClientPortal() {
     if (!token) return;
     let cancelled = false;
     setLoading(true);
-    fetchPublicWorkOrder(token)
-      .then(async (data) => {
+    Promise.all([fetchPublicWorkOrder(token), fetchWorkOrderStatuses(true)])
+      .then(async ([data, statusDefs]) => {
         if (cancelled) return;
         setOrder(data);
+        setStatuses(statusDefs);
         if (data) setHistory(await fetchPublicStatusHistory(token));
       })
       .catch((err) => !cancelled && setError(getErrorMessage(err)))
@@ -81,12 +81,13 @@ export function ClientPortal() {
     );
   }
 
-  const statusIndex = STATUS_SEQUENCE.indexOf(order.status);
+  const statusIndex = statuses.findIndex((s) => s.id === order.statusId);
+  const currentStatus = statuses.find((s) => s.id === order.statusId);
 
   // Fecha en que la orden alcanzó cada estado, según el historial real.
-  const reachedAt: Partial<Record<WorkOrderStatus, string>> = {};
+  const reachedAt: Record<string, string> = {};
   history.forEach((change) => {
-    reachedAt[change.toStatus] = change.changedAt;
+    reachedAt[change.toStatusId] = change.changedAt;
   });
 
   return (
@@ -131,7 +132,7 @@ export function ClientPortal() {
             <div className="flex items-center gap-2 border border-line bg-panel px-4 py-2">
               <Info size={17} className="text-accent-deep" />
               <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
-                {STATUS_LABELS[order.status]}
+                {currentStatus?.label ?? '—'}
               </span>
             </div>
           }
@@ -194,11 +195,11 @@ export function ClientPortal() {
           <div className="md:col-span-8 bg-panel p-6 border border-line">
             <h2 className="text-base font-bold text-text mb-8 pb-2 border-b-2 border-accent inline-block">Progreso del Servicio</h2>
             <div className="flex flex-col relative pl-2">
-              {STATUS_SEQUENCE.map((status, idx) => {
+              {statuses.map((status, idx) => {
                 const state = idx < statusIndex ? 'completed' : idx === statusIndex ? 'active' : 'pending';
                 return (
-                  <div key={status} className="flex gap-6 relative mb-10 last:mb-0">
-                    {idx < STATUS_SEQUENCE.length - 1 && (
+                  <div key={status.id} className="flex gap-6 relative mb-10 last:mb-0">
+                    {idx < statuses.length - 1 && (
                       <div className="absolute top-[40px] left-[20px] bottom-[-40px] w-0.5 bg-line z-0"></div>
                     )}
 
@@ -224,15 +225,15 @@ export function ClientPortal() {
                       state === 'active' && "bg-panel-alt p-4 border-l-4 border-accent -mt-1"
                     )}>
                       <div className="flex justify-between items-start mb-1">
-                        <h3 className="text-sm font-bold text-text">{STATUS_LABELS[status]}</h3>
+                        <h3 className="text-sm font-bold text-text">{status.label}</h3>
                         {state === 'active' && (
                           <span className="bg-accent text-accent-ink text-[9px] font-bold uppercase tracking-wider px-2 py-0.5">ACTUAL</span>
                         )}
                       </div>
-                      <p className="text-xs text-text-soft mt-1 leading-relaxed">{STATUS_DESCRIPTIONS[status]}</p>
-                      {reachedAt[status] && (
+                      <p className="text-xs text-text-soft mt-1 leading-relaxed">{status.clientDescription}</p>
+                      {reachedAt[status.id] && (
                         <span className="text-[10px] font-bold uppercase tracking-wider text-text-soft block mt-3">
-                          {new Date(reachedAt[status]!).toLocaleString('es-AR', {
+                          {new Date(reachedAt[status.id]!).toLocaleString('es-AR', {
                             day: '2-digit', month: 'short', year: 'numeric',
                             hour: '2-digit', minute: '2-digit',
                           })}

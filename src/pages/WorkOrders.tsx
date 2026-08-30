@@ -7,13 +7,11 @@ import { useAuth } from '@/src/lib/auth';
 import { NewWorkOrderModal } from '@/src/components/NewWorkOrderModal';
 import {
   fetchAllWorkOrders,
+  fetchWorkOrderStatuses,
   getErrorMessage,
-  STATUS_LABELS,
-  STATUS_SEQUENCE,
-  STATUS_STRIP,
   type WorkOrderRow,
+  type WorkOrderStatusDef,
 } from '@/src/lib/workOrders';
-import type { WorkOrderStatus } from '@/src/types';
 
 /**
  * El listado completo de órdenes, en cualquier estado.
@@ -31,17 +29,20 @@ export function WorkOrders() {
   const navigate = useNavigate();
 
   const [orders, setOrders] = React.useState<WorkOrderRow[]>([]);
+  const [statuses, setStatuses] = React.useState<WorkOrderStatusDef[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<WorkOrderStatus | ''>('');
+  const [statusFilter, setStatusFilter] = React.useState('');
   const [showNewOrder, setShowNewOrder] = React.useState(false);
 
   const loadOrders = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setOrders(await fetchAllWorkOrders());
+      const [orderRows, statusDefs] = await Promise.all([fetchAllWorkOrders(), fetchWorkOrderStatuses(true)]);
+      setOrders(orderRows);
+      setStatuses(statusDefs);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -54,16 +55,16 @@ export function WorkOrders() {
   }, [loadOrders]);
 
   const counts = React.useMemo(() => {
-    const base = {} as Record<WorkOrderStatus, number>;
-    STATUS_SEQUENCE.forEach((status) => { base[status] = 0; });
-    orders.forEach((order) => { base[order.status] += 1; });
+    const base: Record<string, number> = {};
+    statuses.forEach((status) => { base[status.id] = 0; });
+    orders.forEach((order) => { base[order.status.id] = (base[order.status.id] ?? 0) + 1; });
     return base;
-  }, [orders]);
+  }, [orders, statuses]);
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((order) => {
-      if (statusFilter && order.status !== statusFilter) return false;
+      if (statusFilter && order.status.id !== statusFilter) return false;
       if (!term) return true;
       return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName]
         .filter(Boolean)
@@ -90,23 +91,23 @@ export function WorkOrders() {
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {STATUS_SEQUENCE.map((status) => (
+        {statuses.map((status) => (
           <button
-            key={status}
-            onClick={() => setStatusFilter(statusFilter === status ? '' : status)}
+            key={status.id}
+            onClick={() => setStatusFilter(statusFilter === status.id ? '' : status.id)}
             className={cn(
               'relative overflow-hidden border p-3 text-left transition-colors',
-              statusFilter === status
+              statusFilter === status.id
                 ? 'border-accent bg-accent/10'
                 : 'border-line-strong bg-panel hover:bg-panel-alt'
             )}
           >
-            <StateStrip color={STATUS_STRIP[status]} />
+            <StateStrip color={status.color} />
             <span className="block pl-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-              {STATUS_LABELS[status]}
+              {status.label}
             </span>
             <span className="block pl-2 font-display text-2xl font-medium text-text">
-              {loading ? '—' : counts[status]}
+              {loading ? '—' : counts[status.id] ?? 0}
             </span>
           </button>
         ))}
@@ -157,7 +158,7 @@ export function WorkOrders() {
                   className="relative border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
                 >
                   <td data-primary className="relative py-3 pl-5 pr-3">
-                    <StateStrip color={STATUS_STRIP[order.status]} />
+                    <StateStrip color={order.status.color} />
                     <Link
                       to={`/orden/${order.number}`}
                       className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"
@@ -177,9 +178,9 @@ export function WorkOrders() {
                       <span
                         aria-hidden
                         className="inline-block h-2 w-2"
-                        style={{ backgroundColor: STATUS_STRIP[order.status] }}
+                        style={{ backgroundColor: order.status.color }}
                       />
-                      {STATUS_LABELS[order.status]}
+                      {order.status.label}
                     </span>
                   </td>
                   <td data-label="Empleado" className="p-3 text-text-soft">

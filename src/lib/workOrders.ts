@@ -1,7 +1,7 @@
 import { supabase } from '@/src/lib/supabase';
 import type { TaxCondition } from '@/src/lib/customers';
 import type { VehicleType } from '@/src/lib/vehicles';
-import type { WorkOrderStatus, WorkOrderItem } from '@/src/types';
+import type { WorkOrderItem } from '@/src/types';
 
 /**
  * Traduce errores de base a mensajes accionables.
@@ -27,49 +27,122 @@ export function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Error desconocido.';
 }
 
-// La etapa de cotización vive en su propio módulo (src/lib/quotations.ts).
-// La OT nace ya autorizada, porque proviene de una cotización aceptada.
-export const STATUS_SEQUENCE: WorkOrderStatus[] = [
-  'AUTORIZADO',
-  'EN_ESPERA_REP',
-  'EN_REPARACION',
-  'CALIBRACION',
-  'TERMINADO',
-];
-
-export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
-  AUTORIZADO: 'Autorizada',
-  EN_ESPERA_REP: 'Esp. Repuestos',
-  EN_REPARACION: 'En Reparación',
-  CALIBRACION: 'Calibración',
-  TERMINADO: 'Terminado',
-};
-
-export const STATUS_BADGE_CLASS: Record<WorkOrderStatus, string> = {
-  AUTORIZADO: 'bg-blue-100 text-blue-700',
-  EN_ESPERA_REP: 'bg-orange-100 text-orange-700',
-  EN_REPARACION: 'bg-purple-100 text-purple-700',
-  CALIBRACION: 'bg-yellow-100 text-yellow-800',
-  TERMINADO: 'bg-green-100 text-green-700',
-};
-
 /**
- * Color de la tira lateral por estado. Codifica el avance real de la orden,
- * así el estado se lee de un vistazo en cualquier listado.
+ * Estados de la OT: ABM de configuración (work_order_statuses), no un enum
+ * fijo. El admin agrega, renombra, reordena o desactiva estados desde su
+ * propia pantalla, sin pedir un cambio de código. Tres marcas reemplazan lo
+ * que antes eran comparaciones contra el texto literal de un estado:
+ *  - isInitial: con qué estado nace una OT (a lo sumo uno).
+ *  - isTerminal: cierra la orden — habilita facturar, cuenta como cerrada.
+ *  - notifiesClient: al llegar acá se manda WhatsApp.
  */
-export const STATUS_STRIP: Record<WorkOrderStatus, string> = {
-  AUTORIZADO: '#2b6cb0',
-  EN_ESPERA_REP: '#e07b1a',
-  EN_REPARACION: '#7b3fa0',
-  CALIBRACION: '#c9a227',
-  TERMINADO: '#2e7d32',
-};
+export interface WorkOrderStatusDef {
+  id: string;
+  label: string;
+  clientDescription: string;
+  color: string;
+  sortOrder: number;
+  active: boolean;
+  isInitial: boolean;
+  isTerminal: boolean;
+  notifiesClient: boolean;
+}
 
-/** Estado siguiente en el flujo natural, o null si ya está terminada. */
-export function nextStatus(current: WorkOrderStatus): WorkOrderStatus | null {
-  const index = STATUS_SEQUENCE.indexOf(current);
-  if (index === -1 || index === STATUS_SEQUENCE.length - 1) return null;
-  return STATUS_SEQUENCE[index + 1];
+export interface WorkOrderStatusInput {
+  label: string;
+  clientDescription: string;
+  color: string;
+  sortOrder: number;
+  active: boolean;
+  isInitial: boolean;
+  isTerminal: boolean;
+  notifiesClient: boolean;
+}
+
+/** Referencia liviana al estado de una OT, tal como viaja embebida en listados y detalle. */
+export interface WorkOrderStatusRef {
+  id: string;
+  label: string;
+  color: string;
+  isTerminal: boolean;
+}
+
+const STATUS_SELECT =
+  'id, label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client';
+
+function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
+  return {
+    id: row.id,
+    label: row.label,
+    clientDescription: row.client_description,
+    color: row.color,
+    sortOrder: Number(row.sort_order),
+    active: row.active,
+    isInitial: row.is_initial,
+    isTerminal: row.is_terminal,
+    notifiesClient: row.notifies_client,
+  };
+}
+
+function mapWorkOrderStatusRef(row: any): WorkOrderStatusRef {
+  return { id: row.id, label: row.label, color: row.color, isTerminal: row.is_terminal };
+}
+
+export async function fetchWorkOrderStatuses(onlyActive = false): Promise<WorkOrderStatusDef[]> {
+  let query = supabase.from('work_order_statuses').select(STATUS_SELECT).order('sort_order');
+  if (onlyActive) query = query.eq('active', true);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map(mapWorkOrderStatus);
+}
+
+function statusRow(input: WorkOrderStatusInput) {
+  return {
+    label: input.label,
+    client_description: input.clientDescription,
+    color: input.color,
+    sort_order: input.sortOrder,
+    active: input.active,
+    is_initial: input.isInitial,
+    is_terminal: input.isTerminal,
+    notifies_client: input.notifiesClient,
+  };
+}
+
+export async function createWorkOrderStatus(input: WorkOrderStatusInput): Promise<WorkOrderStatusDef> {
+  const { data, error } = await supabase
+    .from('work_order_statuses')
+    .insert(statusRow(input))
+    .select(STATUS_SELECT)
+    .single();
+  if (error) throw error;
+  return mapWorkOrderStatus(data);
+}
+
+export async function updateWorkOrderStatus(id: string, input: WorkOrderStatusInput): Promise<WorkOrderStatusDef> {
+  const { data, error } = await supabase
+    .from('work_order_statuses')
+    .update(statusRow(input))
+    .eq('id', id)
+    .select(STATUS_SELECT)
+    .single();
+  if (error) throw error;
+  return mapWorkOrderStatus(data);
+}
+
+export async function deleteWorkOrderStatus(id: string): Promise<void> {
+  const { error } = await supabase.from('work_order_statuses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export function describeWorkOrderStatusError(message: string): string {
+  if (message.includes('work_order_statuses_one_initial')) {
+    return 'Ya hay otro estado marcado como inicial. Sacale la marca a ese antes de ponérsela a este.';
+  }
+  if (message.includes('work_orders_status_id_fkey') || message.includes('foreign key')) {
+    return 'No se puede eliminar: hay órdenes de trabajo en este estado. Podés desactivarlo en cambio.';
+  }
+  return message;
 }
 
 /**
@@ -78,7 +151,7 @@ export function nextStatus(current: WorkOrderStatus): WorkOrderStatus | null {
  */
 export interface PublicWorkOrder {
   number: string;
-  status: WorkOrderStatus;
+  statusId: string;
   component: string | null;
   vehicleBrand: string | null;
   vehicleModel: string | null;
@@ -105,7 +178,7 @@ export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrd
 
   return {
     number: row.number,
-    status: row.status,
+    statusId: row.status_id,
     component: row.component,
     vehicleBrand: row.vehicle_brand,
     vehicleModel: row.vehicle_model,
@@ -122,32 +195,24 @@ export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrd
 
 export async function fetchPublicStatusHistory(
   token: string
-): Promise<{ toStatus: WorkOrderStatus; changedAt: string }[]> {
+): Promise<{ toStatusId: string; changedAt: string }[]> {
   const { data, error } = await supabase.rpc('get_public_status_history', { p_token: token });
   if (error) throw error;
-  return ((data ?? []) as any[]).map((r) => ({ toStatus: r.to_status, changedAt: r.changed_at }));
+  return ((data ?? []) as any[]).map((r) => ({ toStatusId: r.to_status_id, changedAt: r.changed_at }));
 }
 
 export interface StatusChange {
   id: string;
-  fromStatus: WorkOrderStatus | null;
-  toStatus: WorkOrderStatus;
+  fromStatus: WorkOrderStatusRef | null;
+  toStatus: WorkOrderStatusRef;
   changedByEmail: string | null;
   changedAt: string;
 }
 
-export const STATUS_DESCRIPTIONS: Record<WorkOrderStatus, string> = {
-  AUTORIZADO: 'El cliente autorizó el trabajo. Se procederá con la reparación.',
-  EN_ESPERA_REP: 'Se están gestionando los repuestos necesarios.',
-  EN_REPARACION: 'El componente está siendo reparado en el taller.',
-  CALIBRACION: 'Se está calibrando y probando el componente reparado.',
-  TERMINADO: 'El servicio finalizó. Listo para retirar.',
-};
-
 export interface WorkOrderListRow {
   id: string;
   number: string;
-  status: WorkOrderStatus;
+  status: WorkOrderStatusRef;
   component: string | null;
   customerName: string;
   vehicleLabel: string;
@@ -162,33 +227,54 @@ function vehicleLabel(
   return vehicle.license_plate ? `${name} - Placa ${vehicle.license_plate}` : name;
 }
 
-export async function fetchDashboardData() {
-  const { data, error } = await supabase
-    .from('work_orders')
-    .select('id, number, status, component, public_token, customer:customers(name), vehicle:vehicles(brand, model, license_plate)')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  const rows: WorkOrderListRow[] = (data ?? []).map((row: any) => ({
+function mapWorkOrderListRow(row: any): WorkOrderListRow {
+  return {
     id: row.id,
     number: row.number,
-    status: row.status,
+    status: mapWorkOrderStatusRef(row.status),
     component: row.component,
     customerName: row.customer?.name ?? '—',
     vehicleLabel: vehicleLabel(row.vehicle),
     publicToken: row.public_token,
-  }));
-
-  const kpis = {
-    autorizadas: rows.filter((r) => r.status === 'AUTORIZADO').length,
-    enReparacion: rows.filter((r) => r.status === 'EN_REPARACION').length,
-    espRepuestos: rows.filter((r) => r.status === 'EN_ESPERA_REP').length,
-    terminadasHoy: rows.filter((r) => r.status === 'TERMINADO').length,
-    cerradasMes: rows.filter((r) => r.status === 'TERMINADO').length,
   };
+}
 
-  const pendingOrders = rows.filter((r) => r.status !== 'TERMINADO');
+export interface WorkOrderStatusCount {
+  status: WorkOrderStatusDef;
+  count: number;
+}
+
+/**
+ * Un contador por estado activo (en vez de cinco tarjetas fijas): la
+ * cantidad de tarjetas y sus nombres siguen al ABM de estados solos, sin
+ * tocar código acá cuando el admin agrega o renombra uno.
+ */
+export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount[]; pendingOrders: WorkOrderListRow[] }> {
+  const [rows, statuses] = await Promise.all([
+    (async () => {
+      const { data, error } = await supabase
+        .from('work_orders')
+        .select(
+          `id, number, component, public_token,
+           status:work_order_statuses(id, label, color, is_terminal),
+           customer:customers(name),
+           vehicle:vehicles(brand, model, license_plate)`
+        )
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(mapWorkOrderListRow);
+    })(),
+    fetchWorkOrderStatuses(true),
+  ]);
+
+  const countByStatusId = new Map<string, number>();
+  for (const row of rows) countByStatusId.set(row.status.id, (countByStatusId.get(row.status.id) ?? 0) + 1);
+
+  const kpis: WorkOrderStatusCount[] = statuses.map((status) => ({
+    status,
+    count: countByStatusId.get(status.id) ?? 0,
+  }));
+  const pendingOrders = rows.filter((r) => !r.status.isTerminal);
 
   return { kpis, pendingOrders };
 }
@@ -211,7 +297,8 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   const { data, error } = await supabase
     .from('work_orders')
     .select(
-      `id, number, status, component, public_token, created_at,
+      `id, number, component, public_token, created_at,
+       status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
        employee:employees(name)`
@@ -221,13 +308,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   if (error) throw error;
 
   return (data ?? []).map((row: any) => ({
-    id: row.id,
-    number: row.number,
-    status: row.status,
-    component: row.component,
-    customerName: row.customer?.name ?? '—',
-    vehicleLabel: vehicleLabel(row.vehicle),
-    publicToken: row.public_token,
+    ...mapWorkOrderListRow(row),
     employeeName: row.employee?.name ?? null,
     createdAt: row.created_at,
   }));
@@ -257,10 +338,21 @@ export interface NewWorkOrderInput {
  * conversión desde cotización, así no hay riesgo de números repetidos.
  */
 export async function createWorkOrder(input: NewWorkOrderInput) {
+  const { data: initial, error: initialError } = await supabase
+    .from('work_order_statuses')
+    .select('id')
+    .eq('is_initial', true)
+    .limit(1)
+    .maybeSingle();
+  if (initialError) throw initialError;
+  if (!initial) {
+    throw new Error('No hay un estado inicial configurado para las órdenes de trabajo. Marcá uno desde Estados de OT.');
+  }
+
   const { data: workOrder, error } = await supabase
     .from('work_orders')
     .insert({
-      status: 'AUTORIZADO',
+      status_id: initial.id,
       customer_id: input.customerId,
       vehicle_id: input.vehicleId,
       component: input.component || null,
@@ -275,7 +367,7 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
 export interface WorkOrderDetail {
   id: string;
   number: string;
-  status: WorkOrderStatus;
+  status: WorkOrderStatusRef;
   component: string | null;
   customer:
     | {
@@ -321,7 +413,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
   const { data, error } = await supabase
     .from('work_orders')
     .select(
-      `id, number, status, component, public_token,
+      `id, number, component, public_token,
+       status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
@@ -339,7 +432,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
   return {
     id: (data as any).id,
     number: (data as any).number,
-    status: (data as any).status,
+    status: mapWorkOrderStatusRef((data as any).status),
     component: (data as any).component,
     customer: (data as any).customer,
     vehicle: (data as any).vehicle,
@@ -371,26 +464,30 @@ export interface WorkOrderItemInput {
 }
 
 /**
- * Cambia el estado de la OT. El historial lo escribe un trigger en la base,
- * así que no hace falta registrarlo desde acá.
+ * Cambia el estado de la OT (a cuál de work_order_statuses). El historial lo
+ * escribe un trigger en la base, así que no hace falta registrarlo desde acá.
  */
-export async function updateWorkOrderStatus(id: string, status: WorkOrderStatus) {
-  const { error } = await supabase.from('work_orders').update({ status }).eq('id', id);
+export async function setWorkOrderStatus(workOrderId: string, statusId: string) {
+  const { error } = await supabase.from('work_orders').update({ status_id: statusId }).eq('id', workOrderId);
   if (error) throw error;
 }
 
 export async function fetchStatusHistory(workOrderId: string): Promise<StatusChange[]> {
   const { data, error } = await supabase
     .from('work_order_status_history')
-    .select('id, from_status, to_status, changed_by_email, changed_at')
+    .select(
+      `id, changed_by_email, changed_at,
+       from_status:work_order_statuses!work_order_status_history_from_status_id_fkey(id, label, color, is_terminal),
+       to_status:work_order_statuses!work_order_status_history_to_status_id_fkey(id, label, color, is_terminal)`
+    )
     .eq('work_order_id', workOrderId)
     .order('changed_at');
   if (error) throw error;
 
   return (data ?? []).map((row: any) => ({
     id: row.id,
-    fromStatus: row.from_status,
-    toStatus: row.to_status,
+    fromStatus: row.from_status ? mapWorkOrderStatusRef(row.from_status) : null,
+    toStatus: mapWorkOrderStatusRef(row.to_status),
     changedByEmail: row.changed_by_email,
     changedAt: row.changed_at,
   }));

@@ -4,7 +4,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
-import { getErrorMessage, STATUS_STRIP } from '@/src/lib/workOrders';
+import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   balanceOf,
   daysUntilDue,
@@ -354,7 +354,7 @@ function PendingToInvoiceList({
                   className="relative h-11 border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
                 >
                   <td data-primary className="relative px-4 py-1">
-                    <StateStrip color={STATUS_STRIP.TERMINADO} />
+                    <StateStrip color="var(--color-state-done)" />
                     <Link
                       to={`/orden/${order.number}`}
                       className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"

@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  CheckCircle2,
-  Wrench,
-  Hourglass,
-  CheckCircle,
-  FolderOpen,
-  Plus,
-  Eye,
-  Edit2,
-} from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { Plus, Eye, Edit2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { Button, Panel, PageHeader, SectionHeader, StateStrip } from '@/src/components/ui';
@@ -19,9 +9,8 @@ import {
   fetchDashboardData,
   getErrorMessage,
   hasLinkedEmployee,
-  STATUS_LABELS,
-  STATUS_STRIP,
   type WorkOrderListRow,
+  type WorkOrderStatusCount,
 } from '@/src/lib/workOrders';
 
 /**
@@ -40,7 +29,7 @@ function WorkOrderPanel() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [orders, setOrders] = React.useState<WorkOrderListRow[]>([]);
-  const [kpis, setKpis] = React.useState({ autorizadas: 0, enReparacion: 0, espRepuestos: 0, terminadasHoy: 0, cerradasMes: 0 });
+  const [kpis, setKpis] = React.useState<WorkOrderStatusCount[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [showNewOrder, setShowNewOrder] = React.useState(false);
@@ -84,16 +73,6 @@ function WorkOrderPanel() {
       ? 'Tu usuario no está vinculado a ningún empleado activo. Pedile al administrador que lo revise.'
       : 'No tenés órdenes asignadas. El encargado del taller te las asigna desde la orden de trabajo.';
 
-  // Cada indicador es un estado del circuito: el color es el mismo que marca
-  // la tira lateral de la fila, así el número y la orden se asocian solos.
-  const kpiCards = [
-    { label: 'Autorizadas', value: kpis.autorizadas, icon: CheckCircle2, strip: STATUS_STRIP.AUTORIZADO },
-    { label: 'Esp. Repuestos', value: kpis.espRepuestos, icon: Hourglass, strip: STATUS_STRIP.EN_ESPERA_REP },
-    { label: 'En Reparación', value: kpis.enReparacion, icon: Wrench, strip: STATUS_STRIP.EN_REPARACION },
-    { label: 'Terminadas hoy', value: kpis.terminadasHoy, icon: CheckCircle, strip: STATUS_STRIP.TERMINADO },
-    { label: 'Cerradas del mes', value: kpis.cerradasMes, icon: FolderOpen, strip: 'var(--color-state-idle)' },
-  ];
-
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
@@ -115,17 +94,14 @@ function WorkOrderPanel() {
       )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-5">
-        {kpiCards.map((kpi) => (
-          <Panel key={kpi.label} className="relative flex flex-col justify-between p-4 pl-5">
-            <StateStrip color={kpi.strip} />
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-text-soft">
-                {kpi.label}
-              </span>
-              <kpi.icon size={18} className="shrink-0 text-text-faint" />
-            </div>
+        {kpis.map((kpi) => (
+          <Panel key={kpi.status.id} className="relative flex flex-col justify-between p-4 pl-5">
+            <StateStrip color={kpi.status.color} />
+            <span className="mb-3 text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-text-soft">
+              {kpi.status.label}
+            </span>
             <span className="font-display text-4xl font-medium leading-none text-text">
-              {loading ? '—' : kpi.value}
+              {loading ? '—' : kpi.count}
             </span>
           </Panel>
         ))}
@@ -164,7 +140,7 @@ function WorkOrderPanel() {
                   className="relative border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
                 >
                   <td data-primary className="relative py-3 pl-5 pr-3">
-                    <StateStrip color={STATUS_STRIP[order.status]} />
+                    <StateStrip color={order.status.color} />
                     <Link
                       to={`/orden/${order.number}`}
                       className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"
@@ -184,9 +160,9 @@ function WorkOrderPanel() {
                       <span
                         aria-hidden
                         className="inline-block h-2 w-2"
-                        style={{ backgroundColor: STATUS_STRIP[order.status] }}
+                        style={{ backgroundColor: order.status.color }}
                       />
-                      {STATUS_LABELS[order.status]}
+                      {order.status.label}
                     </span>
                   </td>
                   <td className="p-3 text-right">

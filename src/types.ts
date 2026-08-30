@@ -1,10 +1,3 @@
-export type WorkOrderStatus =
-  | 'AUTORIZADO'
-  | 'EN_ESPERA_REP'
-  | 'EN_REPARACION'
-  | 'CALIBRACION'
-  | 'TERMINADO';
-
 export interface Customer {
   id: string;
   name: string;
@@ -33,7 +26,7 @@ export interface WorkOrderItem {
 export interface WorkOrder {
   id: string;
   number: string;
-  status: WorkOrderStatus;
+  status: string;
   customerId: string;
   vehicleId: string;
   component: string;

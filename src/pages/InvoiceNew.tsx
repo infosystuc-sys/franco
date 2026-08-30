@@ -31,7 +31,6 @@ import {
 import {
   fetchWorkOrderByNumber,
   getErrorMessage,
-  STATUS_LABELS,
   type WorkOrderDetail,
   type WorkOrderItemInput,
 } from '@/src/lib/workOrders';
@@ -138,11 +137,11 @@ export function InvoiceNew() {
     );
   }
 
-  if (order.status !== 'TERMINADO') {
+  if (!order.status.isTerminal) {
     return (
       <Blocked title={`La orden ${order.number} todavía no está terminada.`}>
         <p className="mb-4 text-sm text-text-soft">
-          Está en <strong>{STATUS_LABELS[order.status]}</strong>. Se factura recién
+          Está en <strong>{order.status.label}</strong>. Se factura recién
           cuando el trabajo cierra, para no emitir sobre renglones que todavía
           pueden cambiar.
         </p>
