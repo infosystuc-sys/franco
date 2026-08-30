@@ -33,7 +33,6 @@ interface DraftValue extends PaymentValueInput {
 /** Una entrada del desplegable de "Medios de pago": qué kind produce y con qué datos fijos. */
 type MedioOption =
   | { optionKey: string; kind: 'MEDIO_PAGO'; label: string; paymentMethodId: string }
-  | { optionKey: string; kind: 'CHEQUE_ENDOSADO'; label: string; checkId: string; amount: number }
   | { optionKey: string; kind: 'RETENCION'; label: string; taxRateId: string }
   | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
 
@@ -79,6 +78,7 @@ export function PaymentOrderNew() {
 
   const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
   const [draftAmount, setDraftAmount] = React.useState(0);
+  const [selectedCheckIds, setSelectedCheckIds] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     if (role !== 'admin') return;
@@ -146,8 +146,8 @@ export function PaymentOrderNew() {
   );
 
   // El desplegable de "Medios de pago" junta en una sola lista los medios
-  // reales, cada cheque libre de la cartera (para endosar), retención y
-  // saldo a favor, así se elige de un solo lugar en vez de varios botones.
+  // reales, retención y saldo a favor. Los cheques de cartera se endosan
+  // aparte, desde la lista con selección múltiple de abajo.
   const medioOptions = React.useMemo<MedioOption[]>(() => {
     const options: MedioOption[] = methods.map((m) => ({
       optionKey: `medio:${m.id}`,
@@ -155,29 +155,34 @@ export function PaymentOrderNew() {
       label: m.name,
       paymentMethodId: m.id,
     }));
-    walletChecks
-      .filter((c) => !values.some((v) => v.checkId === c.id))
-      .forEach((c) =>
-        options.push({
-          optionKey: `cheque:${c.id}`,
-          kind: 'CHEQUE_ENDOSADO',
-          label: `Cheque ${c.number} — ${c.bankName} — $ ${formatMoney(c.amount)}`,
-          checkId: c.id,
-          amount: c.amount,
-        })
-      );
     retentions.forEach((r) =>
       options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
     );
     if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
     return options;
-  }, [methods, walletChecks, values, retentions, credit]);
+  }, [methods, retentions, credit]);
 
   // Lo que falta cubrir: lo imputado a comprobantes menos lo ya agregado.
   // Un cheque endosado no lo usa: se entrega por su importe completo.
   const suggestedRemaining = React.useMemo(
     () => Math.max(0, round2(totalApplied - totalValues)),
     [totalApplied, totalValues]
+  );
+
+  // Cheques en cartera todavía no endosados en esta orden.
+  const availableWalletChecks = React.useMemo(
+    () => walletChecks.filter((c) => !values.some((v) => v.checkId === c.id)),
+    [walletChecks, values]
+  );
+
+  const selectedChecksSubtotal = React.useMemo(
+    () =>
+      round2(
+        availableWalletChecks
+          .filter((c) => selectedCheckIds.has(c.id))
+          .reduce((sum, c) => sum + c.amount, 0)
+      ),
+    [availableWalletChecks, selectedCheckIds]
   );
 
   if (role !== 'admin') return <Navigate to="/" replace />;
@@ -191,8 +196,7 @@ export function PaymentOrderNew() {
 
   function handleSelectMedio(optionKey: string) {
     setSelectedMedioKey(optionKey);
-    const option = medioOptions.find((o) => o.optionKey === optionKey);
-    setDraftAmount(option?.kind === 'CHEQUE_ENDOSADO' ? option.amount : suggestedRemaining);
+    setDraftAmount(suggestedRemaining);
   }
 
   function handleAddMedio() {
@@ -204,14 +208,37 @@ export function PaymentOrderNew() {
       {
         key: nextKey++,
         kind: option.kind,
-        amount: option.kind === 'CHEQUE_ENDOSADO' ? option.amount : draftAmount,
+        amount: draftAmount,
         paymentMethodId: option.kind === 'MEDIO_PAGO' ? option.paymentMethodId : undefined,
         taxRateId: option.kind === 'RETENCION' ? option.taxRateId : undefined,
-        checkId: option.kind === 'CHEQUE_ENDOSADO' ? option.checkId : undefined,
       },
     ]);
     setSelectedMedioKey('');
     setDraftAmount(0);
+  }
+
+  function handleToggleCheck(checkId: string) {
+    setSelectedCheckIds((current) => {
+      const next = new Set(current);
+      if (next.has(checkId)) next.delete(checkId);
+      else next.add(checkId);
+      return next;
+    });
+  }
+
+  function handleEndorseSelected() {
+    const toAdd = availableWalletChecks.filter((c) => selectedCheckIds.has(c.id));
+    if (toAdd.length === 0) return;
+    setValues((current) => [
+      ...current,
+      ...toAdd.map((c) => ({
+        key: nextKey++,
+        kind: 'CHEQUE_ENDOSADO' as const,
+        amount: c.amount,
+        checkId: c.id,
+      })),
+    ]);
+    setSelectedCheckIds(new Set());
   }
 
   function handleAutoAllocate() {
@@ -260,7 +287,6 @@ export function PaymentOrderNew() {
 
   const onAccount = round2(totalValues - totalApplied);
   const canSave = problems.length === 0 && !saving;
-  const selectedOption = medioOptions.find((o) => o.optionKey === selectedMedioKey);
 
   async function handleSave() {
     if (!canSave) return;
@@ -418,6 +444,75 @@ export function PaymentOrderNew() {
         )}
       </Panel>
 
+      {/* ── Cheques en cartera para endosar ────────────────────────────── */}
+      {availableWalletChecks.length > 0 && (
+        <Panel className="mb-6 p-5">
+          <SectionHeader title="Cheques en cartera para endosar" />
+          <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
+            <table className="table-stack w-full text-left text-[13px]">
+              <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                <tr>
+                  <th className="w-8 px-3 py-1"></th>
+                  <th className="px-3 py-1">Número</th>
+                  <th className="px-3 py-1">Banco</th>
+                  <th className="px-3 py-1 w-28">Vence</th>
+                  <th className="px-3 py-1 w-32 text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {availableWalletChecks.map((c, idx) => (
+                  <tr
+                    key={c.id}
+                    className={cn('h-10 cursor-pointer border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}
+                    onClick={() => handleToggleCheck(c.id)}
+                  >
+                    <td className="px-3 py-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedCheckIds.has(c.id)}
+                        onChange={() => handleToggleCheck(c.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 accent-accent-deep"
+                      />
+                    </td>
+                    <td data-primary className="px-3 py-1 font-mono font-semibold">{c.number}</td>
+                    <td data-label="Banco" className="px-3 py-1">{c.bankName}</td>
+                    <td data-label="Vence" className="px-3 py-1 text-text-soft">{formatDate(c.dueDate)}</td>
+                    <td data-label="Importe" className="px-3 py-1 text-right font-mono">$ {formatMoney(c.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+              <div className="flex items-baseline gap-1.5">
+                <dt className="text-text-soft">Subtotal seleccionado</dt>
+                <dd className="font-mono font-semibold text-text">$ {formatMoney(selectedChecksSubtotal)}</dd>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <dt className="text-text-soft">
+                  {selectedChecksSubtotal <= suggestedRemaining ? 'Saldo restante' : 'Cubre de más'}
+                </dt>
+                <dd className="font-mono font-semibold text-text">
+                  $ {formatMoney(Math.abs(round2(suggestedRemaining - selectedChecksSubtotal)))}
+                </dd>
+              </div>
+            </dl>
+            <Button
+              type="button"
+              onClick={handleEndorseSelected}
+              disabled={selectedCheckIds.size === 0}
+              className="px-3"
+            >
+              <FileCheck size={15} /> Endosar {selectedCheckIds.size > 0 ? `${selectedCheckIds.size} ` : ''}
+              {selectedCheckIds.size === 1 ? 'cheque' : 'cheques'}
+            </Button>
+          </div>
+        </Panel>
+      )}
+
       {/* ── Valores ─────────────────────────────────────────────────── */}
       <Panel className="mb-6 p-5">
         <SectionHeader title="Medios de pago" />
@@ -437,16 +532,7 @@ export function PaymentOrderNew() {
             </select>
           </label>
 
-          {selectedMedioKey && selectedOption?.kind === 'CHEQUE_ENDOSADO' && (
-            <div className={cn(labelClass, 'sm:w-40')}>
-              Importe
-              <p className="mt-1 flex items-center gap-1.5 py-2 font-mono text-sm text-text">
-                <FileCheck size={13} className="text-text-soft" /> $ {formatMoney(selectedOption.amount)}
-              </p>
-            </div>
-          )}
-
-          {selectedMedioKey && selectedOption?.kind !== 'CHEQUE_ENDOSADO' && (
+          {selectedMedioKey && (
             <label className={cn(labelClass, 'sm:w-40')}>
               Importe
               <input
