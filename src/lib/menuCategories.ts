@@ -95,6 +95,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes' },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
+          { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
         ],
       },
       {

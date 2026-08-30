@@ -439,12 +439,17 @@ export async function issueInvoice(
   };
 }
 
-/** Factura libre: sin OT ni cotización de por medio, directo por cliente. */
+/**
+ * Factura libre: sin OT ni cotización de por medio, directo por cliente.
+ * Si viene de un remito pendiente (remitoId), lo vincula a la factura en vez
+ * de crear uno nuevo — emitRemito se ignora en ese caso, ya hay uno.
+ */
 export async function issueFreeInvoice(
   customerId: string,
   items: WorkOrderItemInput[],
   notes: string,
-  emitRemito: boolean
+  emitRemito: boolean,
+  remitoId: string | null = null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_free_invoice', {
     p_customer_id: customerId,
@@ -457,6 +462,7 @@ export async function issueFreeInvoice(
     })),
     p_notes: notes.trim() || null,
     p_emit_remito: emitRemito,
+    p_remito_id: remitoId,
   });
 
   if (error) throw error;

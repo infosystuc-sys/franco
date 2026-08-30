@@ -43,6 +43,9 @@ import { Vehicles } from './pages/Vehicles';
 import { WorkOrderDetails } from './pages/WorkOrderDetails';
 import { WorkOrderStatuses } from './pages/WorkOrderStatuses';
 import { ShopCapacity } from './pages/ShopCapacity';
+import { Remitos } from './pages/Remitos';
+import { RemitoNew } from './pages/RemitoNew';
+import { RemitoDetails } from './pages/RemitoDetails';
 import { ClientPortal } from './pages/ClientPortal';
 
 /**
@@ -114,6 +117,9 @@ export default function App() {
                     <Route path="/vehiculos" element={<Vehicles />} />
                     <Route path="/estados-ot" element={<WorkOrderStatuses />} />
                     <Route path="/disponibilidad-taller" element={<ShopCapacity />} />
+                    <Route path="/remitos" element={<Remitos />} />
+                    <Route path="/remitos/nuevo" element={<RemitoNew />} />
+                    <Route path="/remito/:id" element={<RemitoDetails />} />
                     <Route path="/proveedores" element={<Suppliers />} />
                     <Route path="/usuarios" element={<Users />} />
                     <Route path="/ordenes" element={<WorkOrders />} />

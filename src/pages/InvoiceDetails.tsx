@@ -352,7 +352,7 @@ function SendInvoiceModal({
  * con la factura (comparte la clase print-document) porque en la práctica
  * viajan juntos con la mercadería.
  */
-function RemitoDocument({ remito }: { remito: Remito }) {
+export function RemitoDocument({ remito }: { remito: Remito }) {
   const voided = remito.status === 'ANULADO';
   return (
     <div className="print-document relative mt-6 border border-line bg-panel p-6 md:p-8">

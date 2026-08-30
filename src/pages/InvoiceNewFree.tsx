@@ -1,6 +1,6 @@
 import React from 'react';
-import { XCircle, Receipt, AlertTriangle, ArrowRight } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { XCircle, Receipt, AlertTriangle, ArrowRight, Truck } from 'lucide-react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
@@ -24,6 +24,7 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import { Blocked, CashCheckoutFields, InvoiceTotals, InvoiceTypeBadge } from '@/src/pages/InvoiceNew';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
+import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
 
 /**
  * Facturar sin OT ni cotización: para lo que no sale de una reparación
@@ -34,11 +35,14 @@ import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 export function InvoiceNewFree() {
   const { role } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const remitoId = searchParams.get('remito');
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [company, setCompany] = React.useState<CompanySettings | null>(null);
   const [articles, setArticles] = React.useState<Article[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [remito, setRemito] = React.useState<Remito | null>(null);
 
   const [customerId, setCustomerId] = React.useState('');
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
@@ -53,22 +57,35 @@ export function InvoiceNewFree() {
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
-    Promise.all([fetchCustomers(true), fetchCompanySettings()])
-      .then(([customerRows, settings]) => {
+    Promise.all([fetchCustomers(true), fetchCompanySettings(), fetchArticles(false)])
+      .then(([customerRows, settings, articleRows]) => {
         if (cancelled) return;
         setCustomers(customerRows);
         setCompany(settings);
+        setArticles(articleRows);
+        if (!remitoId) return;
+        return fetchRemitoById(remitoId).then((r) => {
+          if (cancelled || !r) return;
+          setRemito(r);
+          setCustomerId(r.customerId);
+          setItems(
+            r.items.map((item) => ({
+              articleId: item.articleId,
+              code: item.code ?? '',
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.articleId ? articleRows.find((a) => a.id === item.articleId)?.unitPrice ?? 0 : 0,
+            }))
+          );
+        });
       })
       .catch((err) => !cancelled && setError(getErrorMessage(err)))
       .finally(() => !cancelled && setLoading(false));
-    fetchArticles(false)
-      .then((data) => !cancelled && setArticles(data))
-      .catch(() => {/* el catálogo es opcional: se puede seguir cargando líneas manuales */});
     fetchPaymentMethods(true)
       .then((data) => !cancelled && setPaymentMethods(data))
       .catch(() => {/* si falla, el check de contado queda sin opciones y no se puede tildar */});
     return () => { cancelled = true; };
-  }, [role]);
+  }, [role, remitoId]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -115,7 +132,7 @@ export function InvoiceNewFree() {
     setIssuing(true);
     setError(null);
     try {
-      const issued = await issueFreeInvoice(customer.id, items, notes, emitRemito);
+      const issued = await issueFreeInvoice(customer.id, items, notes, emitRemito, remitoId);
       if (isCash) {
         try {
           await saveReceipt(
@@ -142,7 +159,15 @@ export function InvoiceNewFree() {
       <PageHeader
         title="Facturar"
         meta={<InvoiceTypeBadge type={invoiceType} />}
-        subtitle="Sin orden de trabajo ni cotización — se carga el cliente y los renglones a mano."
+        subtitle={
+          remito ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Truck size={14} className="text-accent-deep" /> Facturando el remito {remito.fullNumber}
+            </span>
+          ) : (
+            'Sin orden de trabajo ni cotización — se carga el cliente y los renglones a mano.'
+          )
+        }
         actions={
           <>
             <Link to="/facturas">
@@ -165,7 +190,8 @@ export function InvoiceNewFree() {
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+            disabled={!!remito}
+            className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:opacity-60"
           >
             <option value="">Elegí un cliente...</option>
             {customers.map((c) => (
@@ -174,7 +200,12 @@ export function InvoiceNewFree() {
               </option>
             ))}
           </select>
-          {customers.length === 0 && (
+          {remito && (
+            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
+            </span>
+          )}
+          {customers.length === 0 && !remito && (
             <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
               No hay clientes activos. Cargá uno desde la sección Clientes.
             </span>
@@ -211,15 +242,17 @@ export function InvoiceNewFree() {
           placeholder="Texto que sale impreso en el comprobante. Opcional."
           className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
-        <label className="mt-3 flex items-center gap-2 text-sm text-text cursor-pointer">
-          <input
-            type="checkbox"
-            checked={emitRemito}
-            onChange={(e) => setEmitRemito(e.target.checked)}
-            className="w-4 h-4 accent-accent-deep"
-          />
-          Emitir remito junto con la factura
-        </label>
+        {!remito && (
+          <label className="mt-3 flex items-center gap-2 text-sm text-text cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emitRemito}
+              onChange={(e) => setEmitRemito(e.target.checked)}
+              className="w-4 h-4 accent-accent-deep"
+            />
+            Emitir remito junto con la factura
+          </label>
+        )}
 
         <CashCheckoutFields
           isCash={isCash}
