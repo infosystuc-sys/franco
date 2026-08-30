@@ -16,6 +16,12 @@ import { supabase } from '@/src/lib/supabase';
 
 export type ReceiptStatus = 'REGISTRADO' | 'ANULADO';
 export type ReceiptValueKind = 'MEDIO_PAGO' | 'CHEQUE' | 'RETENCION' | 'SALDO_A_FAVOR';
+export type ReceiptChangeKind = 'MEDIO_PAGO' | 'CHEQUE_PROPIO';
+
+export const CHANGE_KIND_LABELS: Record<ReceiptChangeKind, string> = {
+  MEDIO_PAGO: 'Efectivo o transferencia',
+  CHEQUE_PROPIO: 'Cheque propio',
+};
 
 export const VALUE_KIND_LABELS: Record<ReceiptValueKind, string> = {
   MEDIO_PAGO: 'Efectivo o banco',
@@ -59,6 +65,13 @@ export interface ReceiptValue {
   certificateNumber: string | null;
 }
 
+export interface ReceiptChange {
+  kind: ReceiptChangeKind;
+  amount: number;
+  paymentMethodName: string | null;
+  note: string | null;
+}
+
 export interface Receipt {
   id: string;
   fullNumber: string;
@@ -74,6 +87,7 @@ export interface Receipt {
   voidedReason: string | null;
   allocations: ReceiptAllocation[];
   values: ReceiptValue[];
+  change: ReceiptChange | null;
 }
 
 const SELECT =
@@ -82,7 +96,8 @@ const SELECT =
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
           method:payment_methods(name), rate:tax_rates(name),
-          check:third_party_checks(number, bank_name))`;
+          check:third_party_checks(number, bank_name)),
+   change:receipt_changes(kind, amount, note, method:payment_methods(name))`;
 
 function mapReceipt(row: any): Receipt {
   return {
@@ -114,6 +129,17 @@ function mapReceipt(row: any): Receipt {
       taxRateName: v.rate?.name ?? null,
       certificateNumber: v.certificate_number,
     })),
+    change: mapChange(Array.isArray(row.change) ? row.change[0] : row.change),
+  };
+}
+
+function mapChange(raw: any): ReceiptChange | null {
+  if (!raw) return null;
+  return {
+    kind: raw.kind,
+    amount: Number(raw.amount),
+    paymentMethodName: raw.method?.name ?? null,
+    note: raw.note ?? null,
   };
 }
 
@@ -240,10 +266,18 @@ export interface ValueInput {
   checkDueDate?: string;
 }
 
+export interface ChangeInput {
+  kind: ReceiptChangeKind;
+  amount: number;
+  paymentMethodId?: string;
+  note?: string;
+}
+
 export async function saveReceipt(
   header: { customerId: string; receiptDate: string; notes: string },
   allocations: AllocationInput[],
-  values: ValueInput[]
+  values: ValueInput[],
+  change?: ChangeInput | null
 ): Promise<{ id: string; fullNumber: string }> {
   const { data, error } = await supabase.rpc('save_receipt', {
     p_header: {
@@ -264,6 +298,14 @@ export async function saveReceipt(
       check_issue_date: v.checkIssueDate || null,
       check_due_date: v.checkDueDate || null,
     })),
+    p_change: change
+      ? {
+          kind: change.kind,
+          amount: change.amount,
+          payment_method_id: change.paymentMethodId ?? null,
+          note: change.note?.trim() || null,
+        }
+      : null,
   });
 
   if (error) throw error;

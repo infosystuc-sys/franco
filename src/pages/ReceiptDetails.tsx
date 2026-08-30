@@ -6,6 +6,7 @@ import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  CHANGE_KIND_LABELS,
   describeReceiptError,
   fetchReceiptById,
   isCashValue,
@@ -232,6 +233,28 @@ export function ReceiptDetails() {
               <div className="flex justify-between">
                 <dt className="text-text-soft">A cuenta</dt>
                 <dd className="font-mono text-text">$ {formatMoney(receipt.onAccountAmount)}</dd>
+              </div>
+            )}
+            {receipt.change && (
+              <div className="flex justify-between">
+                <dt className="text-text-soft">
+                  Vuelto — {CHANGE_KIND_LABELS[receipt.change.kind]}
+                  {receipt.change.kind === 'MEDIO_PAGO' && receipt.change.paymentMethodName
+                    ? ` (${receipt.change.paymentMethodName})`
+                    : ''}
+                  {receipt.change.kind === 'CHEQUE_PROPIO' && receipt.change.note
+                    ? ` — ${receipt.change.note}`
+                    : ''}
+                </dt>
+                <dd className="font-mono text-text">− $ {formatMoney(receipt.change.amount)}</dd>
+              </div>
+            )}
+            {receipt.change && receipt.onAccountAmount - receipt.change.amount > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-text-soft">Queda a favor</dt>
+                <dd className="font-mono text-text">
+                  $ {formatMoney(receipt.onAccountAmount - receipt.change.amount)}
+                </dd>
               </div>
             )}
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
