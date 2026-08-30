@@ -20,6 +20,7 @@ import { PriceLists } from './pages/PriceLists';
 import { PublicQuotation } from './pages/PublicQuotation';
 import { QuotationDetails } from './pages/QuotationDetails';
 import { PaymentMethods } from './pages/PaymentMethods';
+import { Banks } from './pages/Banks';
 import { Checks } from './pages/Checks';
 import { PaymentOrderDetails } from './pages/PaymentOrderDetails';
 import { PaymentOrderNew } from './pages/PaymentOrderNew';
@@ -107,6 +108,7 @@ export default function App() {
                     <Route path="/tesoreria" element={<Treasury />} />
                     <Route path="/cheques" element={<Checks />} />
                     <Route path="/medios-pago" element={<PaymentMethods />} />
+                    <Route path="/bancos" element={<Banks />} />
                     <Route path="/alicuotas" element={<TaxRates />} />
                     <Route path="/conceptos" element={<ExpenseConcepts />} />
                     <Route path="/configuracion" element={<Settings />} />

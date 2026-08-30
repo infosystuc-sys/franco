@@ -9,6 +9,8 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConcepts';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
+import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { BankCombobox } from '@/src/components/BankCombobox';
 import {
   canCredit,
   canDeposit,
@@ -43,6 +45,9 @@ export function Checks() {
   const { role } = useAuth();
   const [checks, setChecks] = React.useState<ThirdPartyCheck[]>([]);
   const [banks, setBanks] = React.useState<PaymentMethod[]>([]);
+  // Distinto de `banks` de arriba: ese es "a cuál cuenta nuestra depositar",
+  // este es el catálogo de bancos emisores para sugerir al cargar un cheque.
+  const [checkBanks, setCheckBanks] = React.useState<Bank[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [concepts, setConcepts] = React.useState<ExpenseConcept[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -56,16 +61,18 @@ export function Checks() {
     setLoading(true);
     setError(null);
     try {
-      const [c, m, s, ec] = await Promise.all([
+      const [c, m, s, ec, cb] = await Promise.all([
         fetchChecks(),
         fetchPaymentMethods(true),
         fetchSuppliers(true),
         fetchExpenseConcepts(true),
+        fetchBanks(true),
       ]);
       setChecks(c);
       setBanks(m.filter((method) => method.kind === 'BANCO'));
       setSuppliers(s);
       setConcepts(ec);
+      setCheckBanks(cb);
     } catch (err) {
       setError(describeCheckError(getErrorMessage(err)));
     } finally {
@@ -361,6 +368,8 @@ export function Checks() {
       {receiving && (
         <ReceiveCheckModal
           concepts={concepts}
+          checkBanks={checkBanks}
+          onBankCreated={(bank) => setCheckBanks((current) => [...current, bank])}
           onClose={() => setReceiving(false)}
           onSaved={() => {
             setReceiving(false);
@@ -429,10 +438,14 @@ function Kpi({
 
 function ReceiveCheckModal({
   concepts,
+  checkBanks,
+  onBankCreated,
   onClose,
   onSaved,
 }: {
   concepts: ExpenseConcept[];
+  checkBanks: Bank[];
+  onBankCreated: (bank: Bank) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -505,9 +518,11 @@ function ReceiveCheckModal({
 
             <label className={labelClass}>
               Banco *
-              <input
+              <BankCombobox
                 value={form.bankName}
-                onChange={(e) => patch({ bankName: e.target.value })}
+                onChange={(name) => patch({ bankName: name })}
+                banks={checkBanks}
+                onBankCreated={onBankCreated}
                 placeholder="Banco Galicia"
                 className={cn(inputClass, form.bankName.trim() === '' && 'field-required')}
               />

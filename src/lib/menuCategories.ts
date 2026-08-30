@@ -194,6 +194,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         cards: [
           { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
           { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', adminOnly: true },
+          { icon: Landmark, label: 'Bancos', path: '/bancos', adminOnly: true },
         ],
       },
       {

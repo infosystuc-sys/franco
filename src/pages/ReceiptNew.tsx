@@ -9,6 +9,8 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
+import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { BankCombobox } from '@/src/components/BankCombobox';
 import {
   autoAllocate,
   describeReceiptError,
@@ -57,6 +59,7 @@ export function ReceiptNew() {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [methods, setMethods] = React.useState<PaymentMethod[]>([]);
   const [retentions, setRetentions] = React.useState<TaxRate[]>([]);
+  const [banks, setBanks] = React.useState<Bank[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -78,13 +81,14 @@ export function ReceiptNew() {
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
-    Promise.all([fetchCustomers(true), fetchPaymentMethods(true), fetchTaxRates(true)])
-      .then(([c, m, r]) => {
+    Promise.all([fetchCustomers(true), fetchPaymentMethods(true), fetchTaxRates(true), fetchBanks(true)])
+      .then(([c, m, r, b]) => {
         if (cancelled) return;
         setCustomers(c);
         // La cartera no se elige como medio: el cheque se carga como cheque.
         setMethods(m.filter((method) => method.kind !== 'CARTERA_CHEQUES'));
         setRetentions(r.filter((rate) => rate.kind === 'RETENCION'));
+        setBanks(b);
       })
       .catch((err) => !cancelled && setError(describeReceiptError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
@@ -518,9 +522,11 @@ export function ReceiptNew() {
                     placeholder="Número"
                     className={cn(compactFieldClass, 'w-24 font-mono', !value.checkNumber?.trim() && 'field-required')}
                   />
-                  <input
+                  <BankCombobox
                     value={value.checkBank ?? ''}
-                    onChange={(e) => patchValue(value.key, { checkBank: e.target.value })}
+                    onChange={(name) => patchValue(value.key, { checkBank: name })}
+                    banks={banks}
+                    onBankCreated={(bank) => setBanks((current) => [...current, bank])}
                     placeholder="Banco"
                     className={cn(compactFieldClass, 'w-28', !value.checkBank?.trim() && 'field-required')}
                   />
@@ -560,6 +566,8 @@ export function ReceiptNew() {
       {checkModalOpen && (
         <CheckModal
           remainingBase={suggestedRemaining}
+          banks={banks}
+          onBankCreated={(bank) => setBanks((current) => [...current, bank])}
           onConfirm={handleAddChecks}
           onClose={() => setCheckModalOpen(false)}
         />
@@ -642,10 +650,14 @@ interface DraftCheck {
  */
 function CheckModal({
   remainingBase,
+  banks,
+  onBankCreated,
   onConfirm,
   onClose,
 }: {
   remainingBase: number;
+  banks: Bank[];
+  onBankCreated: (bank: Bank) => void;
   onConfirm: (checks: Omit<DraftValue, 'key' | 'kind'>[]) => void;
   onClose: () => void;
 }) {
@@ -725,9 +737,11 @@ function CheckModal({
                 </label>
                 <label className={labelClass}>
                   Banco *
-                  <input
+                  <BankCombobox
                     value={row.checkBank}
-                    onChange={(e) => patchRow(row.rowKey, { checkBank: e.target.value })}
+                    onChange={(name) => patchRow(row.rowKey, { checkBank: name })}
+                    banks={banks}
+                    onBankCreated={onBankCreated}
                     className={cn(inputClass, !row.checkBank.trim() && 'field-required')}
                   />
                 </label>
