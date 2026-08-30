@@ -338,17 +338,17 @@ export async function fetchPendingToInvoice(): Promise<PendingToInvoice[]> {
     .from('work_orders')
     .select(
       `id, number, component,
+       status:work_order_statuses(is_terminal),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
        invoices(status)`
     )
-    .eq('status', 'TERMINADO')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
   return ((data ?? []) as any[])
-    .filter((row) => !(row.invoices ?? []).some((i: any) => i.status === 'EMITIDA'))
+    .filter((row) => (row.status as any)?.is_terminal && !(row.invoices ?? []).some((i: any) => i.status === 'EMITIDA'))
     .map((row) => {
       const name = [row.vehicle?.brand, row.vehicle?.model].filter(Boolean).join(' ');
       return {

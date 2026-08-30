@@ -127,14 +127,20 @@ function describirFalla(mensaje: string): string {
   return mensaje;
 }
 
-type Cargo = 'operario' | 'administrativo' | 'dueño';
-const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño'];
+type Cargo = 'operario' | 'administrativo' | 'dueño' | 'contador';
+const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño', 'contador'];
 type Workplace = 'Laboratorio 1' | 'Laboratorio 2' | 'Playa';
 const WORKPLACES: Workplace[] = ['Laboratorio 1', 'Laboratorio 2', 'Playa'];
 
-/** operario -> role 'operario'; administrativo y dueño -> 'admin', mismo nivel de acceso, solo cambia el cargo mostrado. */
-function rolDesdeCargo(cargo: Cargo): 'admin' | 'operario' {
-  return cargo === 'operario' ? 'operario' : 'admin';
+/**
+ * operario -> role 'operario'; administrativo y dueño -> 'admin', mismo nivel
+ * de acceso, solo cambia el cargo mostrado; contador -> 'contador', un rol
+ * propio de solo lectura sobre informes impositivos (ver perfil-contador.sql).
+ */
+function rolDesdeCargo(cargo: Cargo): 'admin' | 'operario' | 'contador' {
+  if (cargo === 'operario') return 'operario';
+  if (cargo === 'contador') return 'contador';
+  return 'admin';
 }
 
 interface DatosAcceso {
@@ -351,11 +357,11 @@ async function cambiarCargo(body: Record<string, unknown>, llamadoPor: string): 
     return json({ error: 'No se encontró el perfil de ese usuario.' }, 404);
   }
 
-  // La guarda solo aplica si esto es una democión real (admin -> operario).
-  // Sin este chequeo, volver a guardar el mismo cargo de un operario con el
-  // único admin del sistema todavía activo rechazaba un cambio que ni
-  // siquiera tocaba una cuenta de admin.
-  const esDemocion = perfilActual.role === 'admin' && rolNuevo === 'operario';
+  // La guarda solo aplica si esto es una democión real (admin -> cualquier
+  // otra cosa, operario o contador). Sin este chequeo, volver a guardar el
+  // mismo cargo de un operario con el único admin del sistema todavía activo
+  // rechazaba un cambio que ni siquiera tocaba una cuenta de admin.
+  const esDemocion = perfilActual.role === 'admin' && rolNuevo !== 'admin';
 
   if (esDemocion) {
     const { count } = await db

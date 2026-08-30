@@ -2,7 +2,7 @@ import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 
-export type UserRole = 'admin' | 'operario';
+export type UserRole = 'admin' | 'operario' | 'contador';
 
 interface AuthState {
   session: Session | null;

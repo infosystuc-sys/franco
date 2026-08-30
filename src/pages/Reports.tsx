@@ -12,7 +12,11 @@ import { AREA_LABELS, AREAS, REPORTS, type ReportArea } from '@/src/lib/reports'
  */
 export function Reports() {
   const { role } = useAuth();
-  if (role !== 'admin') return <Navigate to="/" replace />;
+  if (role !== 'admin' && role !== 'contador') return <Navigate to="/" replace />;
+
+  // El contador solo ve el área impositiva — el resto del catálogo (comercial,
+  // cuentas corrientes, stock y tesorería) queda fuera de su acceso.
+  const areas = role === 'contador' ? AREAS.filter((a) => a === 'IMPOSITIVO') : AREAS;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -21,7 +25,7 @@ export function Reports() {
         subtitle="Consultas de gestión. Todas se ven en pantalla y se exportan a Excel."
       />
 
-      {AREAS.map((area) => {
+      {areas.map((area) => {
         const reports = REPORTS.filter((r) => r.area === area);
         if (reports.length === 0) return <PendingArea key={area} area={area} />;
 

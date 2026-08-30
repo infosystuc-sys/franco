@@ -224,7 +224,9 @@ function CargoFields({
           ))}
         </select>
         <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
-          Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta.
+          {cargo === 'contador'
+            ? 'Contador tiene su propio acceso: de solo lectura, exclusivo a los informes impositivos.'
+            : 'Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta.'}
         </span>
       </Label>
 
@@ -242,6 +244,10 @@ function CargoFields({
             ))}
           </select>
         </Label>
+      ) : cargo === 'contador' ? (
+        <span className="self-end pb-2.5 text-xs text-text-soft">
+          Ve Informes → Impositivos (libros de IVA, retenciones) y puede exportarlos. Nada más.
+        </span>
       ) : (
         <label className="flex items-center gap-2 text-sm text-text cursor-pointer self-end pb-2.5">
           <input

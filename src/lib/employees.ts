@@ -1,15 +1,21 @@
 import { supabase } from '@/src/lib/supabase';
 
-/** Cargo dentro del sistema. No es el nivel de acceso (eso es `role`, admin/operario): administrativo y dueño acceden igual, solo cambia la etiqueta. */
-export type Cargo = 'operario' | 'administrativo' | 'dueño';
+/**
+ * Cargo dentro del sistema. No es exactamente el nivel de acceso (eso es
+ * `role`): administrativo y dueño acceden igual (ambos son role='admin'),
+ * solo cambia la etiqueta. Contador es la excepción — tiene su propio role
+ * ('contador'), de solo lectura sobre informes impositivos.
+ */
+export type Cargo = 'operario' | 'administrativo' | 'dueño' | 'contador';
 
 export const CARGO_LABELS: Record<Cargo, string> = {
   operario: 'Operario',
   administrativo: 'Administrativo',
   dueño: 'Dueño',
+  contador: 'Contador',
 };
 
-export const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño'];
+export const CARGOS: Cargo[] = ['operario', 'administrativo', 'dueño', 'contador'];
 
 /** Lugar de trabajo del operario. Solo tiene sentido para cargo='operario'. */
 export type Workplace = 'Laboratorio 1' | 'Laboratorio 2' | 'Playa';

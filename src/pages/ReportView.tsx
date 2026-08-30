@@ -60,8 +60,12 @@ export function ReportView() {
     [filtered, report]
   );
 
-  if (role !== 'admin') return <Navigate to="/" replace />;
+  if (role !== 'admin' && role !== 'contador') return <Navigate to="/" replace />;
   if (!report) return <Navigate to="/informes" replace />;
+  // El contador solo entra a informes del área impositiva — a uno de otra
+  // área no llega por el catálogo (ya está filtrado), pero si fuerza la URL
+  // directo, se lo manda de vuelta acá en vez de mostrárselo.
+  if (role === 'contador' && report.area !== 'IMPOSITIVO') return <Navigate to="/informes" replace />;
 
   const params: ReportParams = { from, to };
   const periodInvalid = report.usesPeriod && from > to;

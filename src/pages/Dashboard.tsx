@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Eye, Edit2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { Button, Panel, PageHeader, SectionHeader, StateStrip } from '@/src/components/ui';
 import { NewWorkOrderModal } from '@/src/components/NewWorkOrderModal';
@@ -22,6 +22,9 @@ import {
 export function Dashboard() {
   const { role } = useAuth();
   if (role === 'admin') return <MenuHome />;
+  // El contador no tiene nada que hacer en el panel de OTs (no ve ninguna):
+  // entra directo a lo único que le compete.
+  if (role === 'contador') return <Navigate to="/informes" replace />;
   return <WorkOrderPanel />;
 }
 
