@@ -444,6 +444,8 @@ export interface WorkOrderDetail {
   };
   /** Identificador aleatorio con el que se arma el link para el cliente. */
   publicToken: string;
+  /** Cuándo estima el admin que el vehículo va a estar listo. Carga manual, opcional. */
+  estimatedDeliveryDate: string | null;
   items: WorkOrderItem[];
   photos: WorkOrderPhoto[];
 }
@@ -458,7 +460,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
   const { data, error } = await supabase
     .from('work_orders')
     .select(
-      `id, number, component, public_token,
+      `id, number, component, public_token, estimated_delivery_date,
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
        status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
@@ -497,6 +499,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       reason: (data as any).price_auth_reason,
     },
     publicToken: (data as any).public_token,
+    estimatedDeliveryDate: (data as any).estimated_delivery_date,
     items: ((data as any).items ?? []).map((item: any) => ({
       id: item.id,
       workOrderId: (data as any).id,
@@ -571,6 +574,15 @@ export async function assignEmployee(workOrderId: string, employeeId: string | n
   const { error } = await supabase
     .from('work_orders')
     .update({ employee_id: employeeId })
+    .eq('id', workOrderId);
+  if (error) throw error;
+}
+
+/** Fecha estimada de entrega, para la vista de disponibilidad del taller. */
+export async function setEstimatedDeliveryDate(workOrderId: string, date: string | null) {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({ estimated_delivery_date: date })
     .eq('id', workOrderId);
   if (error) throw error;
 }

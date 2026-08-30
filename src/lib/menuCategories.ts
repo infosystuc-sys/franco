@@ -19,6 +19,7 @@ import {
   BarChart3,
   MessageSquare,
   Settings,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 import { REPORTS } from '@/src/lib/reports';
@@ -92,6 +93,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: LogIn, label: 'Ingreso de vehículos', path: '/ingresos', adminOnly: true },
           { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
           { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes' },
+          { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
         ],
       },

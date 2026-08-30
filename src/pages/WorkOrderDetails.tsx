@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send } from 'lucide-react';
-import { cn, formatMoney } from '@/src/lib/utils';
+import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
@@ -24,6 +24,7 @@ import {
   getWorkOrderPhotoUrl,
   requestPriceAuthorization,
   saveWorkOrderItems,
+  setEstimatedDeliveryDate,
   setWorkOrderStatus,
   uploadWorkOrderPhoto,
   type StatusChange,
@@ -147,6 +148,17 @@ export function WorkOrderDetails() {
       setError(getErrorMessage(err));
     } finally {
       setAssigningEmployee(false);
+    }
+  }
+
+  async function handleEstimatedDeliveryChange(date: string) {
+    if (!order) return;
+    setError(null);
+    try {
+      await setEstimatedDeliveryDate(order.id, date || null);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   }
 
@@ -279,7 +291,7 @@ export function WorkOrderDetails() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-5">
         <Panel className="p-4">
           <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Cliente
@@ -352,6 +364,24 @@ export function WorkOrderDetails() {
           ) : (
             // El operario solo consulta quién quedó a cargo: la asignación es tarea del admin.
             <span className="block text-sm font-semibold text-text">{order.employee?.name ?? 'Sin asignar'}</span>
+          )}
+        </Panel>
+
+        <Panel className="p-4">
+          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+            Entrega estimada
+          </span>
+          {isAdmin ? (
+            <input
+              type="date"
+              value={order.estimatedDeliveryDate ?? ''}
+              onChange={(e) => handleEstimatedDeliveryChange(e.target.value)}
+              className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+            />
+          ) : (
+            <span className="block text-sm font-semibold text-text">
+              {order.estimatedDeliveryDate ? formatDate(order.estimatedDeliveryDate) : 'Sin definir'}
+            </span>
           )}
         </Panel>
       </div>
