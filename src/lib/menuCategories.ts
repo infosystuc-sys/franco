@@ -216,6 +216,12 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         ],
       },
       {
+        color: 'operaciones',
+        cards: [
+          { icon: MessageSquare, label: 'Retenciones pendientes', path: '/retenciones-pendientes', adminOnly: true },
+        ],
+      },
+      {
         color: 'informes',
         cards: [reportCard('retenciones-sufridas'), reportCard('retenciones-practicadas')],
       },
