@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt } from 'lucide-react';
+import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -16,17 +16,21 @@ import {
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
   assignEmployee,
+  deleteWorkOrderPhoto,
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   getErrorMessage,
+  getWorkOrderPhotoUrl,
   saveWorkOrderItems,
   STATUS_LABELS,
   STATUS_SEQUENCE,
   STATUS_STRIP,
   updateWorkOrderStatus,
+  uploadWorkOrderPhoto,
   type StatusChange,
   type WorkOrderDetail,
   type WorkOrderItemInput,
+  type WorkOrderPhoto,
 } from '@/src/lib/workOrders';
 import type { WorkOrderStatus } from '@/src/types';
 
@@ -347,6 +351,146 @@ export function WorkOrderDetails() {
           editable={isAdmin}
         />
       </Panel>
+
+      {order && (
+        <div className="mt-6">
+          <PhotosSection order={order} isAdmin={isAdmin} onChanged={loadOrder} onError={setError} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fotos del estado de las piezas durante la reparación. Mismo patrón que
+ * las fotos de Ingreso de vehículos: se pueden agregar en cualquier
+ * momento, no solo al terminar, y se sacan directo con la cámara del
+ * celular o tablet.
+ */
+function PhotosSection({
+  order,
+  isAdmin,
+  onChanged,
+  onError,
+}: {
+  order: WorkOrderDetail;
+  isAdmin: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [uploading, setUploading] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    onError('');
+    try {
+      for (const file of Array.from(files)) {
+        await uploadWorkOrderPhoto(order.id, file);
+      }
+      onChanged();
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <Panel className="p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionHeader title={`Fotos${order.photos.length > 0 ? ` (${order.photos.length})` : ''}`} />
+        {isAdmin && (
+          <label className="cursor-pointer">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              onChange={(e) => handleFiles(e.target.files)}
+              disabled={uploading}
+              className="hidden"
+            />
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-accent-ink hover:bg-accent-deep hover:text-white transition-colors">
+              <Camera size={15} /> {uploading ? 'Subiendo...' : 'Agregar foto'}
+            </span>
+          </label>
+        )}
+      </div>
+
+      {order.photos.length === 0 ? (
+        <p className="flex flex-col items-center gap-2 py-8 text-sm text-text-soft">
+          <ImageOff size={22} className="text-text-faint" />
+          Todavía no hay fotos cargadas.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {order.photos.map((photo) => (
+            <PhotoThumb key={photo.id} photo={photo} isAdmin={isAdmin} onChanged={onChanged} onError={onError} />
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function PhotoThumb({
+  photo,
+  isAdmin,
+  onChanged,
+  onError,
+}: {
+  photo: WorkOrderPhoto;
+  isAdmin: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    getWorkOrderPhotoUrl(photo.storagePath)
+      .then((signed) => !cancelled && setUrl(signed))
+      .catch(() => {/* la miniatura queda vacía; no vale la pena cortar el resto de la pantalla */});
+    return () => { cancelled = true; };
+  }, [photo.storagePath]);
+
+  async function handleDelete() {
+    if (!window.confirm('¿Eliminar esta foto?')) return;
+    setDeleting(true);
+    try {
+      await deleteWorkOrderPhoto(photo);
+      onChanged();
+    } catch (err) {
+      onError(getErrorMessage(err));
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="group relative aspect-square overflow-hidden rounded-md border border-line bg-panel-alt">
+      {url ? (
+        <img src={url} alt="Foto de la orden" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-text-faint">
+          <Camera size={20} />
+        </div>
+      )}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          title="Eliminar foto"
+          className="absolute right-1 top-1 bg-black/60 p-1 text-white opacity-0 transition-opacity hover:bg-danger group-hover:opacity-100 disabled:opacity-100"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
     </div>
   );
 }

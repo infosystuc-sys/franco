@@ -308,6 +308,13 @@ export interface WorkOrderDetail {
   /** Identificador aleatorio con el que se arma el link para el cliente. */
   publicToken: string;
   items: WorkOrderItem[];
+  photos: WorkOrderPhoto[];
+}
+
+export interface WorkOrderPhoto {
+  id: string;
+  storagePath: string;
+  createdAt: string;
 }
 
 export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderDetail | null> {
@@ -320,7 +327,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees(id, name),
        quotation:quotations!work_orders_quotation_id_fkey(number),
-       items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal)`
+       items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
+       photos:work_order_photos(id, storage_path, created_at)`
     )
     .eq('number', number)
     .maybeSingle();
@@ -348,6 +356,9 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       unitPrice: Number(item.unit_price),
       subtotal: Number(item.subtotal),
     })),
+    photos: ((data as any).photos ?? [])
+      .map((p: any) => ({ id: p.id, storagePath: p.storage_path, createdAt: p.created_at }))
+      .sort((a: WorkOrderPhoto, b: WorkOrderPhoto) => a.createdAt.localeCompare(b.createdAt)),
   };
 }
 
@@ -396,6 +407,50 @@ export async function assignEmployee(workOrderId: string, employeeId: string | n
     .update({ employee_id: employeeId })
     .eq('id', workOrderId);
   if (error) throw error;
+}
+
+const PHOTOS_BUCKET = 'work-order-photos';
+
+/**
+ * Fotos del estado de las piezas durante la reparación. El archivo se guarda
+ * como "<work_order_id>/<uuid>.<ext>": la política de storage.objects lee
+ * ese primer segmento para aplicar la misma regla de "admin o el operario
+ * asignado" que ya tiene la propia OT, sin depender de esta tabla.
+ */
+export async function uploadWorkOrderPhoto(workOrderId: string, file: File): Promise<WorkOrderPhoto> {
+  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+  const path = `${workOrderId}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: errorSubida } = await supabase.storage.from(PHOTOS_BUCKET).upload(path, file, {
+    contentType: file.type || 'image/jpeg',
+  });
+  if (errorSubida) throw errorSubida;
+
+  const { data, error } = await supabase
+    .from('work_order_photos')
+    .insert({ work_order_id: workOrderId, storage_path: path })
+    .select('id, storage_path, created_at')
+    .single();
+
+  if (error) {
+    await supabase.storage.from(PHOTOS_BUCKET).remove([path]);
+    throw error;
+  }
+
+  return { id: data.id, storagePath: data.storage_path, createdAt: data.created_at };
+}
+
+export async function deleteWorkOrderPhoto(photo: WorkOrderPhoto): Promise<void> {
+  const { error } = await supabase.from('work_order_photos').delete().eq('id', photo.id);
+  if (error) throw error;
+  await supabase.storage.from(PHOTOS_BUCKET).remove([photo.storagePath]);
+}
+
+/** El bucket es privado: se muestra con una URL firmada, nunca con getPublicUrl. */
+export async function getWorkOrderPhotoUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrl(storagePath, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 /**
