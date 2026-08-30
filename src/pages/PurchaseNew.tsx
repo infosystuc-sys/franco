@@ -195,6 +195,29 @@ export function PurchaseNew() {
 
   const missingVat = lines.some((line) => !line.vatRateId);
   const missingDescription = lines.some((line) => line.description.trim() === '');
+
+  // Alerta de precio: compara contra lo que ya tenía cargado el artículo, no
+  // contra nada que se recalcule en este mismo guardado (ese precio se
+  // actualiza recién al guardar, ver stockMoves más abajo). No bloquea nada,
+  // solo avisa — puede ser un aumento real del proveedor, no un error de tipeo.
+  const priceAlerts = isArticles
+    ? lines
+        .map((line) => {
+          if (!line.articleId || line.unitPrice <= 0) return null;
+          const article = articles.find((a) => a.id === line.articleId);
+          if (!article) return null;
+          const lastCost = article.purchasePrice;
+          if (lastCost && lastCost > 0 && line.unitPrice > lastCost * 1.1) {
+            const pct = Math.round(((line.unitPrice - lastCost) / lastCost) * 100);
+            return `${line.code}: ${pct}% más caro que la última compra ($ ${formatMoney(lastCost)})`;
+          }
+          if (line.unitPrice > article.unitPrice) {
+            return `${line.code}: a este costo, el precio de venta actual ($ ${formatMoney(article.unitPrice)}) queda por debajo — conviene actualizarlo`;
+          }
+          return null;
+        })
+        .filter((msg): msg is string => msg !== null)
+    : [];
   const canSave =
     !!supplierId &&
     salesPoint.trim() !== '' &&
@@ -569,6 +592,17 @@ export function PurchaseNew() {
             <AlertTriangle size={14} />
             {missingDescription ? 'Hay renglones sin detalle.' : 'Hay renglones sin alícuota de IVA.'}
           </p>
+        )}
+
+        {priceAlerts.length > 0 && (
+          <div className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-text">
+            <p className="flex items-center gap-1.5 font-semibold text-state-wait">
+              <AlertTriangle size={14} /> Precio distinto al habitual
+            </p>
+            <ul className="mt-1 space-y-0.5 pl-5 text-text-soft" style={{ listStyleType: 'disc' }}>
+              {priceAlerts.map((msg, i) => <li key={i}>{msg}</li>)}
+            </ul>
+          </div>
         )}
 
         {stockMoves && lines.length > 0 && (
