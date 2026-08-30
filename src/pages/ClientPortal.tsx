@@ -8,17 +8,23 @@ import {
   CheckCircle,
   Mail,
   Info,
-  ArrowLeft
+  ArrowLeft,
+  AlertTriangle,
+  Check,
+  X,
 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
-import { PageHeader } from '@/src/components/ui';
+import { Button, PageHeader } from '@/src/components/ui';
 import {
+  decidePriceAuthorization,
   fetchPublicStatusHistory,
   fetchPublicWorkOrder,
   fetchWorkOrderStatuses,
   getErrorMessage,
+  PRICE_AUTH_DECISION_MESSAGES,
+  type PriceAuthDecisionResult,
   type PublicWorkOrder,
   type WorkOrderStatusDef,
 } from '@/src/lib/workOrders';
@@ -39,24 +45,40 @@ export function ClientPortal() {
   const [history, setHistory] = React.useState<{ toStatusId: string; changedAt: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [priceDeciding, setPriceDeciding] = React.useState(false);
+  const [priceConfirming, setPriceConfirming] = React.useState<'autorizar' | 'rechazar' | null>(null);
+  const [priceResult, setPriceResult] = React.useState<PriceAuthDecisionResult | null>(null);
+  const [priceReason, setPriceReason] = React.useState('');
 
-  React.useEffect(() => {
+  const load = React.useCallback(async () => {
     if (!token) return;
-    let cancelled = false;
     setLoading(true);
-    Promise.all([fetchPublicWorkOrder(token), fetchWorkOrderStatuses(true)])
-      .then(async ([data, statusDefs]) => {
-        if (cancelled) return;
-        setOrder(data);
-        setStatuses(statusDefs);
-        if (data) setHistory(await fetchPublicStatusHistory(token));
-      })
-      .catch((err) => !cancelled && setError(getErrorMessage(err)))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const [data, statusDefs] = await Promise.all([fetchPublicWorkOrder(token), fetchWorkOrderStatuses(true)]);
+      setOrder(data);
+      setStatuses(statusDefs);
+      if (data) setHistory(await fetchPublicStatusHistory(token));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  async function decidirPrecio(accept: boolean) {
+    if (!token) return;
+    setPriceDeciding(true);
+    try {
+      const r = await decidePriceAuthorization(token, accept, priceReason);
+      if (r !== 'FALTA_MOTIVO') setPriceConfirming(null);
+      setPriceResult(r === 'FALTA_MOTIVO' ? null : r);
+      if (r !== 'FALTA_MOTIVO') await load();
+    } finally {
+      setPriceDeciding(false);
+    }
+  }
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-text-soft">Cargando…</div>;
@@ -137,6 +159,96 @@ export function ClientPortal() {
             </div>
           }
         />
+
+        {(order.priceAuthStatus === 'PENDIENTE' || priceResult) && (
+          <div className="bg-panel p-5 border border-state-wait space-y-4">
+            {priceResult ? (
+              <div
+                className={cn(
+                  'border px-4 py-3 text-sm',
+                  priceResult === 'AUTORIZADO'
+                    ? 'border-state-done/40 bg-panel-alt text-state-done'
+                    : 'border-line bg-panel-alt text-text-soft'
+                )}
+              >
+                {PRICE_AUTH_DECISION_MESSAGES[priceResult]}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-state-wait" />
+                  <div>
+                    <p className="text-sm font-bold text-text">El costo cambió respecto al presupuesto original</p>
+                    <p className="mt-1 text-sm text-text-soft">
+                      Nuevo monto: <span className="font-semibold text-text">
+                        {order.priceAuthRequestedTotal !== null ? formatMoney(order.priceAuthRequestedTotal) : '—'}
+                      </span>. Necesitamos su autorización para poder continuar.
+                    </p>
+                  </div>
+                </div>
+
+                {priceConfirming === null ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button onClick={() => setPriceConfirming('autorizar')} className="justify-center sm:flex-1">
+                      <Check size={16} /> Autorizar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setPriceConfirming('rechazar')}
+                      className="justify-center sm:flex-1"
+                    >
+                      <X size={16} /> No autorizar
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-text">
+                      {priceConfirming === 'autorizar'
+                        ? '¿Confirmás que autorizás el nuevo monto? El taller va a continuar con el trabajo.'
+                        : '¿Confirmás que no autorizás el nuevo monto?'}
+                    </p>
+                    {priceConfirming === 'rechazar' && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                          ¿Por qué no autoriza? *
+                        </span>
+                        <textarea
+                          autoFocus
+                          value={priceReason}
+                          onChange={(e) => setPriceReason(e.target.value)}
+                          rows={3}
+                          placeholder="Por ejemplo: el nuevo monto excede lo que puedo pagar, quiero que me expliquen el motivo del cambio…"
+                          className={cn(
+                            'w-full resize-y border border-line bg-panel px-3 py-2 text-sm',
+                            'focus:border-accent-deep focus:outline-none',
+                            priceReason.trim() === '' && 'field-required'
+                          )}
+                        />
+                      </label>
+                    )}
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        onClick={() => decidirPrecio(priceConfirming === 'autorizar')}
+                        disabled={priceDeciding}
+                        className="justify-center sm:flex-1"
+                      >
+                        {priceDeciding ? 'Enviando…' : 'Confirmar'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setPriceConfirming(null)}
+                        disabled={priceDeciding}
+                        className="justify-center sm:flex-1"
+                      >
+                        Volver
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           <div className="md:col-span-4 space-y-6">

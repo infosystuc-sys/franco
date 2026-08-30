@@ -149,6 +149,8 @@ export function describeWorkOrderStatusError(message: string): string {
  * Datos que ve el cliente en el link público. Es lo único que devuelve la
  * base: sin CUIT, sin teléfono, sin importes y sin precios de compra.
  */
+export type PriceAuthStatus = 'PENDIENTE' | 'AUTORIZADO' | 'RECHAZADO';
+
 export interface PublicWorkOrder {
   number: string;
   statusId: string;
@@ -163,6 +165,8 @@ export interface PublicWorkOrder {
   injectionSystem: string | null;
   employeeName: string | null;
   customerName: string | null;
+  priceAuthStatus: PriceAuthStatus | null;
+  priceAuthRequestedTotal: number | null;
 }
 
 /**
@@ -190,7 +194,39 @@ export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrd
     injectionSystem: row.injection_system,
     employeeName: row.employee_name,
     customerName: row.customer_name,
+    priceAuthStatus: row.price_auth_status,
+    priceAuthRequestedTotal: row.price_auth_requested_total === null ? null : Number(row.price_auth_requested_total),
   };
+}
+
+export type PriceAuthDecisionResult = 'PENDIENTE' | 'AUTORIZADO' | 'RECHAZADO' | 'NO_EXISTE' | 'YA_RESUELTA' | 'FALTA_MOTIVO';
+
+export const PRICE_AUTH_DECISION_MESSAGES: Record<PriceAuthDecisionResult, string> = {
+  PENDIENTE: 'Solicitud enviada.',
+  AUTORIZADO: 'Autorizó el nuevo monto. El taller ya fue avisado y va a continuar con el trabajo.',
+  RECHAZADO: 'Registramos que no autoriza el nuevo monto. El taller se va a comunicar.',
+  NO_EXISTE: 'Este link no corresponde a ninguna orden.',
+  YA_RESUELTA: 'Esta solicitud ya fue respondida. Si necesitás cambiarla, comunicate con el taller.',
+  FALTA_MOTIVO: 'Para no autorizar el cambio tenés que contarnos el motivo.',
+};
+
+/**
+ * Decisión del cliente sobre un cambio de precio, desde el mismo link de
+ * seguimiento. Mismo patrón que decideQuotation: toda la validación vive en
+ * la base porque el link es público.
+ */
+export async function decidePriceAuthorization(
+  token: string,
+  accept: boolean,
+  reason = ''
+): Promise<PriceAuthDecisionResult> {
+  const { data, error } = await supabase.rpc('decide_price_authorization', {
+    p_token: token,
+    p_accept: accept,
+    p_reason: reason.trim() || null,
+  });
+  if (error) throw error;
+  return data as PriceAuthDecisionResult;
 }
 
 export async function fetchPublicStatusHistory(
@@ -397,6 +433,15 @@ export interface WorkOrderDetail {
     | null;
   employee: { id: string; name: string } | null;
   quotationNumber: string | null;
+  /** Total de la cotización que le dio origen. Null si la OT no nació de una. */
+  quotedTotal: number | null;
+  priceAuth: {
+    status: PriceAuthStatus | null;
+    requestedTotal: number | null;
+    requestedAt: string | null;
+    decidedAt: string | null;
+    reason: string | null;
+  };
   /** Identificador aleatorio con el que se arma el link para el cliente. */
   publicToken: string;
   items: WorkOrderItem[];
@@ -414,12 +459,13 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     .from('work_orders')
     .select(
       `id, number, component, public_token,
+       price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
        status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
        vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees(id, name),
-       quotation:quotations!work_orders_quotation_id_fkey(number),
+       quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
        photos:work_order_photos(id, storage_path, created_at)`
     )
@@ -429,6 +475,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
   if (error) throw error;
   if (!data) return null;
 
+  const quotation = (data as any).quotation;
+
   return {
     id: (data as any).id,
     number: (data as any).number,
@@ -437,7 +485,17 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     customer: (data as any).customer,
     vehicle: (data as any).vehicle,
     employee: (data as any).employee,
-    quotationNumber: (data as any).quotation?.number ?? null,
+    quotationNumber: quotation?.number ?? null,
+    quotedTotal: quotation
+      ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
+      : null,
+    priceAuth: {
+      status: (data as any).price_auth_status,
+      requestedTotal: (data as any).price_auth_requested_total === null ? null : Number((data as any).price_auth_requested_total),
+      requestedAt: (data as any).price_auth_requested_at,
+      decidedAt: (data as any).price_auth_decided_at,
+      reason: (data as any).price_auth_reason,
+    },
     publicToken: (data as any).public_token,
     items: ((data as any).items ?? []).map((item: any) => ({
       id: item.id,
@@ -469,6 +527,17 @@ export interface WorkOrderItemInput {
  */
 export async function setWorkOrderStatus(workOrderId: string, statusId: string) {
   const { error } = await supabase.from('work_orders').update({ status_id: statusId }).eq('id', workOrderId);
+  if (error) throw error;
+}
+
+/**
+ * Manda al cliente el aviso de que el monto cambió respecto a la cotización,
+ * pidiéndole autorización. Mientras no responda con un sí para este mismo
+ * monto, la base no deja llevar la OT a un estado terminal (no se factura
+ * ni se cierra sin que el cliente lo haya autorizado).
+ */
+export async function requestPriceAuthorization(workOrderId: string): Promise<void> {
+  const { error } = await supabase.rpc('request_price_authorization', { p_work_order_id: workOrderId });
   if (error) throw error;
 }
 

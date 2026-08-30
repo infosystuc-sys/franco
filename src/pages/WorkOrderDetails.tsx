@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2 } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send } from 'lucide-react';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
@@ -22,6 +22,7 @@ import {
   fetchWorkOrderStatuses,
   getErrorMessage,
   getWorkOrderPhotoUrl,
+  requestPriceAuthorization,
   saveWorkOrderItems,
   setWorkOrderStatus,
   uploadWorkOrderPhoto,
@@ -48,6 +49,7 @@ export function WorkOrderDetails() {
   const [assigningEmployee, setAssigningEmployee] = useState(false);
   const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
   const [statuses, setStatuses] = useState<WorkOrderStatusDef[]>([]);
+  const [requestingPriceAuth, setRequestingPriceAuth] = useState(false);
 
   const loadOrder = React.useCallback(async () => {
     if (!id) return;
@@ -148,6 +150,20 @@ export function WorkOrderDetails() {
     }
   }
 
+  async function handleRequestPriceAuth() {
+    if (!order) return;
+    setRequestingPriceAuth(true);
+    setError(null);
+    try {
+      await requestPriceAuthorization(order.id);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setRequestingPriceAuth(false);
+    }
+  }
+
   async function handleSave() {
     if (!order) return;
     setSaving(true);
@@ -178,6 +194,13 @@ export function WorkOrderDetails() {
   }
 
   const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
+  const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
+  const priceDiffers =
+    order.quotedTotal !== null && Math.abs(currentTotal - order.quotedTotal) > 0.005;
+  const priceAuthCoversCurrent =
+    order.priceAuth.status === 'AUTORIZADO' &&
+    order.priceAuth.requestedTotal !== null &&
+    Math.abs(order.priceAuth.requestedTotal - currentTotal) < 0.005;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -224,6 +247,36 @@ export function WorkOrderDetails() {
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+      )}
+
+      {order.quotedTotal !== null && priceDiffers && !priceAuthCoversCurrent && (
+        <div className="mb-6 flex flex-col gap-2 rounded-md border border-state-wait/40 bg-state-wait/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span className="flex items-start gap-2 text-text">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-state-wait" />
+            <span>
+              El monto de la OT ({formatMoney(currentTotal)}) difiere del presupuesto original
+              ({formatMoney(order.quotedTotal)}).
+              {order.priceAuth.status === 'PENDIENTE' && (
+                <>
+                  {' '}Esperando la respuesta del cliente
+                  {order.priceAuth.requestedAt ? ` (pedida el ${new Date(order.priceAuth.requestedAt).toLocaleDateString('es-AR')})` : ''}.
+                  No se puede cerrar la OT hasta que autorice.
+                </>
+              )}
+              {order.priceAuth.status === 'RECHAZADO' && (
+                <>
+                  {' '}El cliente no autorizó el cambio
+                  {order.priceAuth.reason ? `: "${order.priceAuth.reason}"` : '.'} No se puede cerrar la OT así.
+                </>
+              )}
+            </span>
+          </span>
+          {isAdmin && order.priceAuth.status !== 'PENDIENTE' && (
+            <Button variant="ghost" onClick={handleRequestPriceAuth} disabled={requestingPriceAuth}>
+              <Send size={15} /> {requestingPriceAuth ? 'Enviando…' : 'Solicitar autorización'}
+            </Button>
+          )}
+        </div>
       )}
 
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-4">
