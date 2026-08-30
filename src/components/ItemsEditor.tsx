@@ -1,9 +1,15 @@
 import React from 'react';
-import { Plus, Trash2, Package, Search, X } from 'lucide-react';
+import { Plus, Trash2, Package, Search, X, Check, PackagePlus } from 'lucide-react';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import type { Article } from '@/src/lib/articles';
+import { createArticle, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
+
+/** Traduce el único error de base que puede dar el alta rápida desde acá. */
+function describeQuickArticleError(message: string): string {
+  if (message.includes('articles_code_key')) return 'Ese código ya existe. Elegí otro.';
+  return message;
+}
 
 const IVA_RATE = 0.21;
 
@@ -33,6 +39,11 @@ export function ItemsEditor({
   totals?: React.ReactNode;
 }) {
   const [showPicker, setShowPicker] = React.useState(false);
+  // Artículos creados al vuelo desde el buscador: el catálogo que llega por
+  // prop no se refresca solo, así que se suman acá para que aparezcan de
+  // inmediato en la misma sesión de carga.
+  const [extraArticles, setExtraArticles] = React.useState<Article[]>([]);
+  const allArticles = React.useMemo(() => [...articles, ...extraArticles], [articles, extraArticles]);
 
   const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const iva = total * IVA_RATE;
@@ -60,7 +71,11 @@ export function ItemsEditor({
         unitPrice: article.unitPrice,
       },
     ]);
-    setShowPicker(false);
+  }
+
+  function handleArticleCreated(article: Article) {
+    setExtraArticles((current) => [...current, article]);
+    addArticle(article);
   }
 
   return (
@@ -191,7 +206,13 @@ export function ItemsEditor({
       )}
 
       {showPicker && (
-        <ArticlePicker articles={articles} onPick={addArticle} onClose={() => setShowPicker(false)} />
+        <ArticlePicker
+          articles={allArticles}
+          onPick={addArticle}
+          onArticleCreated={handleArticleCreated}
+          onClose={() => setShowPicker(false)}
+          addedCount={items.length}
+        />
       )}
     </div>
   );
@@ -200,13 +221,19 @@ export function ItemsEditor({
 function ArticlePicker({
   articles,
   onPick,
+  onArticleCreated,
   onClose,
+  addedCount,
 }: {
   articles: Article[];
   onPick: (article: Article) => void;
+  onArticleCreated: (article: Article) => void;
   onClose: () => void;
+  addedCount: number;
 }) {
   const [search, setSearch] = React.useState('');
+  const [justAdded, setJustAdded] = React.useState<string | null>(null);
+  const searchRef = React.useRef<HTMLInputElement>(null);
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -216,27 +243,49 @@ function ArticlePicker({
     );
   }, [articles, search]);
 
+  // No se cierra al elegir: se puede seguir cargando renglones sin volver a
+  // abrir la ventana. Se limpia la búsqueda y vuelve el foco, como si el
+  // artículo elegido ya "saliera de la lista" para pasar al siguiente.
+  function handlePick(article: Article) {
+    onPick(article);
+    setJustAdded(article.description);
+    setSearch('');
+    searchRef.current?.focus();
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl flex flex-col max-h-[80vh]">
         <div className="flex justify-between items-center px-5 py-4 border-b border-line">
-          <h2 className="text-base font-bold text-text">Agregar artículo del catálogo</h2>
+          <h2 className="text-base font-bold text-text">Agregar artículos del catálogo</h2>
           <button type="button" onClick={onClose} className="text-text-soft hover:text-text">
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-5 pb-3">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por código o descripción..."
-              className="w-full h-9 pl-9 pr-3 border border-line text-sm"
-            />
+        <div className="p-5 pb-3 space-y-2">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
+              <input
+                ref={searchRef}
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por código o descripción..."
+                className="w-full h-9 pl-9 pr-3 border border-line text-sm"
+              />
+            </div>
+            <NewArticleToggle onCreated={(article) => {
+              onArticleCreated(article);
+              setJustAdded(article.description);
+            }} />
           </div>
+          {justAdded && (
+            <p className="flex items-center gap-1.5 text-xs text-state-done">
+              <Check size={13} /> Se agregó "{justAdded}". Podés seguir eligiendo.
+            </p>
+          )}
         </div>
 
         <div className="overflow-y-auto px-5 pb-5">
@@ -254,7 +303,7 @@ function ArticlePicker({
                 <tr>
                   <td colSpan={4} className="p-6 text-center text-text-soft">
                     {articles.length === 0
-                      ? 'No hay artículos activos en el catálogo. Cargalos desde Inventario.'
+                      ? 'No hay artículos activos en el catálogo. Creá uno con "+ Nuevo artículo", arriba.'
                       : 'Ningún artículo coincide con la búsqueda.'}
                   </td>
                 </tr>
@@ -262,7 +311,7 @@ function ArticlePicker({
               {filtered.map((article) => (
                 <tr
                   key={article.id}
-                  onClick={() => onPick(article)}
+                  onClick={() => handlePick(article)}
                   className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
                 >
                   <td data-primary className="p-2 font-bold">{article.code}</td>
@@ -287,7 +336,123 @@ function ArticlePicker({
             </tbody>
           </table>
         </div>
+
+        <div className="flex items-center justify-between border-t border-line px-5 py-3">
+          <span className="text-xs text-text-soft">
+            {addedCount > 0 ? `${addedCount} renglón${addedCount === 1 ? '' : 'es'} cargado${addedCount === 1 ? '' : 's'}` : 'Sin renglones todavía'}
+          </span>
+          <Button type="button" onClick={onClose} className="px-4">Listo</Button>
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Alta rápida de un artículo sin salir de la cotización/orden. El código ya
+ * existe en Inventario (createArticle): acá solo se pide lo mínimo para
+ * poder facturarlo — marca, stock y utilidad se completan después si hace
+ * falta.
+ */
+function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const [code, setCode] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [unitPrice, setUnitPrice] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const canSave = code.trim() !== '' && description.trim() !== '' && Number(unitPrice) >= 0;
+
+  async function handleSave() {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const article = await createArticle({
+        code: code.trim(),
+        description: description.trim(),
+        brand: null,
+        tracksStock: false,
+        stockQuantity: 0,
+        active: true,
+        markupPercent: null,
+        unitPrice: Number(unitPrice) || 0,
+      });
+      onCreated(article);
+      setCode('');
+      setDescription('');
+      setUnitPrice('');
+      setOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo crear el artículo.';
+      setError(describeQuickArticleError(message));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button type="button" variant="ghost" onClick={() => setOpen(true)} className="px-3 whitespace-nowrap">
+        <PackagePlus size={16} /> Nuevo artículo
+      </Button>
+    );
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="px-3 whitespace-nowrap">
+        <X size={16} /> Cancelar
+      </Button>
+      <div className="fixed inset-0 bg-black/40 z-70 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-sm">
+          <div className="flex justify-between items-center px-5 py-4 border-b border-line">
+            <h3 className="text-sm font-bold text-text">Artículo nuevo</h3>
+            <button type="button" onClick={() => setOpen(false)} className="text-text-soft hover:text-text">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="p-5 space-y-3">
+            {error && <p className="text-xs text-danger">{error}</p>}
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+              Código *
+              <input
+                autoFocus
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="mt-1 w-full border border-line px-3 py-2 text-sm font-mono normal-case focus:border-accent-deep focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+              Descripción *
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+              Precio unitario *
+              <input
+                type="number" step="0.01" min="0"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                className="mt-1 w-full border border-line px-3 py-2 text-sm font-mono normal-case focus:border-accent-deep focus:outline-none"
+              />
+            </label>
+            <p className="text-[10px] normal-case text-text-soft">
+              Queda cargado en el catálogo con lo mínimo. Marca, stock y utilidad se completan
+              después desde Inventario si hace falta.
+            </p>
+            <div className="flex justify-end pt-1">
+              <Button type="button" onClick={handleSave} disabled={!canSave || saving}>
+                {saving ? 'Creando…' : 'Crear y agregar'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
