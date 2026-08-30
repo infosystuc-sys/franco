@@ -18,8 +18,11 @@ import {
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
+  toDateString,
 } from '@/src/lib/invoices';
-import { Blocked, InvoiceTotals, InvoiceTypeBadge } from '@/src/pages/InvoiceNew';
+import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
+import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
+import { Blocked, CashCheckoutFields, InvoiceTotals, InvoiceTypeBadge } from '@/src/pages/InvoiceNew';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 
 /**
@@ -41,6 +44,9 @@ export function InvoiceNewFree() {
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
+  const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
+  const [isCash, setIsCash] = React.useState(false);
+  const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [issuing, setIssuing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -58,6 +64,9 @@ export function InvoiceNewFree() {
     fetchArticles(false)
       .then((data) => !cancelled && setArticles(data))
       .catch(() => {/* el catálogo es opcional: se puede seguir cargando líneas manuales */});
+    fetchPaymentMethods(true)
+      .then((data) => !cancelled && setPaymentMethods(data))
+      .catch(() => {/* si falla, el check de contado queda sin opciones y no se puede tildar */});
     return () => { cancelled = true; };
   }, [role]);
 
@@ -90,12 +99,15 @@ export function InvoiceNewFree() {
   const totals = computeTotals(items, invoiceType);
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
-  const canIssue = !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 && !issuing;
+  const canIssue =
+    !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
+    (!isCash || !!paymentMethodId) && !issuing;
 
   async function handleIssue() {
     if (!customer || !canIssue) return;
     const confirmed = window.confirm(
-      `Emitir ${INVOICE_TYPE_LABELS[invoiceType]} por $ ${formatMoney(totals.total)} a ${customer.name}?\n\n` +
+      `Emitir ${INVOICE_TYPE_LABELS[invoiceType]} por $ ${formatMoney(totals.total)} a ${customer.name}` +
+        `${isCash ? ' y cobrarla de contado' : ''}?\n\n` +
         `Una vez emitida no se puede editar: solo anular.`
     );
     if (!confirmed) return;
@@ -104,6 +116,20 @@ export function InvoiceNewFree() {
     setError(null);
     try {
       const issued = await issueFreeInvoice(customer.id, items, notes, emitRemito);
+      if (isCash) {
+        try {
+          await saveReceipt(
+            { customerId: customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
+            [{ invoiceId: issued.id, amount: totals.total }],
+            [{ kind: 'MEDIO_PAGO', amount: totals.total, paymentMethodId }]
+          );
+        } catch (receiptErr) {
+          window.alert(
+            `La factura ${issued.fullNumber} se emitió, pero el cobro automático falló: ` +
+              `${describeReceiptError(getErrorMessage(receiptErr))}\n\nRegistrá el cobro a mano desde Cobranzas.`
+          );
+        }
+      }
       navigate(`/factura/${issued.id}`);
     } catch (err) {
       setError(describeInvoiceError(getErrorMessage(err)));
@@ -194,6 +220,14 @@ export function InvoiceNewFree() {
           />
           Emitir remito junto con la factura
         </label>
+
+        <CashCheckoutFields
+          isCash={isCash}
+          onIsCashChange={setIsCash}
+          paymentMethods={paymentMethods}
+          paymentMethodId={paymentMethodId}
+          onPaymentMethodIdChange={setPaymentMethodId}
+        />
       </Panel>
     </div>
   );

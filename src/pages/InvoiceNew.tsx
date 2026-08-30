@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Receipt, AlertTriangle, ArrowRight, CalendarClock } from 'lucide-react';
+import { XCircle, Receipt, AlertTriangle, ArrowRight, CalendarClock, Banknote } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -34,6 +34,8 @@ import {
   type WorkOrderDetail,
   type WorkOrderItemInput,
 } from '@/src/lib/workOrders';
+import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
+import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 
 /**
  * El proceso de facturación de una orden.
@@ -53,6 +55,9 @@ export function InvoiceNew() {
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
+  const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
+  const [isCash, setIsCash] = React.useState(false);
+  const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [articles, setArticles] = React.useState<Article[]>([]);
 
   const [loading, setLoading] = React.useState(true);
@@ -101,6 +106,9 @@ export function InvoiceNew() {
     fetchArticles(false)
       .then((data) => !cancelled && setArticles(data))
       .catch(() => {});
+    fetchPaymentMethods(true)
+      .then((data) => !cancelled && setPaymentMethods(data))
+      .catch(() => {/* si falla, el check de contado queda sin opciones y no se puede tildar */});
 
     return () => {
       cancelled = true;
@@ -180,13 +188,15 @@ export function InvoiceNew() {
   dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
-  const canIssue = items.length > 0 && totals.total > 0 && emptyLines === 0 && !issuing;
+  const canIssue =
+    items.length > 0 && totals.total > 0 && emptyLines === 0 &&
+    (!isCash || !!paymentMethodId) && !issuing;
 
   async function handleIssue() {
-    if (!order || !canIssue) return;
+    if (!order || !canIssue || !order.customer) return;
     const confirmed = window.confirm(
       `Emitir ${INVOICE_TYPE_LABELS[invoiceType]} por $ ${formatMoney(totals.total)} ` +
-        `a ${order.customer?.name ?? 'el cliente'}?\n\n` +
+        `a ${order.customer?.name ?? 'el cliente'}${isCash ? ' y cobrarla de contado' : ''}?\n\n` +
         `Una vez emitida no se puede editar: solo anular.`
     );
     if (!confirmed) return;
@@ -195,6 +205,20 @@ export function InvoiceNew() {
     setError(null);
     try {
       const issued = await issueInvoice(order.id, items, notes, emitRemito);
+      if (isCash) {
+        try {
+          await saveReceipt(
+            { customerId: order.customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
+            [{ invoiceId: issued.id, amount: totals.total }],
+            [{ kind: 'MEDIO_PAGO', amount: totals.total, paymentMethodId }]
+          );
+        } catch (receiptErr) {
+          window.alert(
+            `La factura ${issued.fullNumber} se emitió, pero el cobro automático falló: ` +
+              `${describeReceiptError(getErrorMessage(receiptErr))}\n\nRegistrá el cobro a mano desde Cobranzas.`
+          );
+        }
+      }
       navigate(`/factura/${issued.id}`);
     } catch (err) {
       setError(describeInvoiceError(getErrorMessage(err)));
@@ -326,6 +350,14 @@ export function InvoiceNew() {
           />
           Emitir remito junto con la factura
         </label>
+
+        <CashCheckoutFields
+          isCash={isCash}
+          onIsCashChange={setIsCash}
+          paymentMethods={paymentMethods}
+          paymentMethodId={paymentMethodId}
+          onPaymentMethodIdChange={setPaymentMethodId}
+        />
       </Panel>
 
       <div className="mb-10 flex flex-wrap items-center justify-between gap-3 border border-line bg-panel-alt px-5 py-4">
@@ -397,6 +429,70 @@ export function InvoiceTotals({
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Check de "factura de contado": genera y aplica el recibo en el mismo paso
+ * que la emisión, para no tener que ir después a Cobranzas a buscar la
+ * factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
+ * InvoiceNewFree — mismo comportamiento, con o sin OT de por medio.
+ */
+export function CashCheckoutFields({
+  isCash,
+  onIsCashChange,
+  paymentMethods,
+  paymentMethodId,
+  onPaymentMethodIdChange,
+}: {
+  isCash: boolean;
+  onIsCashChange: (value: boolean) => void;
+  paymentMethods: PaymentMethod[];
+  paymentMethodId: string;
+  onPaymentMethodIdChange: (value: string) => void;
+}) {
+  // La cartera de cheques no es un medio de pago elegible acá: se mueve
+  // desde la pantalla de Cheques, no cobrando una factura con ella.
+  const selectableMethods = paymentMethods.filter((m) => m.kind !== 'CARTERA_CHEQUES');
+
+  return (
+    <div className="mt-3">
+      <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+        <input
+          type="checkbox"
+          checked={isCash}
+          onChange={(e) => onIsCashChange(e.target.checked)}
+          className="w-4 h-4 accent-accent-deep"
+        />
+        Factura de contado — cobrarla al emitir
+      </label>
+
+      {isCash && (
+        <label className="mt-2 block max-w-xs text-xs font-bold uppercase tracking-wider text-text-soft">
+          <span className="flex items-center gap-1.5">
+            <Banknote size={13} className="text-accent-deep" /> Medio de pago
+          </span>
+          <select
+            value={paymentMethodId}
+            onChange={(e) => onPaymentMethodIdChange(e.target.value)}
+            className={cn(
+              'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none',
+              !paymentMethodId && 'field-required'
+            )}
+          >
+            <option value="">Elegí un medio...</option>
+            {selectableMethods.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          {selectableMethods.length === 0 && (
+            <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+              No hay medios de pago activos. Cargá uno desde Medios de pago.
+            </span>
+          )}
+        </label>
+      )}
     </div>
   );
 }
