@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck } from 'lucide-react';
+import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, FileMinus } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -14,6 +14,7 @@ import { formatCuit } from '@/src/lib/fiscal';
 import {
   autoAllocate,
   describePaymentOrderError,
+  fetchAvailableProvisionalCreditNotes,
   fetchOpenPurchaseDocs,
   fetchSupplierCredit,
   isCashValue,
@@ -22,8 +23,11 @@ import {
   PURCHASE_DOC_TYPE_SHORT,
   savePaymentOrder,
   signOfDoc,
+  type NewProvisionalCreditNoteInput,
   type OpenPurchaseDoc,
+  type PaymentAllocationInput,
   type PaymentValueInput,
+  type ProvisionalCreditNote,
 } from '@/src/lib/paymentOrders';
 
 interface DraftValue extends PaymentValueInput {
@@ -37,10 +41,30 @@ type MedioOption =
   | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
 
 let nextKey = 1;
+let nextProvKey = 1;
 
 /** Campo angosto para las filas de un renglón (medios de pago ya agregados). */
 const compactFieldClass =
   'rounded border border-line bg-panel px-2 py-1 text-sm focus:border-accent-deep focus:outline-none';
+
+interface DraftProvisional {
+  tempKey: string;
+  description: string;
+  amount: number;
+}
+
+/** Comprobante real y NC provisoria (nueva o reutilizada) en una sola fila para la tabla. */
+interface CancelableRow {
+  key: string;
+  fullNumber: string;
+  description?: string;
+  issueDate?: string;
+  dueDate?: string;
+  isCredit: boolean;
+  isProvisional: boolean;
+  isDraft: boolean;
+  pending: number;
+}
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -72,6 +96,8 @@ export function PaymentOrderNew() {
 
   const [docs, setDocs] = React.useState<OpenPurchaseDoc[]>([]);
   const [credit, setCredit] = React.useState(0);
+  const [availableProvisionals, setAvailableProvisionals] = React.useState<ProvisionalCreditNote[]>([]);
+  const [draftProvisionals, setDraftProvisionals] = React.useState<DraftProvisional[]>([]);
   const [loadingSupplier, setLoadingSupplier] = React.useState(false);
   const [allocations, setAllocations] = React.useState<Record<string, string>>({});
   const [values, setValues] = React.useState<DraftValue[]>([]);
@@ -79,6 +105,10 @@ export function PaymentOrderNew() {
   const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
   const [draftAmount, setDraftAmount] = React.useState(0);
   const [selectedCheckIds, setSelectedCheckIds] = React.useState<Set<string>>(new Set());
+
+  const [addingProvisional, setAddingProvisional] = React.useState(false);
+  const [provisionalDescription, setProvisionalDescription] = React.useState('');
+  const [provisionalAmount, setProvisionalAmount] = React.useState(0);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
@@ -103,17 +133,25 @@ export function PaymentOrderNew() {
     if (!supplierId) {
       setDocs([]);
       setCredit(0);
+      setAvailableProvisionals([]);
+      setDraftProvisionals([]);
       setAllocations({});
       return;
     }
     let cancelled = false;
     setLoadingSupplier(true);
     setAllocations({});
-    Promise.all([fetchOpenPurchaseDocs(supplierId), fetchSupplierCredit(supplierId)])
-      .then(([d, cr]) => {
+    setDraftProvisionals([]);
+    Promise.all([
+      fetchOpenPurchaseDocs(supplierId),
+      fetchSupplierCredit(supplierId),
+      fetchAvailableProvisionalCreditNotes(supplierId),
+    ])
+      .then(([d, cr, pcn]) => {
         if (cancelled) return;
         setDocs(d);
         setCredit(cr);
+        setAvailableProvisionals(pcn);
       })
       .catch((err) => !cancelled && setError(describePaymentOrderError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoadingSupplier(false));
@@ -161,6 +199,31 @@ export function PaymentOrderNew() {
     if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
     return options;
   }, [methods, retentions, credit]);
+
+  // NC provisorias por descuento de pronto pago: las que ya existían (de una
+  // orden anulada, con saldo libre) y las nuevas cargadas en esta pantalla.
+  // Se muestran igual que un comprobante real en "Comprobantes a cancelar".
+  const provisionalRows = React.useMemo<CancelableRow[]>(() => {
+    const existing: CancelableRow[] = availableProvisionals.map((p) => ({
+      key: p.id,
+      fullNumber: p.fullNumber,
+      description: p.description,
+      isCredit: true,
+      isProvisional: true,
+      isDraft: false,
+      pending: round2(p.amount - p.settledAmount),
+    }));
+    const draft: CancelableRow[] = draftProvisionals.map((p) => ({
+      key: `draft:${p.tempKey}`,
+      fullNumber: 'NC provisoria (nueva)',
+      description: p.description,
+      isCredit: true,
+      isProvisional: true,
+      isDraft: true,
+      pending: p.amount,
+    }));
+    return [...existing, ...draft];
+  }, [availableProvisionals, draftProvisionals]);
 
   // Lo que falta cubrir: lo imputado a comprobantes menos lo ya agregado.
   // Un cheque endosado no lo usa: se entrega por su importe completo.
@@ -247,6 +310,28 @@ export function PaymentOrderNew() {
     setError(null);
   }
 
+  function handleAddProvisional() {
+    if (!provisionalDescription.trim() || provisionalAmount <= 0) return;
+    const tempKey = `prov-${nextProvKey++}`;
+    setDraftProvisionals((current) => [
+      ...current,
+      { tempKey, description: provisionalDescription.trim(), amount: round2(provisionalAmount) },
+    ]);
+    setAllocations((current) => ({ ...current, [`draft:${tempKey}`]: String(-round2(provisionalAmount)) }));
+    setAddingProvisional(false);
+    setProvisionalDescription('');
+    setProvisionalAmount(0);
+  }
+
+  function handleRemoveDraftProvisional(tempKey: string) {
+    setDraftProvisionals((current) => current.filter((p) => p.tempKey !== tempKey));
+    setAllocations((current) => {
+      const next = { ...current };
+      delete next[`draft:${tempKey}`];
+      return next;
+    });
+  }
+
   const problems: string[] = [];
   if (!supplierId) problems.push('Elegí un proveedor.');
   if (values.length === 0 && Object.values(allocations).every((a) => !Number(a))) {
@@ -284,6 +369,14 @@ export function PaymentOrderNew() {
       problems.push(`${doc.fullNumber} tiene $ ${formatMoney(doc.pending)} pendientes.`);
     }
   }
+  for (const row of provisionalRows) {
+    const amount = Number(allocations[row.key]) || 0;
+    if (amount === 0) continue;
+    if (amount > 0) problems.push(`${row.fullNumber} resta: cargala en negativo.`);
+    if (Math.abs(amount) > row.pending) {
+      problems.push(`${row.fullNumber} tiene $ ${formatMoney(row.pending)} disponibles.`);
+    }
+  }
 
   const onAccount = round2(totalValues - totalApplied);
   const canSave = problems.length === 0 && !saving;
@@ -293,12 +386,33 @@ export function PaymentOrderNew() {
     setSaving(true);
     setError(null);
     try {
+      const invoiceAllocations: PaymentAllocationInput[] = Object.entries(allocations)
+        .filter(([key]) => !key.startsWith('draft:') && !availableProvisionals.some((p) => p.id === key))
+        .map(([purchaseInvoiceId, amount]) => ({ purchaseInvoiceId, amount: Number(amount) || 0 }))
+        .filter((a) => a.amount !== 0);
+
+      const existingProvisionalAllocations: PaymentAllocationInput[] = availableProvisionals
+        .map((p) => ({ provisionalCreditNoteId: p.id, amount: Number(allocations[p.id]) || 0 }))
+        .filter((a) => a.amount !== 0);
+
+      const usedDrafts = draftProvisionals.filter(
+        (p) => (Number(allocations[`draft:${p.tempKey}`]) || 0) !== 0
+      );
+      const draftAllocations: PaymentAllocationInput[] = usedDrafts.map((p) => ({
+        provisionalCreditNoteTempKey: p.tempKey,
+        amount: Number(allocations[`draft:${p.tempKey}`]) || 0,
+      }));
+      const newProvisionalCreditNotes: NewProvisionalCreditNoteInput[] = usedDrafts.map((p) => ({
+        tempKey: p.tempKey,
+        description: p.description,
+        amount: p.amount,
+      }));
+
       const saved = await savePaymentOrder(
         { supplierId, paymentDate, notes },
-        Object.entries(allocations)
-          .map(([purchaseInvoiceId, amount]) => ({ purchaseInvoiceId, amount: Number(amount) || 0 }))
-          .filter((a) => a.amount !== 0),
-        values.map(({ key: _key, ...value }) => ({ ...value, amount: Number(value.amount) || 0 }))
+        [...invoiceAllocations, ...existingProvisionalAllocations, ...draftAllocations],
+        values.map(({ key: _key, ...value }) => ({ ...value, amount: Number(value.amount) || 0 })),
+        newProvisionalCreditNotes
       );
       navigate(`/pago/${saved.id}`);
     } catch (err) {
@@ -368,23 +482,66 @@ export function PaymentOrderNew() {
         <SectionHeader
           title="Comprobantes a cancelar"
           actions={
-            docs.length > 0 && (
-              <Button type="button" variant="ghost" onClick={handleAutoAllocate} className="px-3">
-                <Wand2 size={15} /> Repartir automático
-              </Button>
-            )
+            <>
+              {docs.length > 0 && (
+                <Button type="button" variant="ghost" onClick={handleAutoAllocate} className="px-3">
+                  <Wand2 size={15} /> Repartir automático
+                </Button>
+              )}
+              {supplierId && !addingProvisional && (
+                <Button type="button" variant="ghost" onClick={() => setAddingProvisional(true)} className="px-3">
+                  <FileMinus size={15} /> NC provisoria
+                </Button>
+              )}
+            </>
           }
         />
 
         {!supplierId && <p className="text-sm text-text-soft">Elegí un proveedor para ver sus comprobantes pendientes.</p>}
         {supplierId && loadingSupplier && <p className="text-sm text-text-soft">Cargando comprobantes…</p>}
-        {supplierId && !loadingSupplier && docs.length === 0 && (
+        {supplierId && !loadingSupplier && docs.length === 0 && provisionalRows.length === 0 && !addingProvisional && (
           <p className="text-sm text-text-soft">
             Este proveedor no tiene comprobantes pendientes. Podés pagar igual: queda a cuenta.
           </p>
         )}
 
-        {docs.length > 0 && (
+        {addingProvisional && (
+          <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
+            <label className={cn(labelClass, 'sm:flex-1')}>
+              Motivo
+              <input
+                value={provisionalDescription}
+                onChange={(e) => setProvisionalDescription(e.target.value)}
+                placeholder="Descuento 5% pronto pago FC A 0003-00012345"
+                className={cn(inputClass, !provisionalDescription.trim() && 'field-required')}
+              />
+            </label>
+            <label className={cn(labelClass, 'sm:w-40')}>
+              Importe
+              <input
+                type="number" step="0.01" min="0"
+                value={provisionalAmount || ''}
+                onChange={(e) => setProvisionalAmount(Number(e.target.value))}
+                className={cn(inputClass, 'font-mono', provisionalAmount <= 0 && 'field-required')}
+              />
+            </label>
+            <div className="flex gap-2 sm:mb-0">
+              <Button
+                type="button"
+                onClick={handleAddProvisional}
+                disabled={!provisionalDescription.trim() || provisionalAmount <= 0}
+                className="px-3"
+              >
+                <Plus size={15} /> Agregar
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setAddingProvisional(false)} className="px-3">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {(docs.length > 0 || provisionalRows.length > 0) && (
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
             <table className="table-stack w-full text-left text-[13px]">
               <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
@@ -434,6 +591,55 @@ export function PaymentOrderNew() {
                             (wrongSign || excess) && 'border-danger bg-danger-soft'
                           )}
                         />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {provisionalRows.map((row, idx) => {
+                  const amount = Number(allocations[row.key]) || 0;
+                  const wrongSign = amount !== 0 && amount > 0;
+                  const excess = Math.abs(amount) > row.pending;
+                  return (
+                    <tr
+                      key={row.key}
+                      className={cn(
+                        'h-10 border-b border-line',
+                        (docs.length + idx) % 2 === 0 ? 'bg-panel-alt' : 'bg-panel'
+                      )}
+                    >
+                      <td data-primary className="px-3 py-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-state-done">NC</span>{' '}
+                        <span className="font-mono font-semibold">{row.fullNumber}</span>
+                        {row.description && <p className="text-[10px] text-text-soft">{row.description}</p>}
+                      </td>
+                      <td data-label="Fecha" className="px-3 py-1 text-text-faint">—</td>
+                      <td data-label="Vence" className="px-3 py-1 text-text-faint">—</td>
+                      <td data-label="Pendiente" className="px-3 py-1 text-right font-semibold">
+                        −$ {formatMoney(row.pending)}
+                      </td>
+                      <td data-label="A imputar" className="px-1 py-1">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number" step="0.01"
+                            value={allocations[row.key] ?? ''}
+                            onChange={(e) => setAllocations((c) => ({ ...c, [row.key]: e.target.value }))}
+                            placeholder="−0,00"
+                            className={cn(
+                              'w-full rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
+                              (wrongSign || excess) && 'border-danger bg-danger-soft'
+                            )}
+                          />
+                          {row.isDraft && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDraftProvisional(row.key.replace(/^draft:/, ''))}
+                              aria-label="Quitar NC provisoria"
+                              className="shrink-0 text-text-soft transition-colors hover:text-danger"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

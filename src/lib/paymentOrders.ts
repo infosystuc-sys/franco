@@ -50,11 +50,14 @@ export { PURCHASE_DOC_TYPE_SHORT };
 // ===========================================================================
 
 export interface PaymentAllocation {
-  purchaseInvoiceId: string;
+  purchaseInvoiceId: string | null;
+  provisionalCreditNoteId: string | null;
+  /** "NCP-00000007" para una provisoria, sin letra. */
   fullNumber: string;
   docType: PurchaseDocType;
   letter: string;
   amount: number;
+  isProvisional: boolean;
 }
 
 export interface PaymentValue {
@@ -87,8 +90,9 @@ export interface PaymentOrder {
 const SELECT =
   `id, full_number, status, supplier_id, supplier_name, payment_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
-   allocations:payment_order_allocations(purchase_invoice_id, amount,
-       doc:purchase_invoices(full_number, doc_type, letter)),
+   allocations:payment_order_allocations(purchase_invoice_id, provisional_credit_note_id, amount,
+       doc:purchase_invoices(full_number, doc_type, letter),
+       provisional:provisional_credit_notes(full_number, description)),
    values:payment_order_values(kind, amount, certificate_number,
        method:payment_methods(name), rate:tax_rates(name),
        check:third_party_checks(number, bank_name))`;
@@ -109,10 +113,12 @@ function mapOrder(row: any): PaymentOrder {
     voidedReason: row.voided_reason,
     allocations: ((row.allocations ?? []) as any[]).map((a) => ({
       purchaseInvoiceId: a.purchase_invoice_id,
-      fullNumber: a.doc?.full_number ?? '—',
-      docType: a.doc?.doc_type ?? 'FACTURA',
+      provisionalCreditNoteId: a.provisional_credit_note_id,
+      fullNumber: a.doc?.full_number ?? a.provisional?.full_number ?? '—',
+      docType: a.doc?.doc_type ?? 'NOTA_CREDITO',
       letter: a.doc?.letter ?? '',
       amount: Number(a.amount),
+      isProvisional: a.provisional_credit_note_id != null,
     })),
     values: ((row.values ?? []) as any[]).map((v) => ({
       kind: v.kind,
@@ -232,8 +238,18 @@ export async function fetchSupplierCredit(supplierId: string): Promise<number> {
 // ===========================================================================
 
 export interface PaymentAllocationInput {
-  purchaseInvoiceId: string;
-  /** Con signo: negativo en notas de crédito. */
+  /** Exactamente uno de los tres: comprobante real, provisoria existente, o provisoria nueva (por su tempKey). */
+  purchaseInvoiceId?: string;
+  provisionalCreditNoteId?: string;
+  provisionalCreditNoteTempKey?: string;
+  /** Con signo: negativo en notas de crédito, reales o provisorias. */
+  amount: number;
+}
+
+/** Una NC provisoria a crear en el mismo momento en que se guarda la orden. */
+export interface NewProvisionalCreditNoteInput {
+  tempKey: string;
+  description: string;
   amount: number;
 }
 
@@ -249,7 +265,8 @@ export interface PaymentValueInput {
 export async function savePaymentOrder(
   header: { supplierId: string; paymentDate: string; notes: string },
   allocations: PaymentAllocationInput[],
-  values: PaymentValueInput[]
+  values: PaymentValueInput[],
+  newProvisionalCreditNotes: NewProvisionalCreditNoteInput[] = []
 ): Promise<{ id: string; fullNumber: string }> {
   const { data, error } = await supabase.rpc('save_payment_order', {
     p_header: {
@@ -258,7 +275,9 @@ export async function savePaymentOrder(
       notes: header.notes.trim() || null,
     },
     p_allocations: allocations.map((a) => ({
-      purchase_invoice_id: a.purchaseInvoiceId,
+      purchase_invoice_id: a.purchaseInvoiceId ?? null,
+      provisional_credit_note_id: a.provisionalCreditNoteId ?? null,
+      provisional_credit_note_temp_key: a.provisionalCreditNoteTempKey ?? null,
       amount: a.amount,
     })),
     p_values: values.map((v) => ({
@@ -268,6 +287,11 @@ export async function savePaymentOrder(
       check_id: v.checkId ?? null,
       tax_rate_id: v.taxRateId ?? null,
       certificate_number: v.certificateNumber ?? null,
+    })),
+    p_new_provisional_credit_notes: newProvisionalCreditNotes.map((n) => ({
+      temp_key: n.tempKey,
+      description: n.description,
+      amount: n.amount,
     })),
   });
 
@@ -324,4 +348,79 @@ export function describePaymentOrderError(message: string): string {
     return 'Falta aplicar la migración de pagos en la base (supabase/payment-orders.sql).';
   }
   return message;
+}
+
+// ===========================================================================
+// NC provisorias por descuento de pronto pago
+// ===========================================================================
+// Nunca son un comprobante fiscal: no viven en purchase_invoices ni entran
+// al Libro IVA Compras. Se crean y se usan en la misma orden de pago (ver
+// savePaymentOrder / NewProvisionalCreditNoteInput); esto es solo para
+// leerlas después y vincularlas con la NC real cuando llega.
+
+export type ProvisionalCreditNoteStatus = 'PENDIENTE' | 'FORMALIZADA';
+
+export interface ProvisionalCreditNote {
+  id: string;
+  fullNumber: string;
+  status: ProvisionalCreditNoteStatus;
+  supplierId: string;
+  supplierName: string;
+  description: string;
+  amount: number;
+  settledAmount: number;
+  createdAt: string;
+}
+
+function mapProvisional(row: any): ProvisionalCreditNote {
+  return {
+    id: row.id,
+    fullNumber: row.full_number,
+    status: row.status,
+    supplierId: row.supplier_id,
+    supplierName: row.supplier_name,
+    description: row.description,
+    amount: Number(row.amount),
+    settledAmount: Number(row.settled_amount),
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Provisorias de un proveedor que todavía tienen saldo disponible para
+ * aplicarse (por ejemplo, si la orden que las usó se anuló). Para elegir en
+ * "Comprobantes a cancelar" de una nueva orden.
+ */
+export async function fetchAvailableProvisionalCreditNotes(supplierId: string): Promise<ProvisionalCreditNote[]> {
+  const { data, error } = await supabase
+    .from('provisional_credit_notes')
+    .select('id, full_number, status, supplier_id, supplier_name, description, amount, settled_amount, created_at')
+    .eq('supplier_id', supplierId)
+    .eq('status', 'PENDIENTE')
+    .order('created_at');
+
+  if (error) throw error;
+  return ((data ?? []) as any[]).map(mapProvisional).filter((p) => p.amount - p.settledAmount > 0);
+}
+
+/** Provisorias ya usadas en una orden, esperando la NC formal del proveedor. Para la pantalla "NC provisorias". */
+export async function fetchProvisionalCreditNotesPendingFormalization(): Promise<ProvisionalCreditNote[]> {
+  const { data, error } = await supabase
+    .from('provisional_credit_notes')
+    .select('id, full_number, status, supplier_id, supplier_name, description, amount, settled_amount, created_at')
+    .eq('status', 'PENDIENTE')
+    .gt('settled_amount', 0)
+    .order('supplier_name')
+    .order('created_at');
+
+  if (error) throw error;
+  return ((data ?? []) as any[]).map(mapProvisional);
+}
+
+export async function matchProvisionalCreditNote(provisionalId: string, invoiceId: string): Promise<void> {
+  const { error } = await supabase.rpc('match_provisional_credit_note', {
+    p_provisional_id: provisionalId,
+    p_invoice_id: invoiceId,
+  });
+  if (error) throw error;
 }

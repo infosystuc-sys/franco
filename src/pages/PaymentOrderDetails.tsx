@@ -185,9 +185,14 @@ export function PaymentOrderDetails() {
               </thead>
               <tbody>
                 {order.allocations.map((a) => (
-                  <tr key={a.purchaseInvoiceId} className="border-b border-line">
+                  <tr key={a.purchaseInvoiceId ?? a.provisionalCreditNoteId} className="border-b border-line">
                     <td className="py-1.5 font-mono">
-                      {PURCHASE_DOC_TYPE_SHORT[a.docType]} {a.letter} {a.fullNumber}
+                      {a.isProvisional ? (
+                        <span className="text-state-done">NC provisoria</span>
+                      ) : (
+                        <>{PURCHASE_DOC_TYPE_SHORT[a.docType]} {a.letter}</>
+                      )}{' '}
+                      {a.fullNumber}
                     </td>
                     <td
                       className={cn(
