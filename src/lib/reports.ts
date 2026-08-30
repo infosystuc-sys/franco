@@ -26,13 +26,14 @@ export interface ReportColumn {
   width?: number;
 }
 
-export type ReportArea = 'COMERCIAL' | 'CUENTAS_CORRIENTES' | 'IMPOSITIVO' | 'STOCK_TESORERIA';
+export type ReportArea = 'COMERCIAL' | 'CUENTAS_CORRIENTES' | 'IMPOSITIVO' | 'STOCK_TESORERIA' | 'OPERACIONES';
 
 export const AREA_LABELS: Record<ReportArea, string> = {
   COMERCIAL: 'Comerciales',
   CUENTAS_CORRIENTES: 'Cuentas corrientes',
   IMPOSITIVO: 'Impositivos',
   STOCK_TESORERIA: 'Stock y tesorería',
+  OPERACIONES: 'Operaciones de taller',
 };
 
 export const AREAS = Object.keys(AREA_LABELS) as ReportArea[];
@@ -377,6 +378,25 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'importe', label: 'Importe', format: 'money', total: true, width: 14 },
     ],
     run: () => callReport('report_checks_portfolio'),
+  },
+
+  // ── Operaciones de taller ────────────────────────────────────────
+  {
+    id: 'tiempos-por-etapa',
+    area: 'OPERACIONES',
+    name: 'Tiempos por etapa',
+    description:
+      'Cuánto duró cada tramo de OT por estado, sector y empleado, para detectar cuellos de botella y horas muertas.',
+    usesPeriod: true,
+    columns: [
+      { key: 'status_label', label: 'Estado', width: 18 },
+      { key: 'sector', label: 'Sector', width: 18 },
+      { key: 'employee_name', label: 'Empleado', width: 22 },
+      { key: 'assignments', label: 'Tramos', format: 'integer', total: true, width: 10 },
+      { key: 'avg_hours', label: 'Horas prom.', format: 'number', width: 12 },
+      { key: 'total_hours', label: 'Horas totales', format: 'number', total: true, width: 14 },
+    ],
+    run: (p) => callReport('report_stage_times', periodArgs(p)),
   },
 ];
 

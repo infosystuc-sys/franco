@@ -111,6 +111,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           reportCard('articulos-vendidos'),
           reportCard('ventas-mensual'),
           reportCard('libro-iva-ventas'),
+          reportCard('tiempos-por-etapa'),
         ],
       },
     ],
