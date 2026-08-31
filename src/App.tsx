@@ -24,6 +24,7 @@ import { Banks } from './pages/Banks';
 import { PendingRetentions } from './pages/PendingRetentions';
 import { ProvisionalCreditNotes } from './pages/ProvisionalCreditNotes';
 import { Checks } from './pages/Checks';
+import { CheckNew } from './pages/CheckNew';
 import { PaymentOrderDetails } from './pages/PaymentOrderDetails';
 import { PaymentOrderNew } from './pages/PaymentOrderNew';
 import { PaymentOrders } from './pages/PaymentOrders';
@@ -109,6 +110,7 @@ export default function App() {
                     <Route path="/pago/:id" element={<PaymentOrderDetails />} />
                     <Route path="/tesoreria" element={<Treasury />} />
                     <Route path="/cheques" element={<Checks />} />
+                    <Route path="/cheques/nuevo" element={<CheckNew />} />
                     <Route path="/medios-pago" element={<PaymentMethods />} />
                     <Route path="/bancos" element={<Banks />} />
                     <Route path="/retenciones-pendientes" element={<PendingRetentions />} />

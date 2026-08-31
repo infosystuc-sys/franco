@@ -154,7 +154,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'operaciones',
         cards: [
-          { icon: FileCheck, label: 'Cheques', path: '/cheques', adminOnly: true },
+          { icon: FileCheck, label: 'Cheques', path: '/cheques', newPath: '/cheques/nuevo', adminOnly: true },
           { icon: FileMinus, label: 'NC provisorias', path: '/nc-provisorias', adminOnly: true },
         ],
       },
