@@ -76,6 +76,8 @@ export interface PaymentOrder {
   status: PaymentOrderStatus;
   supplierId: string;
   supplierName: string;
+  supplierEmail: string | null;
+  supplierPhone: string | null;
   paymentDate: string;
   totalAmount: number;
   appliedAmount: number;
@@ -90,6 +92,7 @@ export interface PaymentOrder {
 const SELECT =
   `id, full_number, status, supplier_id, supplier_name, payment_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
+   supplier:suppliers(email, phone),
    allocations:payment_order_allocations(purchase_invoice_id, provisional_credit_note_id, amount,
        doc:purchase_invoices(full_number, doc_type, letter),
        provisional:provisional_credit_notes(full_number, description)),
@@ -104,6 +107,8 @@ function mapOrder(row: any): PaymentOrder {
     status: row.status,
     supplierId: row.supplier_id,
     supplierName: row.supplier_name,
+    supplierEmail: row.supplier?.email ?? null,
+    supplierPhone: row.supplier?.phone ?? null,
     paymentDate: row.payment_date,
     totalAmount: Number(row.total_amount),
     appliedAmount: Number(row.applied_amount),

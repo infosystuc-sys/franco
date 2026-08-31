@@ -10,12 +10,16 @@ import {
   Lock,
   ArrowRight,
   ThumbsDown,
+  Printer,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
@@ -33,6 +37,8 @@ import {
   type QuotationDetail,
 } from '@/src/lib/quotations';
 
+const QUOTATION_IVA_RATE = 0.21;
+
 export function QuotationDetails() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
@@ -49,6 +55,8 @@ export function QuotationDetails() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const loadQuotation = React.useCallback(async () => {
     if (!number) return;
@@ -139,8 +147,12 @@ export function QuotationDetails() {
     navigate(`/orden/${created.number}`);
   });
 
+  const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <div className="no-print space-y-6">
       <PageHeader
         title={<span className="font-mono text-3xl font-medium tracking-normal text-text">{quotation.number}</span>}
         meta={
@@ -167,18 +179,29 @@ export function QuotationDetails() {
         }
         actions={
           isAdmin && (
-            <ActionBar
-              quotation={quotation}
-              busy={busy}
-              editable={editable}
-              hasItems={hasItems}
-              onSave={handleSave}
-              onSend={handleSend}
-              onAccept={() => handleStatus('ACEPTADA', 'Cotización aceptada. Ya podés convertirla en orden de trabajo.')}
-              onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
-              onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
-              onConvert={handleConvert}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="ghost" type="button" onClick={() => window.print()}>
+                <Printer size={16} /> Imprimir
+              </Button>
+              <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                <Mail size={16} /> Enviar por mail
+              </Button>
+              <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                <MessageCircle size={16} /> Enviar por WhatsApp
+              </Button>
+              <ActionBar
+                quotation={quotation}
+                busy={busy}
+                editable={editable}
+                hasItems={hasItems}
+                onSave={handleSave}
+                onSend={handleSend}
+                onAccept={() => handleStatus('ACEPTADA', 'Cotización aceptada. Ya podés convertirla en orden de trabajo.')}
+                onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
+                onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
+                onConvert={handleConvert}
+              />
+            </div>
           )
         }
       />
@@ -302,6 +325,105 @@ export function QuotationDetails() {
           editable={editable}
         />
       </div>
+      </div>
+
+      {/* Vista imprimible: lo que se imprime y lo que se manda por mail o
+          WhatsApp son siempre este mismo bloque, no el formulario de arriba. */}
+      <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
+        <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
+          <div>
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+              Presupuesto para
+            </span>
+            <h2 className="font-display text-xl font-medium uppercase leading-tight text-text">
+              {quotation.customer?.name ?? '—'}
+            </h2>
+            {quotation.customer?.tax_id && (
+              <p className="mt-1 font-mono text-[11px] text-text-soft">{formatCuit(quotation.customer.tax_id)}</p>
+            )}
+          </div>
+          <div className="sm:text-right">
+            <h3 className="font-display text-lg uppercase tracking-[0.08em] text-text-faint">Presupuesto</h3>
+            <p className="mt-1 font-mono text-lg font-semibold text-text">{quotation.number}</p>
+            {quotation.validUntil && (
+              <p className="mt-1 text-[11px] text-text-soft">
+                Válido hasta {new Date(`${quotation.validUntil}T00:00:00`).toLocaleDateString('es-AR')}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="py-4 text-[12px] text-text-soft">
+          {[quotation.vehicle?.brand, quotation.vehicle?.model].filter(Boolean).join(' ') || '—'}
+          {quotation.vehicle?.license_plate ? ` · ${quotation.vehicle.license_plate}` : ''}
+          {quotation.component ? ` · ${quotation.component}` : ''}
+        </div>
+
+        <table className="w-full text-left text-[12px]">
+          <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <tr>
+              <th className="py-1.5">Detalle</th>
+              <th className="w-20 py-1.5 text-right">Cant.</th>
+              <th className="w-28 py-1.5 text-right">Precio</th>
+              <th className="w-28 py-1.5 text-right">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => (
+              <tr key={idx} className="border-b border-line">
+                <td className="py-1.5">{item.description}</td>
+                <td className="py-1.5 text-right">{item.quantity.toFixed(2)}</td>
+                <td className="py-1.5 text-right">$ {formatMoney(item.unitPrice)}</td>
+                <td className="py-1.5 text-right font-semibold">$ {formatMoney(item.quantity * item.unitPrice)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="flex justify-end border-t-2 border-ink pt-4">
+          <dl className="w-full space-y-1 text-[12px] sm:w-72">
+            <div className="flex justify-between">
+              <dt className="text-text-soft">Subtotal</dt>
+              <dd className="font-mono text-text">$ {formatMoney(itemsTotal)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-text-soft">IVA 21%</dt>
+              <dd className="font-mono text-text">$ {formatMoney(itemsIva)}</dd>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
+              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
+              <dd className="font-display text-2xl font-medium text-text">
+                $ {formatMoney(itemsTotal + itemsIva)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        {quotation.notes && (
+          <div className="mt-5 border-t border-line pt-3">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+              Observaciones
+            </span>
+            <p className="whitespace-pre-line text-[12px] text-text-soft">{quotation.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {sendModal && (
+        <SendDocumentModal
+          channel={sendModal}
+          defaultDestino={(sendModal === 'email' ? quotation.customer?.email : quotation.customer?.phone) ?? null}
+          fileName={`Presupuesto-${quotation.number}.pdf`}
+          documentRef={documentRef}
+          subject={`Presupuesto ${quotation.number}`}
+          text={
+            sendModal === 'email'
+              ? `Adjuntamos el presupuesto ${quotation.number} por $ ${formatMoney(itemsTotal + itemsIva)}.`
+              : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`
+          }
+          onClose={() => setSendModal(null)}
+        />
+      )}
     </div>
   );
 }

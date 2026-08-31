@@ -71,7 +71,13 @@ export interface QuotationDetail {
   validUntil: string | null;
   customerId: string;
   vehicleId: string;
-  customer: { name: string; legal_name: string | null; tax_id: string | null } | null;
+  customer: {
+    name: string;
+    legal_name: string | null;
+    tax_id: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
   vehicle: { brand: string | null; model: string; license_plate: string | null } | null;
   workOrderId: string | null;
   workOrderNumber: string | null;
@@ -133,7 +139,7 @@ export async function fetchQuotations(): Promise<QuotationListRow[]> {
 const DETAIL_SELECT = `
   id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
   decided_at, rejection_reason,
-  customer:customers(name, legal_name, tax_id),
+  customer:customers(name, legal_name, tax_id, email, phone),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
   items:quotation_items(id, article_id, code, description, quantity, unit_price)

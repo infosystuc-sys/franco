@@ -1,9 +1,10 @@
 import React from 'react';
-import { XCircle, Printer, Ban, FileCheck } from 'lucide-react';
+import { XCircle, Printer, Ban, FileCheck, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   describePaymentOrderError,
@@ -24,6 +25,8 @@ export function PaymentOrderDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -111,6 +114,16 @@ export function PaymentOrderDetails() {
                 <Printer size={16} /> Imprimir
               </Button>
               {!voided && (
+                <>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                    <Mail size={16} /> Enviar por mail
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </Button>
+                </>
+              )}
+              {!voided && (
                 <Button variant="danger" type="button" onClick={handleVoid} disabled={voiding}>
                   <Ban size={16} /> {voiding ? 'Anulando…' : 'Anular'}
                 </Button>
@@ -146,7 +159,7 @@ export function PaymentOrderDetails() {
         )}
       </div>
 
-      <div className="print-document border border-line bg-panel p-6 md:p-8">
+      <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
         <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
           <div>
             <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
@@ -272,6 +285,22 @@ export function PaymentOrderDetails() {
           </div>
         </div>
       </div>
+
+      {sendModal && (
+        <SendDocumentModal
+          channel={sendModal}
+          defaultDestino={(sendModal === 'email' ? order.supplierEmail : order.supplierPhone) ?? null}
+          fileName={`${order.fullNumber}.pdf`}
+          documentRef={documentRef}
+          subject={`Orden de pago ${order.fullNumber}`}
+          text={
+            sendModal === 'email'
+              ? `Adjuntamos la orden de pago ${order.fullNumber} por $ ${formatMoney(order.totalAmount)}.`
+              : `Orden de pago ${order.fullNumber} — $ ${formatMoney(order.totalAmount)}`
+          }
+          onClose={() => setSendModal(null)}
+        />
+      )}
     </div>
   );
 }
