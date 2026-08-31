@@ -328,6 +328,23 @@ export const REPORTS: ReportDefinition[] = [
     run: (p) => callReport('report_idle_stock', periodArgs(p)),
   },
   {
+    id: 'precios-desactualizados',
+    area: 'STOCK_TESORERIA',
+    name: 'Precios desactualizados',
+    description: 'Artículos ordenados por cuánto hace que no cambia su precio, de más viejo a más nuevo.',
+    usesPeriod: false,
+    columns: [
+      { key: 'code', label: 'Código', width: 14 },
+      { key: 'description', label: 'Descripción', width: 34 },
+      { key: 'proveedor', label: 'Prov. preferido', width: 22 },
+      { key: 'precio_compra', label: 'P. compra', format: 'money', width: 14 },
+      { key: 'precio_venta', label: 'P. venta', format: 'money', width: 14 },
+      { key: 'actualizado', label: 'Últ. cambio', format: 'date', width: 14 },
+      { key: 'dias_sin_cambiar', label: 'Días', format: 'integer', width: 8 },
+    ],
+    run: () => callReport('report_stale_prices'),
+  },
+  {
     id: 'libro-caja',
     area: 'STOCK_TESORERIA',
     name: 'Libro de caja',
