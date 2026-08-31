@@ -109,7 +109,11 @@ export async function deleteArticle(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Precio de venta que resultaría de un precio de compra y una utilidad. */
+/**
+ * Precio de venta que resultaría de un precio de compra y una utilidad,
+ * redondeado hacia arriba al múltiplo de $10 más cercano (mismo criterio que
+ * compute_sale_price() en la base — ver price-lists-rounding.sql).
+ */
 export function computeSalePrice(purchasePrice: number, markupPercent: number): number {
-  return Math.round(purchasePrice * (1 + markupPercent / 100) * 100) / 100;
+  return Math.ceil((purchasePrice * (1 + markupPercent / 100)) / 10) * 10;
 }
