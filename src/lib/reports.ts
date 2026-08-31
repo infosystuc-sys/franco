@@ -415,6 +415,26 @@ export const REPORTS: ReportDefinition[] = [
     ],
     run: (p) => callReport('report_stage_times', periodArgs(p)),
   },
+  {
+    id: 'rentabilidad-ot',
+    area: 'OPERACIONES',
+    name: 'Rentabilidad por OT',
+    description:
+      'Margen bruto real de cada OT facturada: lo cobrado contra el costo histórico de los repuestos y el costo de las horas trabajadas.',
+    usesPeriod: true,
+    columns: [
+      { key: 'ot_number', label: 'OT', width: 12 },
+      { key: 'cliente', label: 'Cliente', width: 26 },
+      { key: 'fecha_factura', label: 'Fecha', format: 'date', width: 12 },
+      { key: 'ingreso', label: 'Ingreso', format: 'money', total: true, width: 14 },
+      { key: 'costo_repuestos', label: 'Costo repuestos', format: 'money', total: true, width: 16 },
+      { key: 'costo_mano_obra', label: 'Costo mano de obra', format: 'money', total: true, width: 16 },
+      { key: 'costo_total', label: 'Costo total', format: 'money', total: true, width: 14 },
+      { key: 'margen', label: 'Margen $', format: 'money', total: true, width: 14 },
+      { key: 'margen_pct', label: 'Margen %', format: 'number', width: 10 },
+    ],
+    run: (p) => callReport('report_work_order_margin', periodArgs(p)),
+  },
 ];
 
 export function findReport(id: string): ReportDefinition | undefined {

@@ -231,6 +231,7 @@ async function crearUsuario(body: Record<string, unknown>): Promise<Response> {
   const datos = leerDatosAcceso(body);
   if ('error' in datos) return json(datos, 400);
 
+  const hourlyCost = body.hourlyCost;
   const { data: empleado, error: errorEmpleado } = await db
     .from('employees')
     .insert({
@@ -238,6 +239,7 @@ async function crearUsuario(body: Record<string, unknown>): Promise<Response> {
       role: String(body.role ?? ''),
       phone: String(body.phone ?? ''),
       active: body.active !== false,
+      hourly_cost: typeof hourlyCost === 'number' ? hourlyCost : null,
     })
     .select('id')
     .single();

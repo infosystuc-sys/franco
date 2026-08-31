@@ -33,6 +33,8 @@ export interface Employee {
   /** Cargo del acceso al sistema. null si todavía no tiene acceso creado. */
   cargo: Cargo | null;
   workplace: Workplace | null;
+  /** Costo por hora, para el margen bruto por OT. null = no aporta costo de mano de obra. */
+  hourlyCost: number | null;
 }
 
 export interface EmployeeInput {
@@ -40,6 +42,7 @@ export interface EmployeeInput {
   role: string;
   phone: string;
   active: boolean;
+  hourlyCost: number | null;
 }
 
 /** Lo que se pide al dar de alta un usuario: el registro y el acceso, en un solo paso. */
@@ -64,10 +67,11 @@ function mapEmployee(row: any): Employee {
     email: row.profile?.email ?? null,
     cargo: (row.profile?.position as Cargo) ?? null,
     workplace: (row.workplace as Workplace) ?? null,
+    hourlyCost: row.hourly_cost !== null ? Number(row.hourly_cost) : null,
   };
 }
 
-const SELECT = 'id, name, role, phone, active, profile_id, workplace, profile:profiles(email, position)';
+const SELECT = 'id, name, role, phone, active, profile_id, workplace, hourly_cost, profile:profiles(email, position)';
 
 export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
   let query = supabase.from('employees').select(SELECT).order('name');
@@ -82,7 +86,7 @@ export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
 export async function fetchOperarios(): Promise<Employee[]> {
   const { data, error } = await supabase
     .from('employees')
-    .select('id, name, role, phone, active, profile_id, workplace, profile:profiles!inner(email, position)')
+    .select('id, name, role, phone, active, profile_id, workplace, hourly_cost, profile:profiles!inner(email, position)')
     .eq('active', true)
     .eq('profile.position', 'operario')
     .order('name');
@@ -93,7 +97,13 @@ export async function fetchOperarios(): Promise<Employee[]> {
 export async function updateEmployee(id: string, input: EmployeeInput): Promise<Employee> {
   const { data, error } = await supabase
     .from('employees')
-    .update(input)
+    .update({
+      name: input.name,
+      role: input.role,
+      phone: input.phone,
+      active: input.active,
+      hourly_cost: input.hourlyCost,
+    })
     .eq('id', id)
     .select(SELECT)
     .single();

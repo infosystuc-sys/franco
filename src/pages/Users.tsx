@@ -24,7 +24,7 @@ import {
   type Workplace,
 } from '@/src/lib/employees';
 
-const EMPTY_FORM: EmployeeInput = { name: '', role: '', phone: '', active: true };
+const EMPTY_FORM: EmployeeInput = { name: '', role: '', phone: '', active: true, hourlyCost: null };
 
 export function Users() {
   const { role } = useAuth();
@@ -276,7 +276,13 @@ function UserModal({
 }) {
   const [form, setForm] = React.useState<EmployeeInput>(
     employee
-      ? { name: employee.name, role: employee.role ?? '', phone: employee.phone ?? '', active: employee.active }
+      ? {
+          name: employee.name,
+          role: employee.role ?? '',
+          phone: employee.phone ?? '',
+          active: employee.active,
+          hourlyCost: employee.hourlyCost,
+        }
       : EMPTY_FORM
   );
   const [saving, setSaving] = React.useState(false);
@@ -468,6 +474,17 @@ function UserModal({
               />
             </Label>
           </div>
+
+          <Label>
+            Costo por hora
+            <input
+              type="number" step="0.01" min="0"
+              value={form.hourlyCost ?? ''}
+              onChange={(e) => patch({ hourlyCost: e.target.value === '' ? null : Number(e.target.value) })}
+              className={fieldClass(false, 'font-normal normal-case')}
+              placeholder="Opcional — para el margen bruto por OT"
+            />
+          </Label>
 
           <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
             <input
