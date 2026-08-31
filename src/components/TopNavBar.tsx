@@ -1,14 +1,18 @@
 import React from 'react';
-import { Search, Bell, LogOut, Menu, X } from 'lucide-react';
+import { Search, Bell, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 
 export function TopNavBar({
   onMenuClick,
   menuOpen,
+  railCollapsed,
+  onToggleRail,
 }: {
   onMenuClick: () => void;
   menuOpen: boolean;
+  railCollapsed: boolean;
+  onToggleRail: () => void;
 }) {
   const { session, role, signOut } = useAuth();
 
@@ -27,6 +31,15 @@ export function TopNavBar({
           className="p-1.5 text-accent transition-colors hover:bg-ink-hover md:hidden"
         >
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
+        {/* En pantallas grandes el menú queda persistente, pero se puede ocultar para ganar ancho de trabajo. */}
+        <button
+          onClick={onToggleRail}
+          aria-label={railCollapsed ? 'Mostrar menú' : 'Ocultar menú'}
+          aria-expanded={!railCollapsed}
+          className="hidden p-1.5 text-accent transition-colors hover:bg-ink-hover md:inline-flex"
+        >
+          {railCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
         <Link to="/" className="flex items-baseline gap-1.5 transition-opacity hover:opacity-80">
           <span className="font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-accent">

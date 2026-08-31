@@ -12,7 +12,15 @@ import { MENU_CATEGORIES, MENU_DIRECT_LINKS, visibleCategories } from '@/src/lib
  * todas las pantallas, no solo en el inicio: sirve para saltar de categoría
  * sin volver antes a "/".
  */
-export function CategoryRail({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CategoryRail({
+  open,
+  onClose,
+  collapsed,
+}: {
+  open: boolean;
+  onClose: () => void;
+  collapsed: boolean;
+}) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { role } = useAuth();
@@ -39,8 +47,9 @@ export function CategoryRail({ open, onClose }: { open: boolean; onClose: () => 
       <nav
         className={cn(
           'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
-          'transition-transform duration-200 md:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full'
+          'transition-transform duration-200',
+          open ? 'translate-x-0' : '-translate-x-full',
+          collapsed ? 'md:-translate-x-full' : 'md:translate-x-0'
         )}
         style={{
           top: 'calc(3.5rem + var(--safe-top))',
@@ -83,8 +92,9 @@ export function CategoryRail({ open, onClose }: { open: boolean; onClose: () => 
       <nav
         className={cn(
           'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
-          'transition-transform duration-200 md:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full'
+          'transition-transform duration-200',
+          open ? 'translate-x-0' : '-translate-x-full',
+          collapsed ? 'md:-translate-x-full' : 'md:translate-x-0'
         )}
         style={{
           top: 'calc(3.5rem + var(--safe-top))',
