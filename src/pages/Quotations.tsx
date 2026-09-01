@@ -6,7 +6,9 @@ import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
-import { vehicleLabel } from '@/src/lib/vehicles';
+import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
+import { CustomerModal } from '@/src/components/CustomerModal';
+import { VehicleModal } from '@/src/components/VehicleModal';
 import {
   createQuotation,
   defaultValidUntil,
@@ -271,15 +273,20 @@ function NewQuotationModal({
   const [validUntil, setValidUntil] = React.useState(defaultValidUntil());
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [creatingCustomer, setCreatingCustomer] = React.useState(false);
+  const [creatingVehicle, setCreatingVehicle] = React.useState(false);
+
+  const loadCustomers = React.useCallback(() => {
+    setLoadingCustomers(true);
+    return fetchCustomers(true)
+      .then((data) => setCustomers(data))
+      .catch((err) => setError(getErrorMessage(err)))
+      .finally(() => setLoadingCustomers(false));
+  }, []);
 
   React.useEffect(() => {
-    let cancelled = false;
-    fetchCustomers(true)
-      .then((data) => !cancelled && setCustomers(data))
-      .catch((err) => !cancelled && setError(getErrorMessage(err)))
-      .finally(() => !cancelled && setLoadingCustomers(false));
-    return () => { cancelled = true; };
-  }, []);
+    loadCustomers();
+  }, [loadCustomers]);
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
   const vehicles = (selectedCustomer?.vehicles ?? []).filter((v) => v.active);
@@ -311,6 +318,7 @@ function NewQuotationModal({
   const inputClass = 'mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case';
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
       <div className="bg-panel w-full max-w-md">
         <div className="flex justify-between items-center px-5 py-4 border-b border-line">
@@ -324,42 +332,61 @@ function NewQuotationModal({
 
           <label className={cn(labelClass, 'block')}>
             Cliente
-            <select
-              value={customerId}
-              onChange={(e) => handleCustomerChange(e.target.value)}
-              disabled={loadingCustomers}
-              className={cn(inputClass, 'bg-panel')}
-            >
-              <option value="">{loadingCustomers ? 'Cargando clientes...' : 'Elegí un cliente...'}</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1 flex gap-2">
+              <select
+                value={customerId}
+                onChange={(e) => handleCustomerChange(e.target.value)}
+                disabled={loadingCustomers}
+                className={cn(inputClass, 'bg-panel mt-0 flex-1')}
+              >
+                <option value="">{loadingCustomers ? 'Cargando clientes...' : 'Elegí un cliente...'}</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCreatingCustomer(true)}
+                className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt whitespace-nowrap"
+              >
+                + Nuevo
+              </button>
+            </div>
             {!loadingCustomers && customers.length === 0 && (
               <span className="block mt-1 text-[10px] font-normal normal-case text-state-wait">
-                No hay clientes activos. Cargá uno desde la sección Clientes.
+                No hay clientes activos. Cargá uno con el botón "+ Nuevo".
               </span>
             )}
           </label>
 
           <label className={cn(labelClass, 'block')}>
             Vehículo / Equipo
-            <select
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              disabled={!selectedCustomer}
-              className={cn(inputClass, 'bg-panel disabled:bg-panel-alt')}
-            >
-              <option value="">{!selectedCustomer ? 'Elegí primero un cliente...' : 'Elegí un vehículo...'}</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>{vehicleLabel(vehicle)}</option>
-              ))}
-            </select>
+            <div className="mt-1 flex gap-2">
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                disabled={!selectedCustomer}
+                className={cn(inputClass, 'bg-panel disabled:bg-panel-alt mt-0 flex-1')}
+              >
+                <option value="">{!selectedCustomer ? 'Elegí primero un cliente...' : 'Elegí un vehículo...'}</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>{vehicleLabel(vehicle)}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCreatingVehicle(true)}
+                disabled={!selectedCustomer}
+                className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50 whitespace-nowrap"
+              >
+                + Nuevo
+              </button>
+            </div>
             {selectedCustomer && vehicles.length === 0 && (
               <span className="block mt-1 text-[10px] font-normal normal-case text-state-wait">
-                Este cliente no tiene vehículos activos. Agregale uno desde la sección Vehículos.
+                Este cliente no tiene vehículos activos. Agregale uno con el botón "+ Nuevo".
               </span>
             )}
           </label>
@@ -389,5 +416,32 @@ function NewQuotationModal({
         </form>
       </div>
     </div>
+
+    {creatingCustomer && (
+      <CustomerModal
+        customer={null}
+        onClose={() => setCreatingCustomer(false)}
+        onSaved={async (customer) => {
+          setCreatingCustomer(false);
+          await loadCustomers();
+          handleCustomerChange(customer.id);
+        }}
+      />
+    )}
+
+    {creatingVehicle && selectedCustomer && (
+      <VehicleModal
+        vehicle={null}
+        customers={customers}
+        fixedCustomerId={selectedCustomer.id}
+        onClose={() => setCreatingVehicle(false)}
+        onSaved={async (vehicle: Vehicle) => {
+          setCreatingVehicle(false);
+          await loadCustomers();
+          setVehicleId(vehicle.id);
+        }}
+      />
+    )}
+    </>
   );
 }
