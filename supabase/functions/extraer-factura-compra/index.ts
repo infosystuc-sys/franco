@@ -263,7 +263,11 @@ Deno.serve(async (req: Request) => {
     .eq('id', draft.id);
 
   if (errorUpdate) {
-    return json({ error: `No se pudo guardar la lectura: ${errorUpdate.message}` }, 500);
+    // Igual que cualquier otra falla post-creación del borrador: se marca
+    // ERROR en vez de dejarlo con status EXTRAIDO sin raw_extraction — si no,
+    // la pantalla de revisión lo mostraría como "leído" sin tener nada para
+    // mostrar.
+    return marcarError(`No se pudo guardar la lectura: ${errorUpdate.message}`);
   }
 
   return json({ id: draft.id });
