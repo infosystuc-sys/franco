@@ -5,9 +5,10 @@
 
 ## Qué se va a construir
 
-Al cargar un cliente o un proveedor, escribir el CUIT (o el DNI) trae los datos
-del padrón de ARCA y completa el formulario: razón social, condición frente al
-IVA y domicilio fiscal. Es un solo punto de inserción —
+Al cargar un cliente o un proveedor, se escribe el CUIT (o el DNI) y un botón
+trae los datos del padrón de ARCA para completar el formulario: razón social,
+condición frente al IVA y domicilio fiscal. Siempre a pedido: nunca sale a
+consultar por su cuenta. Es un solo punto de inserción —
 [`FiscalFields.tsx`](../../../src/components/FiscalFields.tsx), el componente
 donde hoy se tipea el CUIT — así que clientes y proveedores lo reciben juntos.
 
@@ -143,12 +144,12 @@ conoce al cliente, y rara vez coincide con la razón social.
 Todo ocurre en `FiscalFields.tsx`, que hoy ya tiene el input de CUIT y la
 validación de dígito verificador.
 
-- **Automático:** al terminar de escribir un documento válido, consulta sola —
-  pero solo al dar de alta. Editando un registro que ya existe nunca dispara
-  sola: ahí se pide con el botón, para no sorprender a alguien que abrió la
-  ficha a cambiar un teléfono.
-- **Manual:** un botón "Traer de ARCA" al lado del campo, siempre disponible,
-  tanto en alta como en edición.
+- **Siempre a pedido.** Un botón "Traer de ARCA" al lado del campo del
+  documento. Nunca consulta sola: ni al tipear, ni al salir del campo, ni al
+  abrir la ficha. Vale igual para el alta y para la edición.
+- El botón queda deshabilitado mientras el documento no tenga una longitud
+  válida (7 u 8 dígitos, o 11 con dígito verificador correcto), así no se
+  gastan consultas en un CUIT a medio escribir.
 - **Campos vacíos:** se completan directo.
 - **Campos con algo distinto:** no se tocan. Aparece un panel chico con una fila
   por campo en conflicto — qué tenés contra qué dice ARCA — y se aplica lo que se
