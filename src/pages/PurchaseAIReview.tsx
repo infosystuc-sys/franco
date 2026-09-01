@@ -149,6 +149,10 @@ export function PurchaseAIReview() {
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
   const [notes, setNotes] = React.useState('');
+  // Total que la IA leyó del papel: control cruzado automático contra el
+  // total que dan los renglones que se están por guardar (PurchaseTotalsSummary
+  // hace la comparación sola en cuanto este campo tiene un valor).
+  const [declaredTotal, setDeclaredTotal] = React.useState('');
   // Percepciones que la IA leyó pero no coinciden con ninguna alícuota
   // cargada: no se inventan, se avisan para que el usuario decida.
   const [unmatchedPercepciones, setUnmatchedPercepciones] = React.useState<{ nombre: string; importe: string }[]>([]);
@@ -181,6 +185,8 @@ export function PurchaseAIReview() {
         const parsedIssueDate = parseFechaExtraida(String(v.fecha_comprobante ?? ''));
         if (parsedIssueDate) setIssueDate(parsedIssueDate);
         setNotes(v.condicion_pago ? `Condición de pago (IA): ${v.condicion_pago}` : '');
+        const parsedDeclaredTotal = parseArgNumber(String(v.total ?? ''));
+        setDeclaredTotal(parsedDeclaredTotal > 0 ? String(parsedDeclaredTotal) : '');
 
         // Percepciones leídas del pie: se matchean por nombre contra las
         // alícuotas de percepción/impuesto interno ya cargadas. Lo que no
@@ -587,8 +593,8 @@ export function PurchaseAIReview() {
             totals={totals}
             generalDiscount={generalDiscount}
             onGeneralDiscountChange={setGeneralDiscount}
-            declaredTotal=""
-            onDeclaredTotalChange={() => {}}
+            declaredTotal={declaredTotal}
+            onDeclaredTotalChange={setDeclaredTotal}
           />
         </Panel>
       </div>
