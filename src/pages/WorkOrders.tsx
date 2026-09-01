@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, Eye, Edit2 } from 'lucide-react';
+import { Plus, Search, Eye, Edit2, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { cn, formatDate } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, StateStrip } from '@/src/components/ui';
@@ -162,9 +162,14 @@ export function WorkOrders() {
                     <StateStrip color={order.status.color} />
                     <Link
                       to={`/orden/${order.number}`}
-                      className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"
+                      className="inline-flex items-center gap-1.5 font-mono font-semibold text-text hover:text-accent-deep hover:underline"
                     >
                       {order.number}
+                      {order.priceDiffers && (
+                        <span title="El monto de la OT difiere de la cotización original">
+                          <AlertTriangle size={14} className="text-state-wait" />
+                        </span>
+                      )}
                     </Link>
                   </td>
                   <td data-label="Cliente" className="p-3">{order.customerName}</td>

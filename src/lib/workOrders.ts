@@ -318,6 +318,13 @@ export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount
 export interface WorkOrderRow extends WorkOrderListRow {
   employeeName: string | null;
   createdAt: string;
+  /**
+   * El total actual de la OT difiere del total de la cotización que la
+   * originó, y ese cambio todavía no quedó autorizado por el cliente — el
+   * mismo cálculo que el cartel de la ficha, para verlo de un vistazo en el
+   * listado sin entrar a cada orden.
+   */
+  priceDiffers: boolean;
 }
 
 /**
@@ -334,20 +341,37 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
     .from('work_orders')
     .select(
       `id, number, component, public_token, created_at,
+       price_auth_status, price_auth_requested_total,
        status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
-       employee:employees(name)`
+       employee:employees(name),
+       quotation:quotations!work_orders_quotation_id_fkey(items:quotation_items(subtotal)),
+       items:work_order_items(subtotal)`
     )
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  return (data ?? []).map((row: any) => ({
-    ...mapWorkOrderListRow(row),
-    employeeName: row.employee?.name ?? null,
-    createdAt: row.created_at,
-  }));
+  return (data ?? []).map((row: any) => {
+    const quotation = row.quotation;
+    const quotedTotal = quotation
+      ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
+      : null;
+    const currentTotal = (row.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0);
+    const priceDiffers = quotedTotal !== null && Math.abs(currentTotal - quotedTotal) > 0.005;
+    const priceAuthCoversCurrent =
+      row.price_auth_status === 'AUTORIZADO' &&
+      row.price_auth_requested_total !== null &&
+      Math.abs(Number(row.price_auth_requested_total) - currentTotal) < 0.005;
+
+    return {
+      ...mapWorkOrderListRow(row),
+      employeeName: row.employee?.name ?? null,
+      createdAt: row.created_at,
+      priceDiffers: priceDiffers && !priceAuthCoversCurrent,
+    };
+  });
 }
 
 /**
