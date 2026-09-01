@@ -51,23 +51,42 @@ export function WorkOrderDetails() {
   const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
   const [statuses, setStatuses] = useState<WorkOrderStatusDef[]>([]);
   const [requestingPriceAuth, setRequestingPriceAuth] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
-  const loadOrder = React.useCallback(async () => {
-    if (!id) return;
+  // Qué OT ya sincronizó `items` desde la base — no un booleano, porque el
+  // mismo componente sigue vivo al navegar de una OT a otra (useParams solo
+  // cambia `id`, no remonta).
+  const itemsLoadedForRef = React.useRef<string | null>(null);
+
+  function mapItems(data: WorkOrderDetail | null): WorkOrderItemInput[] {
+    return (
+      data?.items.map((i) => ({
+        articleId: i.articleId ?? null,
+        code: i.code,
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+      })) ?? []
+    );
+  }
+
+  const loadOrder = React.useCallback(async (): Promise<WorkOrderDetail | null> => {
+    if (!id) return null;
     setLoading(true);
     setError(null);
     try {
       const data = await fetchWorkOrderByNumber(id);
       setOrder(data);
-      setItems(
-        data?.items.map((i) => ({
-          articleId: i.articleId ?? null,
-          code: i.code,
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-        })) ?? []
-      );
+      // Los renglones son un borrador local (ver ItemsEditor/handleSave): un
+      // refresco disparado por otra acción (cambiar estado, asignar
+      // empleado, fecha estimada, fotos...) no debe pisar una edición sin
+      // guardar. Solo se sincronizan acá la primera vez que se carga esta
+      // OT — después de un guardado exitoso, handleSave los actualiza por
+      // su cuenta con la respuesta fresca.
+      if (itemsLoadedForRef.current !== id) {
+        setItems(mapItems(data));
+        itemsLoadedForRef.current = id;
+      }
       setHistory(data ? await fetchStatusHistory(data.id) : []);
 
       // La factura se consulta aparte y sin propagar el error: el operario no
@@ -75,8 +94,10 @@ export function WorkOrderDetails() {
       // se aplico la tabla no existe. En ninguno de los dos casos deberia
       // caerse la pantalla de la orden: simplemente no hay boton.
       setInvoice(data ? await fetchInvoiceForWorkOrder(data.id).catch(() => null) : null);
+      return data;
     } catch (err) {
       setError(getErrorMessage(err));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -182,8 +203,12 @@ export function WorkOrderDetails() {
     setError(null);
     try {
       await saveWorkOrderItems(order.id, items);
-      // Recargar: el stock pudo cambiar y los renglones ahora tienen id nuevo.
-      await loadOrder();
+      // Recargar: el stock pudo cambiar y los renglones ahora tienen id
+      // nuevo. loadOrder ya no toca `items` en refrescos posteriores al
+      // primero (ver comentario ahí), así que acá sí se resincroniza a
+      // propósito con la respuesta fresca.
+      const fresh = await loadOrder();
+      setItems(mapItems(fresh));
       if (isAdmin) fetchArticles(false).then(setArticles).catch(() => {});
     } catch (err) {
       setError(getErrorMessage(err));
@@ -205,6 +230,9 @@ export function WorkOrderDetails() {
     );
   }
 
+  // Con factura emitida la OT queda congelada: lo único que la desbloquea es
+  // anular esa factura (fuera de esta pantalla, desde Facturación).
+  const locked = !!invoice;
   const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
   const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
   const priceDiffers =
@@ -242,13 +270,13 @@ export function WorkOrderDetails() {
         }
         actions={
           <>
-            <Link to="/">
+            <Link to="/ordenes">
               <Button variant="ghost" type="button">
                 <XCircle size={16} /> Volver
               </Button>
             </Link>
             {isAdmin && <InvoiceAction order={order} invoice={invoice} />}
-            {isAdmin && (
+            {isAdmin && !locked && (
               <Button onClick={handleSave} disabled={saving}>
                 <Save size={16} /> {saving ? 'Guardando…' : 'Guardar'}
               </Button>
@@ -347,7 +375,7 @@ export function WorkOrderDetails() {
           <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Empleado
           </span>
-          {isAdmin ? (
+          {isAdmin && !locked ? (
             <select
               value={order.employee?.id ?? ''}
               onChange={(e) => handleAssignEmployee(e.target.value || null)}
@@ -371,7 +399,7 @@ export function WorkOrderDetails() {
           <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Entrega estimada
           </span>
-          {isAdmin ? (
+          {isAdmin && !locked ? (
             <input
               type="date"
               value={order.estimatedDeliveryDate ?? ''}
@@ -435,7 +463,26 @@ export function WorkOrderDetails() {
 
       {history.length > 1 && (
         <div className="mb-6">
-          <StatusHistory history={history} />
+          {showHistory ? (
+            <>
+              <StatusHistory history={history} />
+              <button
+                type="button"
+                onClick={() => setShowHistory(false)}
+                className="mt-2 text-xs font-semibold text-text-soft hover:text-text"
+              >
+                Ocultar historial
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowHistory(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-text"
+            >
+              <History size={14} /> Ver historial de estados ({history.length})
+            </button>
+          )}
         </div>
       )}
 
@@ -445,7 +492,7 @@ export function WorkOrderDetails() {
           items={items}
           onChange={setItems}
           articles={articles}
-          editable={isAdmin}
+          editable={isAdmin && !locked}
         />
       </Panel>
 
@@ -677,8 +724,8 @@ function StatusControls({
         <select
           value={order.status.id}
           onChange={(e) => onChange(e.target.value)}
-          disabled={busy}
-          className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+          disabled={busy || !!invoice}
+          className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none disabled:opacity-60"
         >
           {options.map((status) => (
             <option key={status.id} value={status.id}>{status.label}</option>
@@ -691,10 +738,10 @@ function StatusControls({
         )}
       </div>
 
-      {isDone && invoice && (
+      {invoice && (
         <p className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
-          Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida.
-          Si cambiás el estado, esa factura no se anula ni se actualiza sola.
+          Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida:
+          queda bloqueada, no se puede modificar. Para corregir algo, anulá esa factura primero.
         </p>
       )}
     </div>
