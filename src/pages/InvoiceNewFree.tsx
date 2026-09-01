@@ -235,15 +235,8 @@ export function InvoiceNewFree() {
 
       <Panel className="mb-10 p-5">
         <SectionHeader title="Observaciones" />
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Texto que sale impreso en el comprobante. Opcional."
-          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
-        />
         {!remito && (
-          <label className="mt-3 flex items-center gap-2 text-sm text-text cursor-pointer">
+          <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
             <input
               type="checkbox"
               checked={emitRemito}
@@ -260,6 +253,14 @@ export function InvoiceNewFree() {
           paymentMethods={paymentMethods}
           paymentMethodId={paymentMethodId}
           onPaymentMethodIdChange={setPaymentMethodId}
+        />
+
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          placeholder="Texto que sale impreso en el comprobante. Opcional."
+          className="mt-4 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
       </Panel>
     </div>
