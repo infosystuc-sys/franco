@@ -196,13 +196,15 @@ export async function rejectCheck(id: string, reason: string, date: string): Pro
   if (error) throw error;
 }
 
-export async function endorseCheck(id: string, supplierId: string, date: string): Promise<void> {
-  const { error } = await supabase.rpc('endorse_check', {
+/** Endosa el cheque a un proveedor. Devuelve el número del comprobante de egreso generado en Tesorería. */
+export async function endorseCheck(id: string, supplierId: string, date: string): Promise<string> {
+  const { data, error } = await supabase.rpc('endorse_check', {
     p_check_id: id,
     p_supplier_id: supplierId,
     p_date: date,
   });
   if (error) throw error;
+  return data as string;
 }
 
 /** Traduce errores de base a mensajes accionables para el usuario. */

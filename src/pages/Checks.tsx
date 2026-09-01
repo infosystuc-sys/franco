@@ -1,12 +1,11 @@
 import React from 'react';
-import { Plus, Search, AlertTriangle, Landmark, Send, Check, Ban } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
-import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
 import {
   canCredit,
   canDeposit,
@@ -19,7 +18,6 @@ import {
   creditCheck,
   depositCheck,
   describeCheckError,
-  endorseCheck,
   fetchChecks,
   isInWallet,
   rejectCheck,
@@ -38,7 +36,6 @@ export function Checks() {
   const { role } = useAuth();
   const [checks, setChecks] = React.useState<ThirdPartyCheck[]>([]);
   const [banks, setBanks] = React.useState<PaymentMethod[]>([]);
-  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -49,14 +46,12 @@ export function Checks() {
     setLoading(true);
     setError(null);
     try {
-      const [c, m, s] = await Promise.all([
+      const [c, m] = await Promise.all([
         fetchChecks(),
         fetchPaymentMethods(true),
-        fetchSuppliers(true),
       ]);
       setChecks(c);
       setBanks(m.filter((method) => method.kind === 'BANCO'));
-      setSuppliers(s);
     } catch (err) {
       setError(describeCheckError(getErrorMessage(err)));
     } finally {
@@ -150,25 +145,6 @@ export function Checks() {
       return;
     }
     run(() => rejectCheck(check.id, reason, todayLocal()));
-  }
-
-  function handleEndorse(check: ThirdPartyCheck) {
-    if (suppliers.length === 0) {
-      setError('No hay proveedores activos para endosar.');
-      return;
-    }
-    const list = suppliers.slice(0, 30).map((s, i) => `${i + 1}. ${s.name}`).join('\n');
-    const answer = window.prompt(
-      `Endosar el cheque ${check.number} por $ ${formatMoney(check.amount)}.\n\n` +
-        `Sale de la cartera y se entrega al proveedor.\n\n¿A quién?\n${list}\n\nEscribí el número:`
-    );
-    if (answer === null) return;
-    const supplier = suppliers[Number(answer) - 1];
-    if (!supplier) {
-      setError('No elegiste un proveedor válido.');
-      return;
-    }
-    run(() => endorseCheck(check.id, supplier.id, todayLocal()));
   }
 
   return (
@@ -323,9 +299,11 @@ export function Checks() {
                           </ActionButton>
                         )}
                         {canEndorse(check.status) && (
-                          <ActionButton onClick={() => handleEndorse(check)} disabled={busy} icon={Send}>
-                            Endosar
-                          </ActionButton>
+                          <Link to={`/tesoreria/endosar-cheque?check=${check.id}`}>
+                            <ActionButton disabled={busy} icon={ArrowRightLeft}>
+                              Endosar
+                            </ActionButton>
+                          </Link>
                         )}
                         {canCredit(check.status) && (
                           <ActionButton onClick={() => handleCredit(check)} disabled={busy} icon={Check}>
@@ -361,7 +339,7 @@ function ActionButton({
   danger,
   children,
 }: {
-  onClick: () => void;
+  onClick?: () => void;
   disabled: boolean;
   icon: React.ComponentType<{ size?: number }>;
   danger?: boolean;

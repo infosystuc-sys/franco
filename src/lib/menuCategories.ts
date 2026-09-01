@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Settings,
   CalendarClock,
+  ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { REPORTS } from '@/src/lib/reports';
@@ -197,6 +198,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'operaciones',
         cards: [
           { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
+          { icon: ArrowRightLeft, label: 'Endosar cheques', path: '/tesoreria/endosar-cheque', adminOnly: true },
           { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', adminOnly: true },
           { icon: Landmark, label: 'Bancos', path: '/bancos', adminOnly: true },
         ],
