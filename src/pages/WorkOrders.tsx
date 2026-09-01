@@ -155,7 +155,8 @@ export function WorkOrders() {
               {filtered.map((order) => (
                 <tr
                   key={order.id}
-                  className="relative border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
+                  onDoubleClick={() => navigate(`/orden/${order.number}`)}
+                  className="relative cursor-pointer border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
                 >
                   <td data-primary className="relative py-3 pl-5 pr-3">
                     <StateStrip color={order.status.color} />
