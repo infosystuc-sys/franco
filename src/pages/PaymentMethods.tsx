@@ -1,6 +1,6 @@
 import React from 'react';
-import { Plus, X, Pencil, Trash2, Info, Landmark, Wallet, FileCheck } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Plus, X, Pencil, Trash2, Info, Landmark, Wallet, FileCheck, Percent, ArrowRight } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
@@ -89,6 +89,25 @@ export function PaymentMethods() {
       {error && (
         <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
+
+      {/* Una retención (IIBB u otra) no es un medio de pago — es una alícuota,
+          se administra junto con IVA y percepciones — pero es acá donde el
+          taller la va a buscar primero al pensar en "con qué se cobra/paga". */}
+      <Link
+        to="/alicuotas?kind=RETENCION"
+        className="flex items-center justify-between gap-2 rounded-md border border-line bg-panel px-4 py-3 text-sm text-text transition-colors hover:border-line-strong hover:bg-panel-alt"
+      >
+        <span className="flex items-start gap-2">
+          <Percent size={16} className="mt-0.5 shrink-0 text-accent-deep" />
+          <span>
+            Las retenciones (IIBB u otras) no se cargan acá: son alícuotas, se
+            administran junto con el resto de los impuestos.
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+          Ver retenciones <ArrowRight size={14} />
+        </span>
+      </Link>
 
       {/* Las transferencias son movimientos sobre una cuenta bancaria, no un
           medio en sí. Sin ninguna cuenta cargada no hay dónde registrarlas. */}

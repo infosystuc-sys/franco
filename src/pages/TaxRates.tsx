@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, X, Pencil, Trash2, Percent, Info } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
@@ -36,6 +36,13 @@ import {
  */
 export function TaxRates() {
   const { role } = useAuth();
+  const [searchParams] = useSearchParams();
+  // Se llega filtrado desde Tesorería → Medios de pago (las retenciones no
+  // son un medio de pago, pero es donde el taller las va a buscar primero).
+  const kindFilter = searchParams.get('kind');
+  const visibleKinds = kindFilter && TAX_KINDS.includes(kindFilter as TaxKind)
+    ? [kindFilter as TaxKind]
+    : TAX_KINDS;
   const [rates, setRates] = React.useState<TaxRate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -74,8 +81,12 @@ export function TaxRates() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="Alícuotas"
-        subtitle="IVA, percepciones e impuestos que llegan en las facturas de compra."
+        title={kindFilter ? TAX_KIND_LABELS[visibleKinds[0]] : 'Alícuotas'}
+        subtitle={
+          kindFilter
+            ? TAX_KIND_HELP[visibleKinds[0]]
+            : 'IVA, percepciones e impuestos que llegan en las facturas de compra.'
+        }
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus size={16} /> Nueva alícuota
@@ -90,7 +101,7 @@ export function TaxRates() {
       {loading && <p className="text-center text-text-soft">Cargando alícuotas…</p>}
 
       {!loading &&
-        TAX_KINDS.map((kind) => {
+        visibleKinds.map((kind) => {
           const ofKind = rates.filter((rate) => rate.kind === kind);
           return (
             <section key={kind}>
@@ -180,6 +191,7 @@ export function TaxRates() {
       {(creating || editing) && (
         <TaxRateModal
           rate={editing}
+          defaultKind={kindFilter && TAX_KINDS.includes(kindFilter as TaxKind) ? (kindFilter as TaxKind) : undefined}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -197,15 +209,17 @@ export function TaxRates() {
 
 function TaxRateModal({
   rate,
+  defaultKind,
   onClose,
   onSaved,
 }: {
   rate: TaxRate | null;
+  defaultKind?: TaxKind;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [form, setForm] = React.useState<TaxRateInput>(
-    rate ? taxRateToForm(rate) : EMPTY_TAX_RATE_FORM
+    rate ? taxRateToForm(rate) : { ...EMPTY_TAX_RATE_FORM, kind: defaultKind ?? EMPTY_TAX_RATE_FORM.kind }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
