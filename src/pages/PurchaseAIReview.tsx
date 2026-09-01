@@ -2,7 +2,7 @@
 import React from 'react';
 import { Plus, Save, XCircle, AlertTriangle, Package, Trash2 } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
+import { cn, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
@@ -23,6 +23,8 @@ import {
   proposeDueDate,
   savePurchaseInvoice,
   suggestedTaxAmount,
+  PURCHASE_DOC_TYPE_LABELS,
+  PURCHASE_DOC_TYPES,
   type PurchaseDocType,
   type PurchaseFootTax,
   type PurchaseLetter,
@@ -83,6 +85,7 @@ export function PurchaseAIReview() {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showPicker, setShowPicker] = React.useState(false);
+  const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
   const [showNewSupplier, setShowNewSupplier] = React.useState(false);
   const [retrying, setRetrying] = React.useState(false);
 
@@ -94,6 +97,8 @@ export function PurchaseAIReview() {
   const [issueDate, setIssueDate] = React.useState(todayLocal());
   const [receivedDate, setReceivedDate] = React.useState(todayLocal());
   const [dueDate, setDueDate] = React.useState('');
+  // Solo se pregunta en NC y ND: la factura de artículos siempre mueve stock.
+  const [movesStock, setMovesStock] = React.useState(false);
   const [lines, setLines] = React.useState<PurchaseLine[]>([]);
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
@@ -161,6 +166,13 @@ export function PurchaseAIReview() {
     setDueDate((current) => current || proposeDueDate(issueDate, supplier.paymentTermsDays));
   }, [supplier, issueDate]);
 
+  // La NC suele ser devolución, así que arranca marcada; la ND casi nunca
+  // trae mercadería, así que arranca desmarcada. La factura no pregunta.
+  React.useEffect(() => {
+    if (!isArticles) return;
+    setMovesStock(docType === 'NOTA_CREDITO');
+  }, [docType, isArticles]);
+
   const totals = React.useMemo(
     () => computePurchaseTotals(lines, footTaxes, Number(generalDiscount) || 0, vatRates),
     [lines, footTaxes, generalDiscount, vatRates]
@@ -213,11 +225,18 @@ export function PurchaseAIReview() {
   }
 
   function addArticle(article: Article) {
-    setLines((current) => [
-      ...current,
-      { ...EMPTY_LINE, articleId: article.id, code: article.code, description: article.description, unitPrice: article.purchasePrice ?? 0 },
-    ]);
+    if (pickerTargetIndex !== null) {
+      // Completa el renglón que la IA ya había leído (cantidad, precio,
+      // bonificación, alícuota): solo falta el artículo del catálogo.
+      patchLine(pickerTargetIndex, { articleId: article.id, code: article.code, description: article.description });
+    } else {
+      setLines((current) => [
+        ...current,
+        { ...EMPTY_LINE, articleId: article.id, code: article.code, description: article.description, unitPrice: article.purchasePrice ?? 0 },
+      ]);
+    }
     setShowPicker(false);
+    setPickerTargetIndex(null);
   }
 
   function addFootTax(taxRateId: string) {
@@ -251,7 +270,7 @@ export function PurchaseAIReview() {
         {
           kind: draft.kind, docType, letter, salesPoint: Number(salesPoint), number: Number(number),
           supplierId, issueDate, receivedDate, dueDate, paymentTermsDays: supplier.paymentTermsDays,
-          generalDiscountPercent: Number(generalDiscount) || 0, movesStock: docType === 'FACTURA', notes,
+          generalDiscountPercent: Number(generalDiscount) || 0, movesStock, notes,
         },
         lines,
         footTaxes
@@ -318,9 +337,17 @@ export function PurchaseAIReview() {
                 )}
               </label>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <label className={labelClass}>
-                  Letra
+                  Comprobante <ConfidenceChip value={confianzas.tipo_comprobante} />
+                  <select value={docType} onChange={(e) => setDocType(e.target.value as PurchaseDocType)} className={cn(inputClass, 'bg-panel')}>
+                    {PURCHASE_DOC_TYPES.map((type) => (
+                      <option key={type} value={type}>{PURCHASE_DOC_TYPE_LABELS[type]}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Letra <ConfidenceChip value={confianzas.letra} />
                   <select value={letter} onChange={(e) => setLetter(e.target.value as PurchaseLetter)} className={cn(inputClass, 'bg-panel font-mono')}>
                     {(['A', 'B', 'C', 'M'] as PurchaseLetter[]).map((l) => <option key={l} value={l}>{l}</option>)}
                   </select>
@@ -337,12 +364,37 @@ export function PurchaseAIReview() {
                   Fecha <ConfidenceChip value={confianzas.fecha_comprobante} />
                   <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className={inputClass} />
                 </label>
+                <label className={labelClass}>
+                  Fecha de recepción
+                  <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className={inputClass} />
+                </label>
               </div>
 
               <label className={labelClass}>
                 Vencimiento
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
               </label>
+
+              {isArticles && docType !== 'FACTURA' && (
+                <label className="flex cursor-pointer items-start gap-2 border border-line bg-panel-alt p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={movesStock}
+                    onChange={(e) => setMovesStock(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-accent-deep"
+                  />
+                  <span>
+                    <span className="font-semibold text-text">
+                      {docType === 'NOTA_CREDITO' ? 'Devuelve mercadería' : 'Ingresa mercadería'}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-text-soft">
+                      {docType === 'NOTA_CREDITO'
+                        ? 'Marcado, el stock se descuenta. Sin marcar, la nota de crédito es solo un ajuste de precio y no toca el inventario.'
+                        : 'Marcado, el stock se suma. Una nota de débito suele ser un cargo posterior sin mercadería, por eso arranca sin marcar.'}
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           </Panel>
         </div>
@@ -352,7 +404,7 @@ export function PurchaseAIReview() {
         <SectionHeader
           title={isArticles ? 'Artículos' : 'Conceptos'}
           actions={isArticles && (
-            <Button type="button" onClick={() => setShowPicker(true)} className="px-3">
+            <Button type="button" onClick={() => { setPickerTargetIndex(null); setShowPicker(true); }} className="px-3">
               <Package size={16} /> Agregar artículo
             </Button>
           )}
@@ -384,7 +436,7 @@ export function PurchaseAIReview() {
                       <td colSpan={8} className="px-2 py-1">
                         <button
                           type="button"
-                          onClick={() => setShowPicker(true)}
+                          onClick={() => { setPickerTargetIndex(idx); setShowPicker(true); }}
                           className="flex w-full items-center justify-between text-left text-danger hover:underline"
                         >
                           <span>{line.description || 'Renglón sin artículo del catálogo asignado'} — elegir artículo</span>
@@ -453,7 +505,24 @@ export function PurchaseAIReview() {
         </Panel>
       </div>
 
-      {showPicker && <PurchaseArticlePicker articles={articles} onPick={addArticle} onClose={() => setShowPicker(false)} />}
+      <Panel className="mb-6 p-5">
+        <SectionHeader title="Observaciones" />
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Notas internas sobre este comprobante. Opcional."
+          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+        />
+      </Panel>
+
+      {showPicker && (
+        <PurchaseArticlePicker
+          articles={articles}
+          onPick={addArticle}
+          onClose={() => { setShowPicker(false); setPickerTargetIndex(null); }}
+        />
+      )}
       {showNewSupplier && (
         <SupplierModal
           supplier={null}
