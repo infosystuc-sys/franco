@@ -2,7 +2,7 @@
 import React from 'react';
 import { Plus, Save, XCircle, AlertTriangle, Package, Trash2 } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { cn, todayLocal } from '@/src/lib/utils';
+import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
@@ -70,6 +70,52 @@ function parseArgNumber(text: string): number {
   return Number.isFinite(num) ? num : 0;
 }
 
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  return year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+function isoDate(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Fecha del comprobante tal como la imprimió el proveedor -> ISO (yyyy-mm-dd).
+ * Gemini manda el texto como está en el papel: lo normal es DD/MM/AAAA
+ * (o con guiones), pero a veces ya viene en ISO. Ante cualquier otra cosa
+ * (formato raro, vacío, fecha imposible) devuelve null: mejor dejar el
+ * campo en la fecha de hoy que fabricar un valor incorrecto con confianza.
+ */
+function parseFechaExtraida(text: string): string | null {
+  const cleaned = text.trim();
+  if (!cleaned) return null;
+
+  const iso = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const [, y, m, d] = iso.map(Number);
+    return isValidCalendarDate(y, m, d) ? isoDate(y, m, d) : null;
+  }
+
+  const dmy = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy.map(Number);
+    return isValidCalendarDate(y, m, d) ? isoDate(y, m, d) : null;
+  }
+
+  return null;
+}
+
+/** Comparación tolerante de nombres: sin tildes, sin mayúsculas, por inclusión
+ *  en cualquier sentido. El nombre impreso en la factura casi nunca coincide
+ *  exacto con el nombre cargado en Alícuotas ("Percepción IIBB Tucumán" vs.
+ *  lo que sea que haya en el sistema). */
+function normalizeForMatch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export function PurchaseAIReview() {
   const { role } = useAuth();
   const { id } = useParams();
@@ -103,6 +149,9 @@ export function PurchaseAIReview() {
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
   const [notes, setNotes] = React.useState('');
+  // Percepciones que la IA leyó pero no coinciden con ninguna alícuota
+  // cargada: no se inventan, se avisan para que el usuario decida.
+  const [unmatchedPercepciones, setUnmatchedPercepciones] = React.useState<{ nombre: string; importe: string }[]>([]);
 
   const isArticles = draft?.kind === 'ARTICULOS';
 
@@ -129,7 +178,32 @@ export function PurchaseAIReview() {
         if (['A', 'B', 'C', 'M'].includes(v.letra)) setLetter(v.letra);
         if (v.punto_venta) setSalesPoint(String(Number(v.punto_venta.replace(/\D/g, '')) || ''));
         if (v.numero) setNumber(String(Number(v.numero.replace(/\D/g, '')) || ''));
+        const parsedIssueDate = parseFechaExtraida(String(v.fecha_comprobante ?? ''));
+        if (parsedIssueDate) setIssueDate(parsedIssueDate);
         setNotes(v.condicion_pago ? `Condición de pago (IA): ${v.condicion_pago}` : '');
+
+        // Percepciones leídas del pie: se matchean por nombre contra las
+        // alícuotas de percepción/impuesto interno ya cargadas. Lo que no
+        // matchea no se inventa: queda afuera de footTaxes y se avisa.
+        const footCandidates = r.filter((rate) => rate.kind === 'PERCEPCION' || rate.kind === 'IMPUESTO_INTERNO');
+        const matchedFootTaxes: PurchaseFootTax[] = [];
+        const unmatched: { nombre: string; importe: string }[] = [];
+        for (const p of (raw.percepciones ?? []) as any[]) {
+          const nombre = String(p?.nombre ?? '').trim();
+          if (!nombre) continue;
+          const normalizedName = normalizeForMatch(nombre);
+          const match = footCandidates.find((rate) => {
+            const normalizedRateName = normalizeForMatch(rate.name);
+            return normalizedRateName.includes(normalizedName) || normalizedName.includes(normalizedRateName);
+          });
+          if (match) {
+            matchedFootTaxes.push({ taxRateId: match.id, amount: parseArgNumber(String(p?.importe ?? '0')) });
+          } else {
+            unmatched.push({ nombre, importe: String(p?.importe ?? '') });
+          }
+        }
+        setFootTaxes(matchedFootTaxes);
+        setUnmatchedPercepciones(unmatched);
 
         const rateByPercent = new Map(r.filter((rate) => rate.kind === 'IVA').map((rate) => [rate.rate, rate]));
         const draftLines: PurchaseLine[] = (raw.renglones ?? []).map((row: any) => {
@@ -467,6 +541,20 @@ export function PurchaseAIReview() {
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Panel className="p-5">
           <SectionHeader title="Impuestos del pie" />
+          {unmatchedPercepciones.length > 0 && (
+            <div className="mb-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-text">
+              <p className="flex items-center gap-1.5 font-semibold text-state-wait">
+                <AlertTriangle size={14} /> Percepciones leídas sin alícuota cargada
+              </p>
+              <ul className="mt-1 space-y-0.5 pl-5 text-text-soft" style={{ listStyleType: 'disc' }}>
+                {unmatchedPercepciones.map((p, i) => (
+                  <li key={i}>
+                    La IA leyó una percepción que no coincide con ninguna alícuota cargada: «{p.nombre}» $ {formatMoney(parseArgNumber(p.importe))}. Agregala a mano o cargala en Alícuotas.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {footRates.length > 0 && (
             <select value="" onChange={(e) => addFootTax(e.target.value)} className={cn(inputClass, 'mt-0 bg-panel')}>
               <option value="">Agregar percepción o impuesto…</option>
