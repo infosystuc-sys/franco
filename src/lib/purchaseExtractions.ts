@@ -48,10 +48,45 @@ function mapExtraction(row: any): PurchaseExtraction {
   };
 }
 
+/** Tope de tamaño del archivo a leer. Una foto de celular ronda los 2–5 MB;
+ *  arriba de 10 MB casi seguro es un escaneo innecesariamente pesado, y el
+ *  viaje entero (subida + base64 + Gemini) se vuelve una espera larga que
+ *  después falla del otro lado. */
+export const MAX_DRAFT_FILE_BYTES = 10 * 1024 * 1024;
+
+const ACCEPTED_MIME_PREFIXES = ['image/'];
+const ACCEPTED_MIME_TYPES = ['application/pdf'];
+
+/** Valida el archivo antes de subirlo. Devuelve el motivo del rechazo, o null si está bien. */
+export function describeDraftFileProblem(file: File): string | null {
+  const type = file.type || '';
+  const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+  const looksAccepted =
+    ACCEPTED_MIME_TYPES.includes(type) ||
+    ACCEPTED_MIME_PREFIXES.some((prefix) => type.startsWith(prefix)) ||
+    // Algunos navegadores no informan el type: se cae al de la extensión.
+    (type === '' && ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(ext));
+
+  if (!looksAccepted) {
+    return 'Solo se puede subir un PDF o una foto (JPG, PNG). Ese archivo no es ninguno de los dos.';
+  }
+  if (file.size === 0) {
+    return 'El archivo está vacío.';
+  }
+  if (file.size > MAX_DRAFT_FILE_BYTES) {
+    const mb = (file.size / (1024 * 1024)).toFixed(1);
+    return `El archivo pesa ${mb} MB y el máximo es 10 MB. Sacá la foto con menos resolución o comprimí el PDF.`;
+  }
+  return null;
+}
+
 /** Sube el PDF/foto al bucket de borradores. La Edge Function lo lee después con la service key. */
 export async function uploadPurchaseInvoiceDraft(
   file: File
 ): Promise<{ storagePath: string; mimeType: string }> {
+  const problema = describeDraftFileProblem(file);
+  if (problema) throw new Error(problema);
+
   const ext = file.name.split('.').pop() || (file.type === 'application/pdf' ? 'pdf' : 'jpg');
   const path = `${crypto.randomUUID()}.${ext}`;
   const mimeType = file.type || (ext === 'pdf' ? 'application/pdf' : 'image/jpeg');
@@ -99,12 +134,17 @@ export async function fetchExtractionById(id: string): Promise<PurchaseExtractio
   return data ? mapExtraction(data) : null;
 }
 
-/** Borradores leídos por IA que todavía no se confirmaron ni descartaron. */
+/**
+ * Borradores leídos por IA que todavía no se confirmaron ni descartaron.
+ * Incluye los que quedaron en ERROR: si no, un borrador fallido es
+ * inalcanzable en cuanto el usuario cierra la pestaña, y con él el botón de
+ * reintentar la lectura sobre el archivo ya subido.
+ */
 export async function fetchPendingExtractions(): Promise<PurchaseExtraction[]> {
   const { data, error } = await supabase
     .from('purchase_invoice_extractions')
     .select(SELECT)
-    .eq('status', 'EXTRAIDO')
+    .in('status', ['EXTRAIDO', 'ERROR'])
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapExtraction);

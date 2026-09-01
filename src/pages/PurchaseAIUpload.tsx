@@ -7,6 +7,7 @@ import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import type { PurchaseKind } from '@/src/lib/purchases';
 import {
+  describeDraftFileProblem,
   describeExtractionError,
   requestExtraction,
   uploadPurchaseInvoiceDraft,
@@ -28,6 +29,13 @@ export function PurchaseAIUpload() {
   }
 
   async function handleFile(file: File) {
+    // Se valida antes de subir: no tiene sentido gastar la subida entera para
+    // que el archivo rebote del otro lado.
+    const problema = describeDraftFileProblem(file);
+    if (problema) {
+      setError(problema);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -65,6 +73,7 @@ export function PurchaseAIUpload() {
           <>
             <Sparkles size={32} className="text-accent-deep" />
             <p className="text-sm text-text-soft">Subí el PDF de la factura, o sacale una foto con el celular.</p>
+            <p className="text-xs text-text-faint">PDF o imagen, hasta 10 MB.</p>
             <label className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-accent-ink hover:bg-accent-deep">
               Elegir archivo
               <input
@@ -74,6 +83,9 @@ export function PurchaseAIUpload() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
+                  // Se limpia el input para que, si el archivo se rechaza, se
+                  // pueda volver a elegir el mismo después de achicarlo.
+                  e.target.value = '';
                   if (file) handleFile(file);
                 }}
               />

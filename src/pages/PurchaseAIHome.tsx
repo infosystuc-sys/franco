@@ -1,6 +1,6 @@
 // src/pages/PurchaseAIHome.tsx
 import React from 'react';
-import { Sparkles, Package, FileText } from 'lucide-react';
+import { Sparkles, Package, FileText, AlertTriangle } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -75,21 +75,31 @@ export function PurchaseAIHome() {
           <p className="text-sm text-text-soft">No hay borradores pendientes de revisar.</p>
         ) : (
           <ul className="divide-y divide-line">
-            {pending.map((draft) => (
-              <li key={draft.id}>
-                <Link
-                  to={`/compras-ia/revisar/${draft.id}`}
-                  className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-accent-deep"
-                >
-                  <span>
-                    {draft.kind === 'ARTICULOS' ? 'Artículos' : 'Conceptos'} · leída el {formatDate(draft.createdAt)}
-                  </span>
-                  <Button variant="ghost" type="button" className="pointer-events-none px-3">
-                    Revisar
-                  </Button>
-                </Link>
-              </li>
-            ))}
+            {pending.map((draft) => {
+              // Los que fallaron se listan igual: es la única forma de llegar
+              // al botón de reintentar sobre el archivo que ya está subido.
+              const failed = draft.status === 'ERROR';
+              return (
+                <li key={draft.id}>
+                  <Link
+                    to={`/compras-ia/revisar/${draft.id}`}
+                    className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-accent-deep"
+                  >
+                    <span className={failed ? 'text-danger' : undefined}>
+                      {failed && <AlertTriangle size={14} className="mr-1.5 inline-block align-[-2px]" />}
+                      {draft.kind === 'ARTICULOS' ? 'Artículos' : 'Conceptos'} ·{' '}
+                      {failed ? 'no se pudo leer' : 'leída'} el {formatDate(draft.createdAt)}
+                      {failed && draft.errorMessage && (
+                        <span className="mt-0.5 block text-[11px] text-text-soft">{draft.errorMessage}</span>
+                      )}
+                    </span>
+                    <Button variant="ghost" type="button" className="pointer-events-none shrink-0 px-3">
+                      {failed ? 'Reintentar' : 'Revisar'}
+                    </Button>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Panel>

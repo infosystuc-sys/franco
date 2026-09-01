@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { GoogleGenAI, Type } from 'npm:@google/genai@2.4.0';
 
 /*
@@ -190,85 +191,105 @@ Deno.serve(async (req: Request) => {
     return json({ id: draft.id, error: mensaje }, 200); // 200: el borrador existe, el cliente lee su status ERROR
   }
 
-  const { data: fileData, error: errorDescarga } = await db.storage.from(BUCKET).download(storagePath);
-  if (errorDescarga || !fileData) {
-    return marcarError(`No se pudo leer el archivo subido: ${errorDescarga?.message}`);
-  }
-
-  const { data: company } = await db.from('company_settings').select('tax_id').eq('id', true).maybeSingle();
-  const ownTaxId = company?.tax_id ?? null;
-
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(await fileData.arrayBuffer())));
-
-  let respuesta;
+  // Todo lo que sigue va adentro de un try: cualquier excepción inesperada
+  // (armado del payload, red, matcheo) tiene que dejar el borrador en ERROR
+  // con mensaje, nunca huérfano en EXTRAIDO sin raw_extraction — que la
+  // pantalla de revisión mostraría como un formulario vacío normal.
   try {
-    respuesta = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: [
-        { text: 'Extraé los datos de este comprobante según el schema.' },
-        { inlineData: { mimeType, data: base64 } },
-      ],
-      config: {
-        systemInstruction: promptFor(kind, ownTaxId),
-        responseMimeType: 'application/json',
-        responseSchema: schemaFor(kind),
-      },
-    });
-  } catch (err) {
-    return marcarError(`Gemini no pudo leer el comprobante: ${err instanceof Error ? err.message : String(err)}`);
-  }
+    const { data: fileData, error: errorDescarga } = await db.storage.from(BUCKET).download(storagePath);
+    if (errorDescarga || !fileData) {
+      return await marcarError(`No se pudo leer el archivo subido: ${errorDescarga?.message}`);
+    }
 
-  let extraccion: ExtractedHeader;
-  try {
-    extraccion = parseExtraction(respuesta.text ?? '');
-  } catch {
-    return marcarError('La respuesta de Gemini no vino en un JSON legible.');
-  }
+    const { data: company } = await db.from('company_settings').select('tax_id').eq('id', true).maybeSingle();
+    const ownTaxId = company?.tax_id ?? null;
 
-  // ── Matcheo de proveedor por CUIT exacto.
-  const cuitLimpio = (extraccion.valores.proveedor_cuit ?? '').replace(/\D/g, '');
-  let supplierId: string | null = null;
-  if (cuitLimpio) {
-    const { data: supplier } = await db.from('suppliers').select('id').eq('tax_id', cuitLimpio).maybeSingle();
-    supplierId = supplier?.id ?? null;
-  }
+    // encodeBase64 recorre el buffer de a bloques. El
+    // String.fromCharCode(...spread) que había acá pasaba un argumento por
+    // byte y reventaba con RangeError arriba de ~100 KB: o sea, toda foto de
+    // celular fallaba siempre.
+    const base64 = encodeBase64(new Uint8Array(await fileData.arrayBuffer()));
 
-  // ── Matcheo de renglones por código exacto de proveedor (solo ARTICULOS).
-  let renglonesConMatch = extraccion.renglones;
-  if (kind === 'ARTICULOS' && supplierId) {
-    renglonesConMatch = await Promise.all(
-      extraccion.renglones.map(async (renglon) => {
-        const codigo = String(renglon.codigo ?? '').trim();
-        if (!codigo) return { ...renglon, article_id: null };
-        const { data: match } = await db
-          .from('article_suppliers')
-          .select('article_id')
-          .eq('supplier_id', supplierId)
-          .ilike('supplier_code', codigo)
-          .maybeSingle();
-        return { ...renglon, article_id: match?.article_id ?? null };
+    let respuesta;
+    try {
+      respuesta = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: [
+          { text: 'Extraé los datos de este comprobante según el schema.' },
+          { inlineData: { mimeType, data: base64 } },
+        ],
+        config: {
+          systemInstruction: promptFor(kind, ownTaxId),
+          responseMimeType: 'application/json',
+          responseSchema: schemaFor(kind),
+        },
+      });
+    } catch (err) {
+      return await marcarError(`Gemini no pudo leer el comprobante: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    let extraccion: ExtractedHeader;
+    try {
+      extraccion = parseExtraction(respuesta.text ?? '');
+    } catch {
+      return await marcarError('La respuesta de Gemini no vino en un JSON legible.');
+    }
+
+    // ── Matcheo de proveedor por CUIT exacto.
+    const cuitLimpio = (extraccion.valores.proveedor_cuit ?? '').replace(/\D/g, '');
+    let supplierId: string | null = null;
+    if (cuitLimpio) {
+      const { data: supplier } = await db.from('suppliers').select('id').eq('tax_id', cuitLimpio).maybeSingle();
+      supplierId = supplier?.id ?? null;
+    }
+
+    // ── Matcheo de renglones por código exacto de proveedor (solo ARTICULOS).
+    let renglonesConMatch = extraccion.renglones;
+    if (kind === 'ARTICULOS' && supplierId) {
+      renglonesConMatch = await Promise.all(
+        extraccion.renglones.map(async (renglon) => {
+          const codigo = String(renglon.codigo ?? '').trim();
+          if (!codigo) return { ...renglon, article_id: null };
+          // El código va escapado: en ilike, "_" y "%" son comodines, y un
+          // código impreso "AB_1023" matchearía "AB-1023" o "AB11023". Con el
+          // escape la comparación queda exacta salvo por mayúsculas, que es
+          // justo cómo está definido el unique (supplier_id, upper(supplier_code)).
+          const patron = codigo.replace(/([\\%_])/g, '\\$1');
+          const { data: matches } = await db
+            .from('article_suppliers')
+            .select('article_id')
+            .eq('supplier_id', supplierId)
+            .ilike('supplier_code', patron)
+            .limit(2);
+          // Más de un candidato = ambiguo: se deja sin matchear para que lo
+          // elija el usuario, en vez de atar el renglón al artículo equivocado.
+          const articleId = matches?.length === 1 ? matches[0].article_id : null;
+          return { ...renglon, article_id: articleId ?? null };
+        })
+      );
+    } else if (kind === 'ARTICULOS') {
+      renglonesConMatch = extraccion.renglones.map((r) => ({ ...r, article_id: null }));
+    }
+
+    const { error: errorUpdate } = await db
+      .from('purchase_invoice_extractions')
+      .update({
+        supplier_id: supplierId,
+        raw_extraction: { ...extraccion, renglones: renglonesConMatch },
+        status: 'EXTRAIDO',
       })
-    );
-  } else if (kind === 'ARTICULOS') {
-    renglonesConMatch = extraccion.renglones.map((r) => ({ ...r, article_id: null }));
+      .eq('id', draft.id);
+
+    if (errorUpdate) {
+      // Igual que cualquier otra falla post-creación del borrador: se marca
+      // ERROR en vez de dejarlo con status EXTRAIDO sin raw_extraction — si no,
+      // la pantalla de revisión lo mostraría como "leído" sin tener nada para
+      // mostrar.
+      return await marcarError(`No se pudo guardar la lectura: ${errorUpdate.message}`);
+    }
+
+    return json({ id: draft.id });
+  } catch (err) {
+    return await marcarError(`No se pudo procesar el archivo: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  const { error: errorUpdate } = await db
-    .from('purchase_invoice_extractions')
-    .update({
-      supplier_id: supplierId,
-      raw_extraction: { ...extraccion, renglones: renglonesConMatch },
-      status: 'EXTRAIDO',
-    })
-    .eq('id', draft.id);
-
-  if (errorUpdate) {
-    // Igual que cualquier otra falla post-creación del borrador: se marca
-    // ERROR en vez de dejarlo con status EXTRAIDO sin raw_extraction — si no,
-    // la pantalla de revisión lo mostraría como "leído" sin tener nada para
-    // mostrar.
-    return marcarError(`No se pudo guardar la lectura: ${errorUpdate.message}`);
-  }
-
-  return json({ id: draft.id });
 });

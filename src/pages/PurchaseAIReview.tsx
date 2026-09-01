@@ -1,6 +1,6 @@
 // src/pages/PurchaseAIReview.tsx
 import React from 'react';
-import { Plus, Save, XCircle, AlertTriangle, Package, Trash2 } from 'lucide-react';
+import { Plus, Save, XCircle, AlertTriangle, CheckCircle2, Package, Trash2 } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -45,11 +45,37 @@ const EMPTY_LINE: PurchaseLine = {
   quantity: 1, unitPrice: 0, discountPercent: 0, vatRateId: '',
 };
 
+/**
+ * Un renglón de la revisión: el renglón que se va a guardar (PurchaseLine,
+ * idéntico al de la carga manual) más lo que decía el papel. Cuando el
+ * renglón quedó atado a un artículo del catálogo, code/description pasan a
+ * ser los del catálogo —que es lo que realmente se va a afectar— y lo
+ * impreso se conserva acá para poder cotejar. Los campos extra no molestan a
+ * savePurchaseInvoice, que solo lee los de PurchaseLine.
+ */
+type ReviewLine = PurchaseLine & { printedCode?: string; printedDescription?: string };
+
 /** Confianza 0..1 -> semáforo. Mismo criterio que PH_FAC. */
 function ConfidenceChip({ value }: { value: number | undefined }) {
   if (value === undefined) return null;
   const color = value >= 0.8 ? 'text-state-done' : value >= 0.5 ? 'text-state-wait' : 'text-danger';
   return <span className={cn('ml-1.5 font-mono text-[10px]', color)}>{Math.round(value * 100)}%</span>;
+}
+
+/**
+ * Marca del campo. El chip de confianza solo tiene sentido si el valor que se
+ * ve en pantalla es el que leyó la IA: cuando la precarga descartó lo que vino
+ * (formato de fecha raro, letra fuera de A/B/C/M, tipo desconocido) el campo
+ * quedó en su valor por defecto, y mostrar ahí un 95% verde es mentirle al que
+ * revisa. En ese caso se avisa que hay que completarlo a mano.
+ */
+function FieldMark({ applied, confidence }: { applied: boolean; confidence: number | undefined }) {
+  if (applied) return <ConfidenceChip value={confidence} />;
+  return (
+    <span className="ml-1.5 text-[10px] font-normal normal-case text-state-wait">
+      no se pudo leer, completalo a mano
+    </span>
+  );
 }
 
 function parseArgNumber(text: string): number {
@@ -58,6 +84,17 @@ function parseArgNumber(text: string): number {
   if (!cleaned) return 0;
   const lastComma = cleaned.lastIndexOf(',');
   const lastDot = cleaned.lastIndexOf('.');
+
+  // Un único separador seguido de exactamente tres dígitos, y el otro
+  // separador sin aparecer: es separador de miles, no decimal. "12.500" es el
+  // formato argentino de un precio redondo sin centavos y se imprime así; si
+  // se tomara el punto como decimal, el renglón entraría a mil veces menos.
+  const separators = (cleaned.match(/[.,]/g) ?? []).length;
+  if (separators === 1 && /\d[.,]\d{3}$/.test(cleaned)) {
+    const num = Number(cleaned.replace(/[.,]/g, ''));
+    return Number.isFinite(num) ? num : 0;
+  }
+
   let normalized = cleaned;
   if (lastComma > lastDot) {
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
@@ -81,9 +118,10 @@ function isoDate(year: number, month: number, day: number): string {
 /**
  * Fecha del comprobante tal como la imprimió el proveedor -> ISO (yyyy-mm-dd).
  * Gemini manda el texto como está en el papel: lo normal es DD/MM/AAAA
- * (o con guiones), pero a veces ya viene en ISO. Ante cualquier otra cosa
- * (formato raro, vacío, fecha imposible) devuelve null: mejor dejar el
- * campo en la fecha de hoy que fabricar un valor incorrecto con confianza.
+ * (o con guiones), a veces DD/MM/AA con año de dos dígitos, y a veces ya
+ * viene en ISO. Ante cualquier otra cosa (formato raro, vacío, fecha
+ * imposible) devuelve null: mejor dejar el campo en la fecha de hoy — con el
+ * aviso de que no se pudo leer — que fabricar un valor incorrecto.
  */
 function parseFechaExtraida(text: string): string | null {
   const cleaned = text.trim();
@@ -95,13 +133,24 @@ function parseFechaExtraida(text: string): string | null {
     return isValidCalendarDate(y, m, d) ? isoDate(y, m, d) : null;
   }
 
-  const dmy = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  const dmy = cleaned.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
   if (dmy) {
-    const [, d, m, y] = dmy.map(Number);
+    const [, d, m, rawYear] = dmy.map(Number);
+    const y = dmy[3].length === 2 ? expandTwoDigitYear(rawYear) : rawYear;
     return isValidCalendarDate(y, m, d) ? isoDate(y, m, d) : null;
   }
 
   return null;
+}
+
+/**
+ * "26" -> 2026. El siglo se asume 2000; si eso diera una fecha más de un año
+ * en el futuro (un "05/08/99" que sería 2099) se resta un siglo. Una factura
+ * de compra siempre es del pasado reciente.
+ */
+function expandTwoDigitYear(twoDigits: number): number {
+  const year = 2000 + twoDigits;
+  return year > new Date().getFullYear() + 1 ? year - 100 : year;
 }
 
 /** Comparación tolerante de nombres: sin tildes, sin mayúsculas, por inclusión
@@ -134,6 +183,12 @@ export function PurchaseAIReview() {
   const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
   const [showNewSupplier, setShowNewSupplier] = React.useState(false);
   const [retrying, setRetrying] = React.useState(false);
+  // Caso raro pero venenoso: la RPC guardó el comprobante y falló el update
+  // del borrador. El comprobante existe; hay que decirlo así, no como un
+  // error de guardado, o se carga dos veces.
+  const [confirmWarning, setConfirmWarning] = React.useState<
+    { invoiceId: string; fullNumber: string; detail: string } | null
+  >(null);
 
   const [supplierId, setSupplierId] = React.useState('');
   const [docType, setDocType] = React.useState<PurchaseDocType>('FACTURA');
@@ -143,9 +198,10 @@ export function PurchaseAIReview() {
   const [issueDate, setIssueDate] = React.useState(todayLocal());
   const [receivedDate, setReceivedDate] = React.useState(todayLocal());
   const [dueDate, setDueDate] = React.useState('');
+  const [dueDateTouched, setDueDateTouched] = React.useState(false);
   // Solo se pregunta en NC y ND: la factura de artículos siempre mueve stock.
   const [movesStock, setMovesStock] = React.useState(false);
-  const [lines, setLines] = React.useState<PurchaseLine[]>([]);
+  const [lines, setLines] = React.useState<ReviewLine[]>([]);
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
   const [notes, setNotes] = React.useState('');
@@ -153,9 +209,17 @@ export function PurchaseAIReview() {
   // total que dan los renglones que se están por guardar (PurchaseTotalsSummary
   // hace la comparación sola en cuanto este campo tiene un valor).
   const [declaredTotal, setDeclaredTotal] = React.useState('');
+  // El total tal como lo leyó la IA, aparte del campo de control: ese el
+  // usuario lo puede corregir, y el chip de confianza mide la lectura, no la
+  // corrección.
+  const [aiTotal, setAiTotal] = React.useState<number | null>(null);
   // Percepciones que la IA leyó pero no coinciden con ninguna alícuota
   // cargada: no se inventan, se avisan para que el usuario decida.
   const [unmatchedPercepciones, setUnmatchedPercepciones] = React.useState<{ nombre: string; importe: string }[]>([]);
+  // Qué campos del encabezado quedaron efectivamente con lo que leyó la IA.
+  // Lo que no se aplicó no lleva chip de confianza: lleva el aviso de que hay
+  // que completarlo a mano.
+  const [applied, setApplied] = React.useState<Record<string, boolean>>({});
 
   const isArticles = draft?.kind === 'ARTICULOS';
 
@@ -169,24 +233,50 @@ export function PurchaseAIReview() {
         setDraft(d);
         setSuppliers(s);
         setRates(r);
-        if (d.kind === 'ARTICULOS') setArticles(await fetchArticles(false));
-        else setConcepts(await fetchExpenseConcepts(true));
+        let catalog: Article[] = [];
+        if (d.kind === 'ARTICULOS') {
+          catalog = await fetchArticles(false);
+          setArticles(catalog);
+        } else {
+          setConcepts(await fetchExpenseConcepts(true));
+        }
 
         setAttachmentUrl(await getDraftAttachmentUrl(d.attachmentStoragePath));
 
-        // Precarga desde lo que leyó la IA.
+        // Precarga desde lo que leyó la IA. De cada campo se anota si el valor
+        // leído se aplicó de verdad: si se descartó, el campo queda en su
+        // default y no puede llevar chip de confianza (ver FieldMark).
         const raw = (d.rawExtraction ?? {}) as any;
         const v = raw.valores ?? {};
+        const appliedFields: Record<string, boolean> = {};
         if (d.supplierId) setSupplierId(d.supplierId);
-        if (v.tipo_comprobante === 'NOTA_CREDITO' || v.tipo_comprobante === 'NOTA_DEBITO') setDocType(v.tipo_comprobante);
-        if (['A', 'B', 'C', 'M'].includes(v.letra)) setLetter(v.letra);
-        if (v.punto_venta) setSalesPoint(String(Number(v.punto_venta.replace(/\D/g, '')) || ''));
-        if (v.numero) setNumber(String(Number(v.numero.replace(/\D/g, '')) || ''));
+        appliedFields.proveedor_cuit = !!d.supplierId;
+
+        const tipoLeido = String(v.tipo_comprobante ?? '');
+        if (tipoLeido === 'NOTA_CREDITO' || tipoLeido === 'NOTA_DEBITO') setDocType(tipoLeido);
+        appliedFields.tipo_comprobante = tipoLeido === 'FACTURA' || tipoLeido === 'NOTA_CREDITO' || tipoLeido === 'NOTA_DEBITO';
+
+        const letraLeida = String(v.letra ?? '');
+        if (['A', 'B', 'C', 'M'].includes(letraLeida)) setLetter(letraLeida as PurchaseLetter);
+        appliedFields.letra = ['A', 'B', 'C', 'M'].includes(letraLeida);
+
+        const puntoVenta = v.punto_venta ? String(Number(String(v.punto_venta).replace(/\D/g, '')) || '') : '';
+        if (puntoVenta) setSalesPoint(puntoVenta);
+        appliedFields.punto_venta = puntoVenta !== '';
+
+        const numeroLeido = v.numero ? String(Number(String(v.numero).replace(/\D/g, '')) || '') : '';
+        if (numeroLeido) setNumber(numeroLeido);
+        appliedFields.numero = numeroLeido !== '';
+
         const parsedIssueDate = parseFechaExtraida(String(v.fecha_comprobante ?? ''));
         if (parsedIssueDate) setIssueDate(parsedIssueDate);
+        appliedFields.fecha_comprobante = parsedIssueDate !== null;
+
+        setApplied(appliedFields);
         setNotes(v.condicion_pago ? `Condición de pago (IA): ${v.condicion_pago}` : '');
         const parsedDeclaredTotal = parseArgNumber(String(v.total ?? ''));
         setDeclaredTotal(parsedDeclaredTotal > 0 ? String(parsedDeclaredTotal) : '');
+        setAiTotal(parsedDeclaredTotal > 0 ? parsedDeclaredTotal : null);
 
         // Percepciones leídas del pie: se matchean por nombre contra las
         // alícuotas de percepción/impuesto interno ya cargadas. Lo que no
@@ -212,14 +302,24 @@ export function PurchaseAIReview() {
         setUnmatchedPercepciones(unmatched);
 
         const rateByPercent = new Map(r.filter((rate) => rate.kind === 'IVA').map((rate) => [rate.rate, rate]));
-        const draftLines: PurchaseLine[] = (raw.renglones ?? []).map((row: any) => {
+        const articleById = new Map(catalog.map((a) => [a.id, a]));
+        const draftLines: ReviewLine[] = (raw.renglones ?? []).map((row: any) => {
           const alicuota = Number(String(row.alicuota_iva ?? '').replace(',', '.')) || 0;
           const vatRate = rateByPercent.get(alicuota);
+          const printedCode = String(row.codigo ?? '');
+          const printedDescription = String(row.descripcion ?? '');
+          // Si el renglón quedó atado a un artículo, lo que manda es el
+          // artículo: es su stock y su precio de compra lo que se va a tocar.
+          // El código y la descripción del papel se guardan aparte y se
+          // muestran debajo, para poder cotejar que el match sea el correcto.
+          const article = row.article_id ? articleById.get(String(row.article_id)) : undefined;
           return {
-            articleId: row.article_id ?? null,
+            articleId: article?.id ?? null,
             conceptId: null,
-            code: String(row.codigo ?? ''),
-            description: String(row.descripcion ?? ''),
+            code: article ? article.code : printedCode,
+            description: article ? article.description : printedDescription,
+            printedCode,
+            printedDescription,
             quantity: parseArgNumber(String(row.cantidad ?? '1')) || 1,
             unitPrice: parseArgNumber(String(row.precio_unitario ?? '0')),
             discountPercent: parseArgNumber(String(row.bonificacion_porcentaje ?? '0')),
@@ -241,10 +341,14 @@ export function PurchaseAIReview() {
     [rates]
   );
 
+  // Mismo mecanismo que la carga manual: el vencimiento se recalcula cada vez
+  // que cambia la fecha del comprobante o el proveedor, salvo que el revisor
+  // ya lo haya escrito a mano. Antes solo se escribía si estaba vacío, así que
+  // corregir una fecha mal leída dejaba el vencimiento viejo.
   React.useEffect(() => {
-    if (!supplier || !issueDate) return;
-    setDueDate((current) => current || proposeDueDate(issueDate, supplier.paymentTermsDays));
-  }, [supplier, issueDate]);
+    if (dueDateTouched || !supplier || !issueDate) return;
+    setDueDate(proposeDueDate(issueDate, supplier.paymentTermsDays));
+  }, [supplier, issueDate, dueDateTouched]);
 
   // La NC suele ser devolución, así que arranca marcada; la ND casi nunca
   // trae mercadería, así que arranca desmarcada. La factura no pregunta.
@@ -264,11 +368,79 @@ export function PurchaseAIReview() {
   if (loading) return <div className="mx-auto max-w-6xl p-8 text-center text-text-soft">Leyendo el borrador…</div>;
   if (!draft) return <div className="mx-auto max-w-6xl p-8 text-center text-danger">No se encontró esa lectura.</div>;
 
-  if (draft.status === 'ERROR') {
+  // ── Guardas por estado. Solo un borrador EXTRAIDO y con lectura encima se
+  // puede revisar. Sin esto, volver con Atrás después de guardar mostraba el
+  // formulario editable otra vez sobre un borrador ya CONFIRMADO: confirmar de
+  // nuevo rebota contra el unique de purchase_invoices, y si además se corrige
+  // el número se genera un segundo comprobante y el borrador queda apuntando
+  // al nuevo, perdiendo el vínculo con el primero.
+  if (draft.status === 'CONFIRMADO') {
+    return (
+      <div className="mx-auto max-w-2xl p-8 text-center">
+        <CheckCircle2 size={28} className="mx-auto mb-3 text-state-done" />
+        <p className="mb-1 text-sm font-semibold text-text">Esta lectura ya se confirmó.</p>
+        <p className="mb-4 text-sm text-text-soft">
+          El comprobante ya está cargado: no hace falta volver a guardarlo.
+        </p>
+        <div className="flex justify-center gap-2">
+          <Link to="/compras-ia"><Button variant="ghost" type="button">Volver</Button></Link>
+          {draft.purchaseInvoiceId && (
+            <Link to={`/compra/${draft.purchaseInvoiceId}`}>
+              <Button type="button">Ver el comprobante</Button>
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmWarning) {
+    return (
+      <div className="mx-auto max-w-2xl p-8 text-center">
+        <AlertTriangle size={28} className="mx-auto mb-3 text-state-wait" />
+        <p className="mb-1 text-sm font-semibold text-text">
+          El comprobante se guardó; no se pudo marcar el borrador como confirmado.
+        </p>
+        <p className="mb-4 text-sm text-text-soft">
+          La compra {confirmWarning.fullNumber} quedó registrada — no la vuelvas a cargar. Lo único
+          que falló fue cerrar el borrador, así que va a seguir apareciendo en la lista de pendientes:
+          descartalo desde ahí. Detalle: {confirmWarning.detail}
+        </p>
+        <div className="flex justify-center gap-2">
+          <Link to="/compras-ia"><Button variant="ghost" type="button">Ir al listado</Button></Link>
+          <Link to={`/compra/${confirmWarning.invoiceId}`}>
+            <Button type="button">Ver el comprobante</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (draft.status === 'DESCARTADO') {
+    return (
+      <div className="mx-auto max-w-2xl p-8 text-center">
+        <XCircle size={28} className="mx-auto mb-3 text-text-soft" />
+        <p className="mb-1 text-sm font-semibold text-text">Esta lectura está descartada.</p>
+        <p className="mb-4 text-sm text-text-soft">
+          Si la factura sigue sin cargarse, subila de nuevo desde Compras con IA.
+        </p>
+        <Link to="/compras-ia"><Button type="button">Volver al listado</Button></Link>
+      </div>
+    );
+  }
+
+  // Un EXTRAIDO sin raw_extraction es una lectura que nunca ocurrió: se trata
+  // igual que un ERROR, con su botón de reintentar, en vez de mostrar un
+  // formulario vacío que parece normal.
+  const lecturaFallida = draft.status === 'ERROR' || !draft.rawExtraction;
+
+  if (lecturaFallida) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
         <AlertTriangle size={28} className="mx-auto mb-3 text-danger" />
-        <p className="mb-4 text-sm text-danger">{draft.errorMessage ?? 'No se pudo leer esta factura.'}</p>
+        <p className="mb-4 text-sm text-danger">
+          {draft.errorMessage ?? 'No se pudo leer esta factura: la lectura quedó vacía.'}
+        </p>
         {error && <p className="mb-4 text-xs text-danger">{error}</p>}
         <div className="flex justify-center gap-2">
           <Link to="/compras-ia"><Button variant="ghost" type="button">Volver</Button></Link>
@@ -300,19 +472,37 @@ export function PurchaseAIReview() {
     );
   }
 
-  function patchLine(index: number, patch: Partial<PurchaseLine>) {
+  function patchLine(index: number, patch: Partial<ReviewLine>) {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+  }
+
+  /** Mismo default que la carga manual: en la mayoría de las facturas todos los renglones van al 21%. */
+  function defaultVatRateId(): string {
+    return (vatRates.find((r) => r.rate === 21) ?? vatRates[0])?.id ?? '';
+  }
+
+  function addConceptLine() {
+    setLines((current) => [...current, { ...EMPTY_LINE, vatRateId: defaultVatRateId() }]);
   }
 
   function addArticle(article: Article) {
     if (pickerTargetIndex !== null) {
       // Completa el renglón que la IA ya había leído (cantidad, precio,
-      // bonificación, alícuota): solo falta el artículo del catálogo.
+      // bonificación, alícuota): solo falta el artículo del catálogo. El
+      // código y la descripción pasan a ser los del catálogo; lo impreso
+      // queda a la vista debajo del renglón.
       patchLine(pickerTargetIndex, { articleId: article.id, code: article.code, description: article.description });
     } else {
       setLines((current) => [
         ...current,
-        { ...EMPTY_LINE, articleId: article.id, code: article.code, description: article.description, unitPrice: article.purchasePrice ?? 0 },
+        {
+          ...EMPTY_LINE,
+          articleId: article.id,
+          code: article.code,
+          description: article.description,
+          unitPrice: article.purchasePrice ?? 0,
+          vatRateId: defaultVatRateId(),
+        },
       ]);
     }
     setShowPicker(false);
@@ -330,23 +520,56 @@ export function PurchaseAIReview() {
   const missingDescription = lines.some((line) => line.description.trim() === '');
   const unmatchedArticleLines = isArticles ? lines.filter((line) => !line.articleId).length : 0;
 
+  // Alerta de precio, igual que en la carga manual. Acá importa más todavía:
+  // el precio unitario lo tipeó un modelo leyendo un papel, no una persona.
+  // No bloquea nada, solo avisa.
+  const priceAlerts = isArticles
+    ? lines
+        .map((line) => {
+          if (!line.articleId || line.unitPrice <= 0) return null;
+          const article = articles.find((a) => a.id === line.articleId);
+          if (!article) return null;
+          const lastCost = article.purchasePrice;
+          if (lastCost && lastCost > 0 && line.unitPrice > lastCost * 1.1) {
+            const pct = Math.round(((line.unitPrice - lastCost) / lastCost) * 100);
+            return `${line.code}: ${pct}% más caro que la última compra ($ ${formatMoney(lastCost)})`;
+          }
+          if (line.unitPrice > article.unitPrice) {
+            return `${line.code}: a este costo, el precio de venta actual ($ ${formatMoney(article.unitPrice)}) queda por debajo — conviene actualizarlo`;
+          }
+          return null;
+        })
+        .filter((msg): msg is string => msg !== null)
+    : [];
+
   const canSave =
-    !!supplierId && salesPoint.trim() !== '' && Number(number) > 0 && !!issueDate && !!dueDate &&
+    !!supplierId && salesPoint.trim() !== '' && Number(salesPoint) >= 0 &&
+    Number(number) > 0 && !!issueDate && !!dueDate &&
     lines.length > 0 && !missingVat && !missingDescription && totals.total > 0 &&
     unmatchedArticleLines === 0 && !saving;
 
   async function handleDiscard() {
     if (!window.confirm('¿Descartar esta lectura? No se puede deshacer.')) return;
-    await discardExtraction(draft!.id);
-    navigate('/compras-ia');
+    try {
+      await discardExtraction(draft!.id);
+      navigate('/compras-ia');
+    } catch (err) {
+      // Sin esto, si el update fallaba el botón no hacía nada y no se sabía por qué.
+      setError(describeExtractionError(getErrorMessage(err)));
+    }
   }
 
   async function handleSave() {
     if (!canSave || !supplier || !draft) return;
     setSaving(true);
     setError(null);
+
+    // Los dos pasos van separados a propósito. Si la RPC guarda el
+    // comprobante y después falla marcar el borrador, el comprobante EXISTE:
+    // decir "no se pudo guardar la compra" haría que se cargue dos veces.
+    let saved: { id: string; fullNumber: string };
     try {
-      const saved = await savePurchaseInvoice(
+      saved = await savePurchaseInvoice(
         {
           kind: draft.kind, docType, letter, salesPoint: Number(salesPoint), number: Number(number),
           supplierId, issueDate, receivedDate, dueDate, paymentTermsDays: supplier.paymentTermsDays,
@@ -355,12 +578,25 @@ export function PurchaseAIReview() {
         lines,
         footTaxes
       );
-      await confirmExtraction(draft.id, saved.id);
-      navigate(`/compra/${saved.id}`);
     } catch (err) {
       setError(describePurchaseError(getErrorMessage(err)));
       setSaving(false);
+      return;
     }
+
+    try {
+      await confirmExtraction(draft.id, saved.id);
+    } catch (err) {
+      setConfirmWarning({
+        invoiceId: saved.id,
+        fullNumber: saved.fullNumber,
+        detail: getErrorMessage(err),
+      });
+      setSaving(false);
+      return;
+    }
+
+    navigate(`/compra/${saved.id}`);
   }
 
   return (
@@ -394,7 +630,12 @@ export function PurchaseAIReview() {
             <SectionHeader title="Encabezado" />
             <div className="grid grid-cols-1 gap-3">
               <label className={labelClass}>
-                Proveedor <ConfidenceChip value={confianzas.proveedor_cuit} />
+                Proveedor{' '}
+                {applied.proveedor_cuit ? (
+                  <ConfidenceChip value={confianzas.proveedor_cuit} />
+                ) : (
+                  <span className="ml-1.5 text-[10px] font-normal normal-case text-state-wait">elegilo a mano</span>
+                )}
                 <div className="flex gap-2">
                   <select
                     value={supplierId}
@@ -410,16 +651,20 @@ export function PurchaseAIReview() {
                     <Plus size={14} /> Nuevo
                   </Button>
                 </div>
-                {!draft.supplierId && (draft.rawExtraction as any)?.valores?.proveedor_cuit && (
+                {!draft.supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
                   <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
                     La IA leyó CUIT {(draft.rawExtraction as any).valores.proveedor_cuit} pero no coincide con ningún proveedor cargado.
                   </span>
-                )}
+                ) : (
+                  <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                    La IA no pudo leer el CUIT del emisor.
+                  </span>
+                ))}
               </label>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <label className={labelClass}>
-                  Comprobante <ConfidenceChip value={confianzas.tipo_comprobante} />
+                  Comprobante <FieldMark applied={!!applied.tipo_comprobante} confidence={confianzas.tipo_comprobante} />
                   <select value={docType} onChange={(e) => setDocType(e.target.value as PurchaseDocType)} className={cn(inputClass, 'bg-panel')}>
                     {PURCHASE_DOC_TYPES.map((type) => (
                       <option key={type} value={type}>{PURCHASE_DOC_TYPE_LABELS[type]}</option>
@@ -427,22 +672,37 @@ export function PurchaseAIReview() {
                   </select>
                 </label>
                 <label className={labelClass}>
-                  Letra <ConfidenceChip value={confianzas.letra} />
+                  Letra <FieldMark applied={!!applied.letra} confidence={confianzas.letra} />
                   <select value={letter} onChange={(e) => setLetter(e.target.value as PurchaseLetter)} className={cn(inputClass, 'bg-panel font-mono')}>
                     {(['A', 'B', 'C', 'M'] as PurchaseLetter[]).map((l) => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </label>
                 <label className={labelClass}>
-                  P. venta <ConfidenceChip value={confianzas.punto_venta} />
-                  <input type="number" min="0" value={salesPoint} onChange={(e) => setSalesPoint(e.target.value)} className={cn(inputClass, 'font-mono')} />
+                  P. venta <FieldMark applied={!!applied.punto_venta} confidence={confianzas.punto_venta} />
+                  <input
+                    type="number" min="0" max="99999"
+                    value={salesPoint}
+                    onChange={(e) => setSalesPoint(e.target.value)}
+                    className={cn(inputClass, 'font-mono', salesPoint.trim() === '' && 'field-required')}
+                  />
                 </label>
                 <label className={labelClass}>
-                  Número <ConfidenceChip value={confianzas.numero} />
-                  <input type="number" min="1" value={number} onChange={(e) => setNumber(e.target.value)} className={cn(inputClass, 'font-mono')} />
+                  Número <FieldMark applied={!!applied.numero} confidence={confianzas.numero} />
+                  <input
+                    type="number" min="1"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    className={cn(inputClass, 'font-mono', Number(number) <= 0 && 'field-required')}
+                  />
                 </label>
                 <label className={labelClass}>
-                  Fecha <ConfidenceChip value={confianzas.fecha_comprobante} />
+                  Fecha <FieldMark applied={!!applied.fecha_comprobante} confidence={confianzas.fecha_comprobante} />
                   <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className={inputClass} />
+                  {!applied.fecha_comprobante && (
+                    <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                      Quedó la fecha de hoy. De ella salen el vencimiento y el período del Libro IVA.
+                    </span>
+                  )}
                 </label>
                 <label className={labelClass}>
                   Fecha de recepción
@@ -452,7 +712,19 @@ export function PurchaseAIReview() {
 
               <label className={labelClass}>
                 Vencimiento
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => { setDueDate(e.target.value); setDueDateTouched(true); }}
+                  className={cn(inputClass, !dueDate && 'field-required')}
+                />
+                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  {dueDateTouched
+                    ? 'Cargado a mano.'
+                    : supplier
+                      ? `Propuesto por el plazo del proveedor (${supplier.paymentTermsDays} días).`
+                      : 'Se propone al elegir el proveedor.'}
+                </span>
               </label>
 
               {isArticles && docType !== 'FACTURA' && (
@@ -483,9 +755,16 @@ export function PurchaseAIReview() {
       <Panel className="mb-6 p-5">
         <SectionHeader
           title={isArticles ? 'Artículos' : 'Conceptos'}
-          actions={isArticles && (
+          actions={isArticles ? (
             <Button type="button" onClick={() => { setPickerTargetIndex(null); setShowPicker(true); }} className="px-3">
               <Package size={16} /> Agregar artículo
+            </Button>
+          ) : (
+            // En conceptos también hace falta: si la IA se comió uno de cinco
+            // fletes, sin este botón la única salida era descartar y rehacer
+            // todo a mano.
+            <Button type="button" variant="ghost" onClick={addConceptLine} className="px-3">
+              <Plus size={16} /> Agregar renglón
             </Button>
           )}
         />
@@ -509,39 +788,90 @@ export function PurchaseAIReview() {
               </tr>
             </thead>
             <tbody>
-              {lines.map((line, idx) => (
-                <React.Fragment key={idx}>
-                  {isArticles && !line.articleId ? (
-                    <tr className="h-9 border-b border-line bg-danger-soft">
-                      <td colSpan={8} className="px-2 py-1">
-                        <button
-                          type="button"
-                          onClick={() => { setPickerTargetIndex(idx); setShowPicker(true); }}
-                          className="flex w-full items-center justify-between text-left text-danger hover:underline"
-                        >
-                          <span>{line.description || 'Renglón sin artículo del catálogo asignado'} — elegir artículo</span>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setLines((c) => c.filter((_, i) => i !== idx)); }} aria-label="Quitar renglón">
+              {lines.map((line, idx) => {
+                // Lo impreso en el papel solo se muestra si difiere de lo que
+                // se va a guardar: en un renglón matcheado, código y
+                // descripción son los del catálogo (el artículo cuyo stock y
+                // precio de compra se van a tocar), y esta línea de abajo es
+                // la que permite ver si el match fue al artículo correcto.
+                const printed = [line.printedCode, line.printedDescription].filter(Boolean).join(' — ');
+                const showPrinted =
+                  isArticles && !!line.articleId && printed !== '' &&
+                  (line.printedCode !== line.code || line.printedDescription !== line.description);
+
+                return (
+                  <React.Fragment key={idx}>
+                    {isArticles && !line.articleId ? (
+                      <tr className="h-9 border-b border-line bg-danger-soft">
+                        <td colSpan={7} className="px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => { setPickerTargetIndex(idx); setShowPicker(true); }}
+                            className="flex w-full items-center text-left text-danger hover:underline"
+                          >
+                            <span>
+                              {printed || line.description || 'Renglón sin artículo del catálogo asignado'} — elegir artículo
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          {/* Fuera del botón de "elegir artículo": un <button>
+                              adentro de otro <button> es HTML inválido. */}
+                          <button
+                            type="button"
+                            onClick={() => setLines((c) => c.filter((_, i) => i !== idx))}
+                            aria-label="Quitar renglón"
+                            className="text-danger transition-colors hover:text-text"
+                          >
                             <Trash2 size={15} />
                           </button>
-                        </button>
-                      </td>
-                    </tr>
-                  ) : (
-                    <PurchaseItemRow
-                      line={line}
-                      idx={idx}
-                      isArticles={isArticles}
-                      concepts={concepts}
-                      vatRates={vatRates}
-                      onPatch={(patch) => patchLine(idx, patch)}
-                      onRemove={() => setLines((current) => current.filter((_, i) => i !== idx))}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
+                        </td>
+                      </tr>
+                    ) : (
+                      <>
+                        <PurchaseItemRow
+                          line={line}
+                          idx={idx}
+                          isArticles={isArticles}
+                          concepts={concepts}
+                          vatRates={vatRates}
+                          onPatch={(patch) => patchLine(idx, patch)}
+                          onRemove={() => setLines((current) => current.filter((_, i) => i !== idx))}
+                        />
+                        {showPrinted && (
+                          <tr className={cn('border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
+                            <td colSpan={8} className="px-2 pb-1.5 text-[11px] leading-tight text-text-soft">
+                              En la factura decía: <span className="font-mono">{printed}</span>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
+
+        {/* Sin este cartel, el botón de guardar se apagaba sin decir por qué. */}
+        {(missingVat || missingDescription) && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-danger">
+            <AlertTriangle size={14} />
+            {missingDescription ? 'Hay renglones sin detalle.' : 'Hay renglones sin alícuota de IVA.'}
+          </p>
+        )}
+
+        {priceAlerts.length > 0 && (
+          <div className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-text">
+            <p className="flex items-center gap-1.5 font-semibold text-state-wait">
+              <AlertTriangle size={14} /> Precio distinto al habitual
+            </p>
+            <ul className="mt-1 space-y-0.5 pl-5 text-text-soft" style={{ listStyleType: 'disc' }}>
+              {priceAlerts.map((msg, i) => <li key={i}>{msg}</li>)}
+            </ul>
+          </div>
+        )}
       </Panel>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -588,7 +918,15 @@ export function PurchaseAIReview() {
 
         <Panel className="p-5">
           <SectionHeader title="Totales" />
-          <ConfidenceChip value={confianzas.total} />
+          {/* El chip suelto bajo el título era un porcentaje sin campo al que
+              referirse: va pegado al total que la IA leyó del papel, que es lo
+              que mide. */}
+          {aiTotal !== null && (
+            <p className="mb-3 text-[11px] text-text-soft">
+              Total leído del papel: <span className="font-mono text-text">$ {formatMoney(aiTotal)}</span>
+              <ConfidenceChip value={confianzas.total} />
+            </p>
+          )}
           <PurchaseTotalsSummary
             totals={totals}
             generalDiscount={generalDiscount}
