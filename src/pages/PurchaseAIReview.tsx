@@ -78,31 +78,39 @@ function FieldMark({ applied, confidence }: { applied: boolean; confidence: numb
   );
 }
 
+/**
+ * El importe viene tal como está impreso: puede traer "." de miles y ","
+ * decimal, o al revés, o un solo separador que hay que desambiguar.
+ *
+ *   "1.234,56"     -> 1234.56    "1.234.567"    -> 1234567
+ *   "1,234,567.89" -> 1234567.89 "1.234.567,89" -> 1234567.89
+ *   "12.500"       -> 12500      "12,50"        -> 12.5
+ */
 function parseArgNumber(text: string): number {
-  // El importe viene tal como está impreso: puede traer "." de miles y "," decimal, o al revés.
   const cleaned = text.trim();
   if (!cleaned) return 0;
-  const lastComma = cleaned.lastIndexOf(',');
-  const lastDot = cleaned.lastIndexOf('.');
 
-  // Un único separador seguido de exactamente tres dígitos, y el otro
-  // separador sin aparecer: es separador de miles, no decimal. "12.500" es el
-  // formato argentino de un precio redondo sin centavos y se imprime así; si
-  // se tomara el punto como decimal, el renglón entraría a mil veces menos.
-  const separators = (cleaned.match(/[.,]/g) ?? []).length;
-  if (separators === 1 && /\d[.,]\d{3}$/.test(cleaned)) {
-    const num = Number(cleaned.replace(/[.,]/g, ''));
-    return Number.isFinite(num) ? num : 0;
-  }
+  const dots = (cleaned.match(/\./g) ?? []).length;
+  const commas = (cleaned.match(/,/g) ?? []).length;
 
-  let normalized = cleaned;
-  if (lastComma > lastDot) {
-    normalized = cleaned.replace(/\./g, '').replace(',', '.');
-  } else if (lastDot > lastComma) {
-    normalized = cleaned.replace(/,/g, '');
+  let normalized: string;
+  if (dots > 0 && commas > 0) {
+    // Aparecen los dos: el ÚLTIMO es el decimal y el otro es el de miles.
+    normalized = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+      ? cleaned.replace(/\./g, '').replace(/,/g, '.')
+      : cleaned.replace(/,/g, '');
+  } else if (dots + commas === 0) {
+    normalized = cleaned;
   } else {
-    normalized = cleaned.replace(/[.,]/g, '');
+    // Un solo tipo de separador. Es de miles si aparece más de una vez
+    // ("1.234.567" — antes esta rama devolvía 0) o si separa exactamente tres
+    // dígitos al final ("12.500" es el precio redondo argentino sin centavos,
+    // y tomarlo como decimal metía el renglón a mil veces menos). Si no,
+    // es decimal: "12,50", "123.5".
+    const esDeMiles = dots + commas > 1 || /\d[.,]\d{3}$/.test(cleaned);
+    normalized = esDeMiles ? cleaned.replace(/[.,]/g, '') : cleaned.replace(',', '.');
   }
+
   const num = Number(normalized);
   return Number.isFinite(num) ? num : 0;
 }
@@ -304,8 +312,16 @@ export function PurchaseAIReview() {
         const rateByPercent = new Map(r.filter((rate) => rate.kind === 'IVA').map((rate) => [rate.rate, rate]));
         const articleById = new Map(catalog.map((a) => [a.id, a]));
         const draftLines: ReviewLine[] = (raw.renglones ?? []).map((row: any) => {
-          const alicuota = Number(String(row.alicuota_iva ?? '').replace(',', '.')) || 0;
-          const vatRate = rateByPercent.get(alicuota);
+          // "No se pudo leer" no es lo mismo que "es cero". Con `|| 0`, una
+          // alícuota ilegible matcheaba la de 0% y el renglón entraba sin IVA
+          // pero con vatRateId seteado, así que missingVat tampoco lo agarraba:
+          // IVA subdeclarado y crédito fiscal perdido, sin una señal en
+          // pantalla. Ahora lo ilegible queda sin alícuota elegida —el cartel
+          // de renglones incompletos lo pide— y un "0" explícito sí matchea
+          // la alícuota de 0%.
+          const alicuotaTexto = String(row.alicuota_iva ?? '').trim().replace(',', '.');
+          const alicuota = alicuotaTexto === '' ? Number.NaN : Number(alicuotaTexto);
+          const vatRate = Number.isFinite(alicuota) ? rateByPercent.get(alicuota) : undefined;
           const printedCode = String(row.codigo ?? '');
           const printedDescription = String(row.descripcion ?? '');
           // Si el renglón quedó atado a un artículo, lo que manda es el
