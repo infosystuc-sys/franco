@@ -1057,6 +1057,8 @@ grep -n "responseSchema" node_modules/@google/genai/dist/*.d.ts | head -5
 
 Si no aparece nada (versión distinta a la `^2.4.0` declarada), revisar el changelog del paquete antes de continuar — no asumir, ajustar el Step 3 al nombre real.
 
+**Resultado de la Task 2 (ya corrida):** el schema de ARTICULOS (el más grande de los dos, con el array de renglones) compiló sin errores en un llamado real contra Gemini — no hizo falta partir en dos pasadas. El modelo usado en el Step 3 de abajo es `gemini-3.5-flash`, no `gemini-3.7-flash` como decía la primera versión de este plan: al momento de correr la Task 2, `gemini-3.7-flash`, `gemini-3.6-flash` y `gemini-flash-latest` devolvían 503 "high demand" (modelos válidos, solo saturados), mientras que `gemini-3.5-flash` y `gemini-3-flash-preview` respondían bien. Si para cuando se ejecute la Task 6 los modelos más nuevos ya no están saturados, es una mejora opcional cambiar el nombre del modelo — no un requisito.
+
 - [ ] **Step 2: Configurar el secreto**
 
 ```bash
@@ -1270,7 +1272,7 @@ Deno.serve(async (req: Request) => {
   let respuesta;
   try {
     respuesta = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.5-flash',
       contents: [
         { text: 'Extraé los datos de este comprobante según el schema.' },
         { inlineData: { mimeType, data: base64 } },
