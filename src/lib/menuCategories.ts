@@ -22,6 +22,7 @@ import {
   Settings,
   CalendarClock,
   ArrowRightLeft,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { REPORTS } from '@/src/lib/reports';
@@ -128,7 +129,10 @@ export const MENU_CATEGORIES: MenuCategory[] = [
     sections: [
       {
         color: 'comprobantes',
-        cards: [{ icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true }],
+        cards: [
+          { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
+          { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', adminOnly: true },
+        ],
       },
       {
         color: 'padrones',
