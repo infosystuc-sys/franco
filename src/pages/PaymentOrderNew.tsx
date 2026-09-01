@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, FileMinus } from 'lucide-react';
+import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, FileMinus, X } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -38,7 +38,10 @@ interface DraftValue extends PaymentValueInput {
 type MedioOption =
   | { optionKey: string; kind: 'MEDIO_PAGO'; label: string; paymentMethodId: string }
   | { optionKey: string; kind: 'RETENCION'; label: string; taxRateId: string }
-  | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
+  | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string }
+  | { optionKey: string; kind: 'CHEQUE_ENDOSADO'; label: string };
+
+const CHEQUE_MEDIO_KEY = 'cheque-endosado';
 
 let nextKey = 1;
 let nextProvKey = 1;
@@ -105,6 +108,7 @@ export function PaymentOrderNew() {
   const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
   const [draftAmount, setDraftAmount] = React.useState(0);
   const [selectedCheckIds, setSelectedCheckIds] = React.useState<Set<string>>(new Set());
+  const [checkPickerOpen, setCheckPickerOpen] = React.useState(false);
 
   const [addingProvisional, setAddingProvisional] = React.useState(false);
   const [provisionalDescription, setProvisionalDescription] = React.useState('');
@@ -183,9 +187,17 @@ export function PaymentOrderNew() {
     [values]
   );
 
+  // Cheques en cartera todavía no endosados en esta orden.
+  const availableWalletChecks = React.useMemo(
+    () => walletChecks.filter((c) => !values.some((v) => v.checkId === c.id)),
+    [walletChecks, values]
+  );
+
   // El desplegable de "Medios de pago" junta en una sola lista los medios
-  // reales, retención y saldo a favor. Los cheques de cartera se endosan
-  // aparte, desde la lista con selección múltiple de abajo.
+  // reales, retención, saldo a favor y — si hay algo en cartera — cheque
+  // endosado. Elegir este último no agrega un valor directo: abre el modal
+  // de la cartera, porque cada cheque tiene su propio importe fijo y puede
+  // ser más de uno a la vez.
   const medioOptions = React.useMemo<MedioOption[]>(() => {
     const options: MedioOption[] = methods.map((m) => ({
       optionKey: `medio:${m.id}`,
@@ -197,8 +209,11 @@ export function PaymentOrderNew() {
       options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
     );
     if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
+    if (availableWalletChecks.length > 0) {
+      options.push({ optionKey: CHEQUE_MEDIO_KEY, kind: 'CHEQUE_ENDOSADO', label: 'Cheque endosado (cartera)' });
+    }
     return options;
-  }, [methods, retentions, credit]);
+  }, [methods, retentions, credit, availableWalletChecks.length]);
 
   // NC provisorias por descuento de pronto pago: las que ya existían (de una
   // orden anulada, con saldo libre) y las nuevas cargadas en esta pantalla.
@@ -232,12 +247,6 @@ export function PaymentOrderNew() {
     [totalApplied, totalValues]
   );
 
-  // Cheques en cartera todavía no endosados en esta orden.
-  const availableWalletChecks = React.useMemo(
-    () => walletChecks.filter((c) => !values.some((v) => v.checkId === c.id)),
-    [walletChecks, values]
-  );
-
   const selectedChecksSubtotal = React.useMemo(
     () =>
       round2(
@@ -258,6 +267,11 @@ export function PaymentOrderNew() {
   }
 
   function handleSelectMedio(optionKey: string) {
+    if (optionKey === CHEQUE_MEDIO_KEY) {
+      // No agrega un valor directo: cada cheque trae su propio importe fijo.
+      setCheckPickerOpen(true);
+      return;
+    }
     setSelectedMedioKey(optionKey);
     setDraftAmount(suggestedRemaining);
   }
@@ -301,6 +315,12 @@ export function PaymentOrderNew() {
         checkId: c.id,
       })),
     ]);
+    setSelectedCheckIds(new Set());
+    setCheckPickerOpen(false);
+  }
+
+  function closeCheckPicker() {
+    setCheckPickerOpen(false);
     setSelectedCheckIds(new Set());
   }
 
@@ -650,10 +670,18 @@ export function PaymentOrderNew() {
         )}
       </Panel>
 
-      {/* ── Cheques en cartera para endosar ────────────────────────────── */}
-      {availableWalletChecks.length > 0 && (
-        <Panel className="mb-6 p-5">
-          <SectionHeader title="Cheques en cartera para endosar" />
+      {/* ── Cheques en cartera para endosar: modal, solo al elegir el medio ── */}
+      {checkPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Panel className="max-h-[85vh] w-full max-w-2xl overflow-y-auto p-5">
+          <SectionHeader
+            title="Cheques en cartera para endosar"
+            actions={
+              <button type="button" onClick={closeCheckPicker} className="text-text-soft hover:text-text">
+                <X size={18} />
+              </button>
+            }
+          />
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
             <table className="table-stack w-full text-left text-[13px]">
               <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
@@ -706,17 +734,23 @@ export function PaymentOrderNew() {
                 </dd>
               </div>
             </dl>
-            <Button
-              type="button"
-              onClick={handleEndorseSelected}
-              disabled={selectedCheckIds.size === 0}
-              className="px-3"
-            >
-              <FileCheck size={15} /> Endosar {selectedCheckIds.size > 0 ? `${selectedCheckIds.size} ` : ''}
-              {selectedCheckIds.size === 1 ? 'cheque' : 'cheques'}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" type="button" onClick={closeCheckPicker} className="px-3">
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={handleEndorseSelected}
+                disabled={selectedCheckIds.size === 0}
+                className="px-3"
+              >
+                <FileCheck size={15} /> Endosar {selectedCheckIds.size > 0 ? `${selectedCheckIds.size} ` : ''}
+                {selectedCheckIds.size === 1 ? 'cheque' : 'cheques'}
+              </Button>
+            </div>
           </div>
-        </Panel>
+          </Panel>
+        </div>
       )}
 
       {/* ── Valores ─────────────────────────────────────────────────── */}
