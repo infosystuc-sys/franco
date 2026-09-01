@@ -1,11 +1,14 @@
 import React from 'react';
-import { Plus, Trash2, Save, XCircle, AlertTriangle, Check, Package, Boxes } from 'lucide-react';
+import { Plus, Save, XCircle, AlertTriangle, Package, Boxes } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { PurchaseArticlePicker } from '@/src/components/PurchaseArticlePicker';
+import { PurchaseItemRow } from '@/src/components/purchase/PurchaseItemRow';
+import { PurchaseTaxRow } from '@/src/components/purchase/PurchaseTaxRow';
+import { PurchaseTotalsSummary } from '@/src/components/purchase/PurchaseTotalsSummary';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
@@ -186,12 +189,6 @@ export function PurchaseNew() {
     if (!rate) return;
     setFootTaxes((current) => [...current, { taxRateId, amount: suggestedTaxAmount(rate, totals) }]);
   }
-
-  const declared = Number(declaredTotal);
-  const declaredDiff =
-    declaredTotal.trim() === '' || !Number.isFinite(declared)
-      ? null
-      : Math.round((declared - totals.total) * 100) / 100;
 
   const missingVat = lines.some((line) => !line.vatRateId);
   const missingDescription = lines.some((line) => line.description.trim() === '');
@@ -486,103 +483,18 @@ export function PurchaseNew() {
                 </tr>
               )}
 
-              {lines.map((line, idx) => {
-                const net = line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100);
-                return (
-                  <tr key={idx} className={cn('h-9 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
-                    {isArticles ? (
-                      <>
-                        <td data-primary className="px-2 py-1 font-mono font-semibold text-text-soft">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Package size={12} className="text-accent-deep" />
-                            {line.code}
-                          </span>
-                        </td>
-                        <td data-label="Descripción" className="px-2 py-1">{line.description}</td>
-                      </>
-                    ) : (
-                      <>
-                        <td data-label="Concepto" className="px-1 py-1">
-                          <select
-                            value={line.conceptId ?? ''}
-                            onChange={(e) => patchLine(idx, { conceptId: e.target.value || null })}
-                            className="w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none"
-                          >
-                            <option value="">— texto libre —</option>
-                            {concepts.map((concept) => (
-                              <option key={concept.id} value={concept.id}>{concept.name}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td data-label="Detalle" className="px-1 py-1">
-                          <input
-                            value={line.description}
-                            onChange={(e) => patchLine(idx, { description: e.target.value })}
-                            placeholder="Detalle del gasto"
-                            className={cn(
-                              'w-full bg-transparent px-2 py-1',
-                              line.description.trim() === '' && 'bg-danger-soft'
-                            )}
-                          />
-                        </td>
-                      </>
-                    )}
-
-                    <td data-label="Cant." className="px-1 py-1">
-                      <input
-                        type="number" step="0.01" min="0"
-                        value={line.quantity}
-                        onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) })}
-                        className="w-full bg-transparent px-2 py-1 text-right"
-                      />
-                    </td>
-                    <td data-label="P. unitario" className="px-1 py-1">
-                      <input
-                        type="number" step="0.01" min="0"
-                        value={line.unitPrice}
-                        onChange={(e) => patchLine(idx, { unitPrice: Number(e.target.value) })}
-                        className="w-full bg-transparent px-2 py-1 text-right"
-                      />
-                    </td>
-                    <td data-label="Bonif. %" className="px-1 py-1">
-                      <input
-                        type="number" step="0.01" min="0" max="100"
-                        value={line.discountPercent}
-                        onChange={(e) => patchLine(idx, { discountPercent: Number(e.target.value) })}
-                        className="w-full bg-transparent px-2 py-1 text-right"
-                      />
-                    </td>
-                    <td data-label="IVA" className="px-1 py-1">
-                      <select
-                        value={line.vatRateId}
-                        onChange={(e) => patchLine(idx, { vatRateId: e.target.value })}
-                        className={cn(
-                          'w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none',
-                          !line.vatRateId && 'bg-danger-soft'
-                        )}
-                      >
-                        <option value="">— elegir —</option>
-                        {vatRates.map((rate) => (
-                          <option key={rate.id} value={rate.id}>{rate.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td data-label="Neto" className="px-2 py-1 text-right font-semibold">
-                      $ {formatMoney(net)}
-                    </td>
-                    <td className="px-1 py-1 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setLines((current) => current.filter((_, i) => i !== idx))}
-                        aria-label="Quitar renglón"
-                        className="text-text-soft transition-colors hover:text-danger"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {lines.map((line, idx) => (
+                <PurchaseItemRow
+                  key={idx}
+                  line={line}
+                  idx={idx}
+                  isArticles={isArticles}
+                  concepts={concepts}
+                  vatRates={vatRates}
+                  onPatch={(patch) => patchLine(idx, patch)}
+                  onRemove={() => setLines((current) => current.filter((_, i) => i !== idx))}
+                />
+              ))}
             </tbody>
           </table>
         </div>
@@ -649,40 +561,21 @@ export function PurchaseNew() {
                 {footTaxes.length === 0 && (
                   <li className="text-xs text-text-soft">Sin impuestos agregados.</li>
                 )}
-                {footTaxes.map((tax, idx) => {
-                  const rate = footRates.find((r) => r.id === tax.taxRateId);
-                  const suggested = rate ? suggestedTaxAmount(rate, totals) : 0;
-                  const edited = Math.abs(tax.amount - suggested) > 0.009;
-                  return (
-                    <li key={tax.taxRateId} className="flex items-center gap-2 border border-line bg-panel-alt px-3 py-2">
-                      <span className="min-w-0 flex-1 text-xs">
-                        <span className="block truncate font-semibold text-text">{rate?.name}</span>
-                        <span className="text-[10px] text-text-soft">
-                          {rate?.rate}% s/ {rate?.base === 'TOTAL' ? 'total' : 'neto'}
-                          {edited && ` · calculado $ ${formatMoney(suggested)}`}
-                        </span>
-                      </span>
-                      <input
-                        type="number" step="0.01" min="0"
-                        value={tax.amount}
-                        onChange={(e) =>
-                          setFootTaxes((current) =>
-                            current.map((t, i) => (i === idx ? { ...t, amount: Number(e.target.value) } : t))
-                          )
-                        }
-                        className="w-28 rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFootTaxes((current) => current.filter((_, i) => i !== idx))}
-                        aria-label="Quitar impuesto"
-                        className="text-text-soft transition-colors hover:text-danger"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </li>
-                  );
-                })}
+                {footTaxes.map((tax, idx) => (
+                  <PurchaseTaxRow
+                    key={tax.taxRateId}
+                    tax={tax}
+                    rate={footRates.find((r) => r.id === tax.taxRateId)}
+                    suggested={(() => {
+                      const rate = footRates.find((r) => r.id === tax.taxRateId);
+                      return rate ? suggestedTaxAmount(rate, totals) : 0;
+                    })()}
+                    onAmountChange={(amount) =>
+                      setFootTaxes((current) => current.map((t, i) => (i === idx ? { ...t, amount } : t)))
+                    }
+                    onRemove={() => setFootTaxes((current) => current.filter((_, i) => i !== idx))}
+                  />
+                ))}
               </ul>
 
               <p className="mt-3 text-[10px] text-text-soft">
@@ -695,74 +588,13 @@ export function PurchaseNew() {
 
         <Panel className="p-5">
           <SectionHeader title="Totales" />
-
-          <label className={cn(labelClass, 'mb-4 block sm:w-1/2')}>
-            Bonificación general %
-            <input
-              type="number" step="0.01" min="0" max="100"
-              value={generalDiscount}
-              onChange={(e) => setGeneralDiscount(e.target.value)}
-              className={cn(inputClass, 'font-mono')}
-            />
-          </label>
-
-          <dl className="space-y-1 text-[13px]">
-            <Row label="Bruto" value={totals.gross} />
-            {totals.lineDiscount > 0 && (
-              <Row label="Bonificación por renglón" value={-totals.lineDiscount} muted />
-            )}
-            {totals.generalDiscount > 0 && (
-              <Row label={`Bonificación general ${generalDiscount}%`} value={-totals.generalDiscount} muted />
-            )}
-
-            <div className="my-2 border-t border-line" />
-
-            {totals.vatByRate.map((entry) => (
-              <Row key={entry.rate} label={`Neto gravado ${entry.rate}%`} value={entry.net} />
-            ))}
-            {totals.netExempt > 0 && <Row label="Neto exento" value={totals.netExempt} />}
-            {totals.netUntaxed > 0 && <Row label="Neto no gravado" value={totals.netUntaxed} />}
-            {totals.vatByRate.map((entry) => (
-              <Row key={`iva-${entry.rate}`} label={`IVA ${entry.rate}%`} value={entry.vat} />
-            ))}
-            {totals.otherTaxes > 0 && <Row label="Percepciones e impuestos" value={totals.otherTaxes} />}
-
-            <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
-              <dd className="font-display text-2xl font-medium text-text">$ {formatMoney(totals.total)}</dd>
-            </div>
-          </dl>
-
-          {/* Control cruzado contra el papel: es la forma más barata de
-              detectar un precio mal tipeado antes de guardar. */}
-          <div className="mt-4 border-t border-line pt-3">
-            <label className={labelClass}>
-              Total del comprobante (control)
-              <input
-                type="number" step="0.01" min="0"
-                value={declaredTotal}
-                onChange={(e) => setDeclaredTotal(e.target.value)}
-                placeholder="Tipeá el total que figura en el papel"
-                className={cn(
-                  inputClass, 'font-mono',
-                  declaredDiff !== null && declaredDiff !== 0 && 'border-danger bg-danger-soft'
-                )}
-              />
-            </label>
-            {declaredDiff !== null && (
-              <p
-                className={cn(
-                  'mt-1.5 flex items-center gap-1.5 text-xs',
-                  declaredDiff === 0 ? 'text-state-done' : 'text-danger'
-                )}
-              >
-                {declaredDiff === 0 ? <Check size={14} /> : <AlertTriangle size={14} />}
-                {declaredDiff === 0
-                  ? 'Coincide con el comprobante.'
-                  : `Difiere en $ ${formatMoney(Math.abs(declaredDiff))}. Revisá los renglones o el pie.`}
-              </p>
-            )}
-          </div>
+          <PurchaseTotalsSummary
+            totals={totals}
+            generalDiscount={generalDiscount}
+            onGeneralDiscountChange={setGeneralDiscount}
+            declaredTotal={declaredTotal}
+            onDeclaredTotalChange={setDeclaredTotal}
+          />
         </Panel>
       </div>
 
@@ -790,17 +622,6 @@ export function PurchaseNew() {
           onClose={() => setShowPicker(false)}
         />
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
-  return (
-    <div className="flex justify-between">
-      <dt className={muted ? 'text-text-faint' : 'text-text-soft'}>{label}</dt>
-      <dd className={cn('font-mono', muted ? 'text-text-faint' : 'text-text')}>
-        {value < 0 ? '−' : ''}$ {formatMoney(Math.abs(value))}
-      </dd>
     </div>
   );
 }
