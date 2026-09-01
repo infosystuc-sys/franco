@@ -11,6 +11,7 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { BankCombobox } from '@/src/components/BankCombobox';
+import { CheckDraftModal } from '@/src/components/CheckDraftModal';
 import {
   autoAllocate,
   CHANGE_KIND_LABELS,
@@ -583,7 +584,7 @@ export function ReceiptNew() {
       </Panel>
 
       {checkModalOpen && (
-        <CheckModal
+        <CheckDraftModal
           remainingBase={suggestedRemaining}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
@@ -741,156 +742,6 @@ export function ReceiptNew() {
         <div className="mt-4 flex justify-end">
           <Button onClick={handleSave} disabled={!canSave}>
             <Save size={16} /> {saving ? 'Guardando…' : 'Registrar recibo'}
-          </Button>
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
-let nextCheckKey = 1;
-
-interface DraftCheck {
-  rowKey: number;
-  amount: number;
-  checkNumber: string;
-  checkBank: string;
-  checkDueDate: string;
-}
-
-/**
- * Carga de uno o varios cheques a la vez. Cada cheque nuevo sugiere lo que
- * falta cubrir después de descontar lo que ya llevan los cheques cargados
- * en esta misma tanda, no solo lo de afuera del modal.
- */
-function CheckModal({
-  remainingBase,
-  banks,
-  onBankCreated,
-  onConfirm,
-  onClose,
-}: {
-  remainingBase: number;
-  banks: Bank[];
-  onBankCreated: (bank: Bank) => void;
-  onConfirm: (checks: Omit<DraftValue, 'key' | 'kind'>[]) => void;
-  onClose: () => void;
-}) {
-  const [rows, setRows] = React.useState<DraftCheck[]>([
-    { rowKey: nextCheckKey++, amount: remainingBase, checkNumber: '', checkBank: '', checkDueDate: '' },
-  ]);
-
-  function patchRow(rowKey: number, patch: Partial<DraftCheck>) {
-    setRows((current) => current.map((r) => (r.rowKey === rowKey ? { ...r, ...patch } : r)));
-  }
-
-  function addRow() {
-    const used = round2(rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0));
-    setRows((current) => [
-      ...current,
-      {
-        rowKey: nextCheckKey++,
-        amount: Math.max(0, round2(remainingBase - used)),
-        checkNumber: '',
-        checkBank: '',
-        checkDueDate: '',
-      },
-    ]);
-  }
-
-  function removeRow(rowKey: number) {
-    setRows((current) => current.filter((r) => r.rowKey !== rowKey));
-  }
-
-  const valid =
-    rows.length > 0 &&
-    rows.every((r) => r.checkNumber.trim() && r.checkBank.trim() && r.checkDueDate && Number(r.amount) > 0);
-
-  function handleConfirm() {
-    if (!valid) return;
-    onConfirm(
-      rows.map((r) => ({
-        amount: Number(r.amount) || 0,
-        checkNumber: r.checkNumber,
-        checkBank: r.checkBank,
-        checkDueDate: r.checkDueDate,
-      }))
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Panel className="max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-text">Cargar cheques</h3>
-
-        <ul className="mt-3 space-y-3">
-          {rows.map((row, idx) => (
-            <li key={row.rowKey} className="border border-line bg-panel-alt p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
-                  Cheque {idx + 1}
-                </span>
-                {rows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeRow(row.rowKey)}
-                    aria-label="Quitar cheque"
-                    className="text-text-soft transition-colors hover:text-danger"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                <label className={labelClass}>
-                  Número *
-                  <input
-                    value={row.checkNumber}
-                    onChange={(e) => patchRow(row.rowKey, { checkNumber: e.target.value })}
-                    className={cn(inputClass, 'font-mono', !row.checkNumber.trim() && 'field-required')}
-                  />
-                </label>
-                <label className={labelClass}>
-                  Banco *
-                  <BankCombobox
-                    value={row.checkBank}
-                    onChange={(name) => patchRow(row.rowKey, { checkBank: name })}
-                    banks={banks}
-                    onBankCreated={onBankCreated}
-                    className={cn(inputClass, !row.checkBank.trim() && 'field-required')}
-                  />
-                </label>
-                <label className={labelClass}>
-                  Fecha de cobro *
-                  <input
-                    type="date"
-                    value={row.checkDueDate}
-                    onChange={(e) => patchRow(row.rowKey, { checkDueDate: e.target.value })}
-                    className={cn(inputClass, !row.checkDueDate && 'field-required')}
-                  />
-                </label>
-                <label className={labelClass}>
-                  Importe *
-                  <input
-                    type="number" step="0.01" min="0"
-                    value={row.amount || ''}
-                    onChange={(e) => patchRow(row.rowKey, { amount: Number(e.target.value) })}
-                    className={cn(inputClass, 'font-mono', Number(row.amount) <= 0 && 'field-required')}
-                  />
-                </label>
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        <Button type="button" variant="ghost" onClick={addRow} className="mt-3 px-3">
-          <Plus size={15} /> Agregar otro cheque
-        </Button>
-
-        <div className="mt-5 flex justify-end gap-2 border-t border-line pt-4">
-          <Button variant="ghost" type="button" onClick={onClose}>Cancelar</Button>
-          <Button type="button" onClick={handleConfirm} disabled={!valid}>
-            Confirmar {rows.length > 1 ? `(${rows.length} cheques)` : ''}
           </Button>
         </div>
       </Panel>

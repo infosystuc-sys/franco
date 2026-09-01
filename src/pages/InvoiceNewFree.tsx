@@ -25,6 +25,8 @@ import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import { Blocked, CashCheckoutFields, InvoiceTotals, InvoiceTypeBadge } from '@/src/pages/InvoiceNew';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
+import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 
 /**
  * Facturar sin OT ni cotización: para lo que no sale de una reparación
@@ -51,6 +53,9 @@ export function InvoiceNewFree() {
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [isCash, setIsCash] = React.useState(false);
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
+  const [banks, setBanks] = React.useState<Bank[]>([]);
+  const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
+  const [checkModalOpen, setCheckModalOpen] = React.useState(false);
   const [issuing, setIssuing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -84,6 +89,9 @@ export function InvoiceNewFree() {
     fetchPaymentMethods(true)
       .then((data) => !cancelled && setPaymentMethods(data))
       .catch(() => {/* si falla, el check de contado queda sin opciones y no se puede tildar */});
+    fetchBanks(true)
+      .then((data) => !cancelled && setBanks(data))
+      .catch(() => {/* si falla, el combobox de banco del cheque arranca vacío pero se puede cargar uno nuevo igual */});
     return () => { cancelled = true; };
   }, [role, remitoId]);
 
@@ -118,7 +126,7 @@ export function InvoiceNewFree() {
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
-    (!isCash || !!paymentMethodId) && !issuing;
+    (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
   async function handleIssue() {
     if (!customer || !canIssue) return;
@@ -135,10 +143,19 @@ export function InvoiceNewFree() {
       const issued = await issueFreeInvoice(customer.id, items, notes, emitRemito, remitoId);
       if (isCash) {
         try {
+          const values = checkDrafts?.length
+            ? checkDrafts.map((c) => ({
+                kind: 'CHEQUE' as const,
+                amount: c.amount,
+                checkNumber: c.checkNumber,
+                checkBank: c.checkBank,
+                checkDueDate: c.checkDueDate,
+              }))
+            : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
           await saveReceipt(
             { customerId: customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
             [{ invoiceId: issued.id, amount: totals.total }],
-            [{ kind: 'MEDIO_PAGO', amount: totals.total, paymentMethodId }]
+            values
           );
         } catch (receiptErr) {
           window.alert(
@@ -253,6 +270,9 @@ export function InvoiceNewFree() {
           paymentMethods={paymentMethods}
           paymentMethodId={paymentMethodId}
           onPaymentMethodIdChange={setPaymentMethodId}
+          checkDrafts={checkDrafts}
+          onOpenCheckModal={() => setCheckModalOpen(true)}
+          onClearChecks={() => setCheckDrafts(null)}
         />
 
         <textarea
@@ -263,6 +283,19 @@ export function InvoiceNewFree() {
           className="mt-4 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
       </Panel>
+
+      {checkModalOpen && (
+        <CheckDraftModal
+          remainingBase={totals.total}
+          banks={banks}
+          onBankCreated={(bank) => setBanks((current) => [...current, bank])}
+          onConfirm={(checks) => {
+            setCheckDrafts(checks);
+            setCheckModalOpen(false);
+          }}
+          onClose={() => setCheckModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

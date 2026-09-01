@@ -36,6 +36,8 @@ import {
 } from '@/src/lib/workOrders';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
+import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 
 /**
  * El proceso de facturación de una orden.
@@ -58,6 +60,9 @@ export function InvoiceNew() {
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [isCash, setIsCash] = React.useState(false);
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
+  const [banks, setBanks] = React.useState<Bank[]>([]);
+  const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
+  const [checkModalOpen, setCheckModalOpen] = React.useState(false);
   const [articles, setArticles] = React.useState<Article[]>([]);
 
   const [loading, setLoading] = React.useState(true);
@@ -109,6 +114,9 @@ export function InvoiceNew() {
     fetchPaymentMethods(true)
       .then((data) => !cancelled && setPaymentMethods(data))
       .catch(() => {/* si falla, el check de contado queda sin opciones y no se puede tildar */});
+    fetchBanks(true)
+      .then((data) => !cancelled && setBanks(data))
+      .catch(() => {/* si falla, el combobox de banco del cheque arranca vacío pero se puede cargar uno nuevo igual */});
 
     return () => {
       cancelled = true;
@@ -190,7 +198,7 @@ export function InvoiceNew() {
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
     items.length > 0 && totals.total > 0 && emptyLines === 0 &&
-    (!isCash || !!paymentMethodId) && !issuing;
+    (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
   async function handleIssue() {
     if (!order || !canIssue || !order.customer) return;
@@ -207,10 +215,19 @@ export function InvoiceNew() {
       const issued = await issueInvoice(order.id, items, notes, emitRemito);
       if (isCash) {
         try {
+          const values = checkDrafts?.length
+            ? checkDrafts.map((c) => ({
+                kind: 'CHEQUE' as const,
+                amount: c.amount,
+                checkNumber: c.checkNumber,
+                checkBank: c.checkBank,
+                checkDueDate: c.checkDueDate,
+              }))
+            : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
           await saveReceipt(
             { customerId: order.customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
             [{ invoiceId: issued.id, amount: totals.total }],
-            [{ kind: 'MEDIO_PAGO', amount: totals.total, paymentMethodId }]
+            values
           );
         } catch (receiptErr) {
           window.alert(
@@ -350,6 +367,9 @@ export function InvoiceNew() {
           paymentMethods={paymentMethods}
           paymentMethodId={paymentMethodId}
           onPaymentMethodIdChange={setPaymentMethodId}
+          checkDrafts={checkDrafts}
+          onOpenCheckModal={() => setCheckModalOpen(true)}
+          onClearChecks={() => setCheckDrafts(null)}
         />
 
         <textarea
@@ -371,6 +391,19 @@ export function InvoiceNew() {
           <Receipt size={16} /> {issuing ? 'Emitiendo…' : 'Emitir factura'}
         </Button>
       </div>
+
+      {checkModalOpen && (
+        <CheckDraftModal
+          remainingBase={totals.total}
+          banks={banks}
+          onBankCreated={(bank) => setBanks((current) => [...current, bank])}
+          onConfirm={(checks) => {
+            setCheckDrafts(checks);
+            setCheckModalOpen(false);
+          }}
+          onClose={() => setCheckModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -440,22 +473,34 @@ export function InvoiceTotals({
  * factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
  * InvoiceNewFree — mismo comportamiento, con o sin OT de por medio.
  */
+/** Valor centinela del select: elegirlo abre el modal de carga en vez de fijar un medio. */
+const CHEQUE_OPTION_VALUE = '__cheque__';
+
 export function CashCheckoutFields({
   isCash,
   onIsCashChange,
   paymentMethods,
   paymentMethodId,
   onPaymentMethodIdChange,
+  checkDrafts,
+  onOpenCheckModal,
+  onClearChecks,
 }: {
   isCash: boolean;
   onIsCashChange: (value: boolean) => void;
   paymentMethods: PaymentMethod[];
   paymentMethodId: string;
   onPaymentMethodIdChange: (value: string) => void;
+  checkDrafts: CheckDraft[] | null;
+  onOpenCheckModal: () => void;
+  onClearChecks: () => void;
 }) {
   // La cartera de cheques no es un medio de pago elegible acá: se mueve
-  // desde la pantalla de Cheques, no cobrando una factura con ella.
+  // desde la pantalla de Cheques, no cobrando una factura con ella. Pagar
+  // con un cheque NUEVO (que el cliente entrega en el momento) es distinto:
+  // esa opción abre el modal de carga en vez de salir de esta lista.
   const selectableMethods = paymentMethods.filter((m) => m.kind !== 'CARTERA_CHEQUES');
+  const payingWithChecks = checkDrafts !== null;
 
   return (
     <div className="mt-3">
@@ -470,29 +515,56 @@ export function CashCheckoutFields({
       </label>
 
       {isCash && (
-        <label className="mt-2 block max-w-xs text-xs font-bold uppercase tracking-wider text-text-soft">
-          <span className="flex items-center gap-1.5">
-            <Banknote size={13} className="text-accent-deep" /> Medio de pago
+        <div className="mt-2 max-w-xs">
+          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-soft">
+            <Banknote size={13} className="text-accent-deep" /> Cobrado con
           </span>
-          <select
-            value={paymentMethodId}
-            onChange={(e) => onPaymentMethodIdChange(e.target.value)}
-            className={cn(
-              'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none',
-              !paymentMethodId && 'field-required'
-            )}
-          >
-            <option value="">Elegí un medio...</option>
-            {selectableMethods.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-          {selectableMethods.length === 0 && (
-            <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
-              No hay medios de pago activos. Cargá uno desde Medios de pago.
-            </span>
+
+          {payingWithChecks ? (
+            <div className="mt-1 rounded-md border border-line bg-panel-alt px-3 py-2 text-xs">
+              <span className="block font-semibold uppercase tracking-wider text-text-soft">
+                {checkDrafts!.length === 1 ? 'Cheque cargado' : `${checkDrafts!.length} cheques cargados`}
+              </span>
+              {checkDrafts!.map((c, i) => (
+                <span key={i} className="mt-1 block normal-case text-text">
+                  {c.checkNumber} — {c.checkBank} — $ {formatMoney(c.amount)}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={onClearChecks}
+                className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
+              >
+                Cambiar
+              </button>
+            </div>
+          ) : (
+            <>
+              <select
+                value={paymentMethodId}
+                onChange={(e) => {
+                  if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal();
+                  else onPaymentMethodIdChange(e.target.value);
+                }}
+                className={cn(
+                  'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none',
+                  !paymentMethodId && 'field-required'
+                )}
+              >
+                <option value="">Elegí un medio...</option>
+                {selectableMethods.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+                <option value={CHEQUE_OPTION_VALUE}>Cheque</option>
+              </select>
+              {selectableMethods.length === 0 && (
+                <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                  No hay medios de pago activos. Cargá uno desde Medios de pago.
+                </span>
+              )}
+            </>
           )}
-        </label>
+        </div>
       )}
     </div>
   );
