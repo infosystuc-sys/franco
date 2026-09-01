@@ -235,28 +235,31 @@ export function ReceiptDetails() {
                 <dd className="font-mono text-text">$ {formatMoney(receipt.onAccountAmount)}</dd>
               </div>
             )}
-            {receipt.change && (
-              <div className="flex justify-between">
+            {receipt.changes.map((change, i) => (
+              <div key={i} className="flex justify-between">
                 <dt className="text-text-soft">
-                  Vuelto — {CHANGE_KIND_LABELS[receipt.change.kind]}
-                  {receipt.change.kind === 'MEDIO_PAGO' && receipt.change.paymentMethodName
-                    ? ` (${receipt.change.paymentMethodName})`
+                  Vuelto — {CHANGE_KIND_LABELS[change.kind]}
+                  {change.kind === 'MEDIO_PAGO' && change.paymentMethodName
+                    ? ` (${change.paymentMethodName})`
                     : ''}
-                  {receipt.change.kind === 'CHEQUE_PROPIO' && receipt.change.note
-                    ? ` — ${receipt.change.note}`
+                  {change.kind === 'CHEQUE_PROPIO' && change.note ? ` — ${change.note}` : ''}
+                  {change.kind === 'CHEQUE_ENDOSADO' && change.checkNumber
+                    ? ` — ${change.checkNumber} · ${change.checkBank}`
                     : ''}
                 </dt>
-                <dd className="font-mono text-text">− $ {formatMoney(receipt.change.amount)}</dd>
+                <dd className="font-mono text-text">− $ {formatMoney(change.amount)}</dd>
               </div>
-            )}
-            {receipt.change && receipt.onAccountAmount - receipt.change.amount > 0 && (
-              <div className="flex justify-between">
-                <dt className="text-text-soft">Queda a favor</dt>
-                <dd className="font-mono text-text">
-                  $ {formatMoney(receipt.onAccountAmount - receipt.change.amount)}
-                </dd>
-              </div>
-            )}
+            ))}
+            {(() => {
+              const changesTotal = receipt.changes.reduce((sum, c) => sum + c.amount, 0);
+              const left = Math.round((receipt.onAccountAmount - changesTotal) * 100) / 100;
+              return left > 0 ? (
+                <div className="flex justify-between">
+                  <dt className="text-text-soft">Queda a favor</dt>
+                  <dd className="font-mono text-text">$ {formatMoney(left)}</dd>
+                </div>
+              ) : null;
+            })()}
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
               <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 Total recibido

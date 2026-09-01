@@ -10,6 +10,7 @@ import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { fetchChecks, type ThirdPartyCheck } from '@/src/lib/checks';
 import { BankCombobox } from '@/src/components/BankCombobox';
 import { CheckDraftModal } from '@/src/components/CheckDraftModal';
 import {
@@ -30,6 +31,11 @@ import {
 
 /** Un valor en edición. Los campos que no aplican a su tipo quedan vacíos. */
 interface DraftValue extends ValueInput {
+  key: number;
+}
+
+/** Un tramo del vuelto en edición. El vuelto puede repartirse en varios. */
+interface DraftChange extends ChangeInput {
   key: number;
 }
 
@@ -80,19 +86,34 @@ export function ReceiptNew() {
   const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
   const [draftAmount, setDraftAmount] = React.useState(0);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
-  const [change, setChange] = React.useState<ChangeInput | null>(null);
+
+  const [walletChecks, setWalletChecks] = React.useState<ThirdPartyCheck[]>([]);
+  const [changes, setChanges] = React.useState<DraftChange[]>([]);
+  const [changeKind, setChangeKind] = React.useState<ChangeInput['kind']>('MEDIO_PAGO');
+  const [changePaymentMethodId, setChangePaymentMethodId] = React.useState('');
+  const [changeNote, setChangeNote] = React.useState('');
+  const [changeAmount, setChangeAmount] = React.useState(0);
+  const [checkPickerOpen, setCheckPickerOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
-    Promise.all([fetchCustomers(true), fetchPaymentMethods(true), fetchTaxRates(true), fetchBanks(true)])
-      .then(([c, m, r, b]) => {
+    Promise.all([
+      fetchCustomers(true),
+      fetchPaymentMethods(true),
+      fetchTaxRates(true),
+      fetchBanks(true),
+      fetchChecks(),
+    ])
+      .then(([c, m, r, b, checks]) => {
         if (cancelled) return;
         setCustomers(c);
         // La cartera no se elige como medio: el cheque se carga como cheque.
         setMethods(m.filter((method) => method.kind !== 'CARTERA_CHEQUES'));
         setRetentions(r.filter((rate) => rate.kind === 'RETENCION'));
         setBanks(b);
+        // Solo los que siguen en cartera se pueden entregar de vuelto.
+        setWalletChecks(checks.filter((check) => check.status === 'EN_CARTERA'));
       })
       .catch((err) => !cancelled && setError(describeReceiptError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
@@ -184,14 +205,35 @@ export function ReceiptNew() {
   );
 
   // Lo que sobra después de imputar a facturas. Por default queda a cuenta
-  // (saldo a favor automático); "Dar vuelto ahora" es la otra opción.
+  // (saldo a favor automático); el vuelto se puede repartir en varios tramos.
   const onAccount = round2(totalValues - totalAllocated);
+
+  const changesTotal = React.useMemo(
+    () => round2(changes.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)),
+    [changes]
+  );
+
+  // Cuánto queda del sobrante sin asignar a ningún tramo del vuelto — es lo
+  // que se sugiere cada vez que se agrega un tramo nuevo.
+  const remainingForChange = Math.max(0, round2(onAccount - changesTotal));
+
+  // Cheques de cartera que todavía se pueden ofrecer: en cartera, no
+  // elegidos ya en otro tramo de este mismo vuelto, y que entran completos
+  // en lo que falta repartir (un cheque no se parte).
+  const availableWalletChecks = React.useMemo(
+    () =>
+      walletChecks.filter(
+        (check) =>
+          !changes.some((c) => c.checkId === check.id) && check.amount <= remainingForChange + 0.005
+      ),
+    [walletChecks, changes, remainingForChange]
+  );
 
   // Si el sobrante baja de lo que ya se había marcado como vuelto (se sacó
   // una factura, se bajó un valor), el vuelto cargado deja de tener sentido.
   React.useEffect(() => {
-    if (change && (onAccount <= 0 || change.amount > onAccount)) setChange(null);
-  }, [onAccount, change]);
+    if (changes.length > 0 && (onAccount <= 0 || changesTotal > onAccount)) setChanges([]);
+  }, [onAccount, changesTotal, changes.length]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (loading) {
@@ -240,6 +282,40 @@ export function ReceiptNew() {
     setDraftAmount(0);
   }
 
+  function handleChangeKindChange(kind: ChangeInput['kind']) {
+    setChangeKind(kind);
+    setChangeAmount(remainingForChange);
+    setChangePaymentMethodId(kind === 'MEDIO_PAGO' ? methods[0]?.id ?? '' : '');
+    setChangeNote('');
+  }
+
+  function handleAddChange() {
+    if (changeKind === 'CHEQUE_ENDOSADO') {
+      setCheckPickerOpen(true);
+      return;
+    }
+    setChanges((current) => [
+      ...current,
+      {
+        key: nextKey++,
+        kind: changeKind,
+        amount: changeAmount,
+        paymentMethodId: changeKind === 'MEDIO_PAGO' ? changePaymentMethodId : undefined,
+        note: changeKind === 'CHEQUE_PROPIO' ? changeNote : undefined,
+      },
+    ]);
+    setChangeAmount(0);
+    setChangeNote('');
+  }
+
+  function handlePickChangeCheck(check: ThirdPartyCheck) {
+    setChanges((current) => [
+      ...current,
+      { key: nextKey++, kind: 'CHEQUE_ENDOSADO', amount: check.amount, checkId: check.id },
+    ]);
+    setCheckPickerOpen(false);
+  }
+
   function handleAutoAllocate() {
     if (totalValues <= 0) {
       setError('Cargá primero con qué se cobra: el reparto usa ese importe.');
@@ -279,11 +355,16 @@ export function ReceiptNew() {
       problems.push(`${invoice.fullNumber} debe $ ${formatMoney(invoice.balance)}.`);
     }
   }
-  if (change) {
-    if (change.amount <= 0) problems.push('El importe del vuelto tiene que ser mayor a cero.');
-    if (change.amount > onAccount) problems.push('El vuelto no puede ser mayor a lo que queda a cuenta.');
-    if (change.kind === 'MEDIO_PAGO' && !change.paymentMethodId) problems.push('Elegí con qué se da el vuelto.');
-    if (change.kind === 'CHEQUE_PROPIO' && !change.note?.trim()) problems.push('Indicá una referencia para el cheque propio del vuelto.');
+  changes.forEach((c) => {
+    if (Number(c.amount) <= 0) problems.push('Hay un tramo del vuelto con importe en cero.');
+    if (c.kind === 'MEDIO_PAGO' && !c.paymentMethodId) problems.push('Elegí con qué se da un tramo del vuelto.');
+    if (c.kind === 'CHEQUE_PROPIO' && !c.note?.trim()) problems.push('Indicá una referencia para el cheque propio del vuelto.');
+    if (c.kind === 'CHEQUE_ENDOSADO' && !c.checkId) problems.push('Falta elegir qué cheque se entrega de vuelto.');
+  });
+  if (changes.length > 0 && changesTotal > onAccount) {
+    problems.push(
+      `El vuelto ($ ${formatMoney(changesTotal)}) no puede ser mayor a lo que queda a cuenta ($ ${formatMoney(onAccount)}).`
+    );
   }
 
   const canSave = problems.length === 0 && !saving;
@@ -299,7 +380,9 @@ export function ReceiptNew() {
           .map(([invoiceId, amount]) => ({ invoiceId, amount: Number(amount) || 0 }))
           .filter((a) => a.amount > 0),
         values.map(({ key: _key, ...value }) => ({ ...value, amount: Number(value.amount) || 0 })),
-        change
+        changes.length > 0
+          ? changes.map(({ key: _key, ...c }) => ({ ...c, amount: Number(c.amount) || 0 }))
+          : undefined
       );
       navigate(`/recibo/${saved.id}`);
     } catch (err) {
@@ -593,6 +676,49 @@ export function ReceiptNew() {
         />
       )}
 
+      {checkPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Panel className="max-h-[80vh] w-full max-w-lg overflow-y-auto p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <SectionHeader title="Cheque de cartera para el vuelto" />
+              <button
+                type="button"
+                onClick={() => setCheckPickerOpen(false)}
+                aria-label="Cerrar"
+                className="text-text-soft transition-colors hover:text-danger"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            {availableWalletChecks.length === 0 ? (
+              <p className="text-sm text-text-soft">
+                No hay cheques en cartera que entren completos en lo que falta devolver.
+              </p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {availableWalletChecks.map((check) => (
+                  <li key={check.id}>
+                    <button
+                      type="button"
+                      onClick={() => handlePickChangeCheck(check)}
+                      className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:text-accent-deep"
+                    >
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {check.number} · {check.bankName}
+                        </span>
+                        <span className="block text-xs text-text-soft">Vence {formatDate(check.dueDate)}</span>
+                      </span>
+                      <span className="font-mono text-sm">$ {formatMoney(check.amount)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+      )}
+
       {/* ── El cuadre ───────────────────────────────────────────────── */}
       <Panel className="mb-10 p-5">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -615,98 +741,100 @@ export function ReceiptNew() {
             )}
 
             {onAccount > 0 && (
-              <div className="mt-1 border-t border-line pt-3">
-                {!change ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setChange({ kind: 'MEDIO_PAGO', amount: onAccount, paymentMethodId: methods[0]?.id })
-                    }
-                    className="text-xs font-semibold text-accent-deep hover:underline"
-                  >
-                    Dar vuelto ahora
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
-                        Vuelto
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setChange(null)}
-                        aria-label="Quitar vuelto"
-                        className="text-text-soft transition-colors hover:text-danger"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+              <div className="mt-1 space-y-2 border-t border-line pt-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+                  Vuelto
+                </span>
 
-                    <div className="flex flex-wrap gap-2">
+                {changes.length > 0 && (
+                  <ul className="space-y-1">
+                    {changes.map((c) => (
+                      <li key={c.key} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="text-text">
+                          {CHANGE_KIND_LABELS[c.kind]}
+                          {c.kind === 'MEDIO_PAGO' && ` — ${methods.find((m) => m.id === c.paymentMethodId)?.name ?? '?'}`}
+                          {c.kind === 'CHEQUE_PROPIO' && c.note ? ` — ${c.note}` : ''}
+                          {c.kind === 'CHEQUE_ENDOSADO' &&
+                            (() => {
+                              const check = walletChecks.find((wc) => wc.id === c.checkId);
+                              return check ? ` — ${check.number} · ${check.bankName}` : '';
+                            })()}
+                        </span>
+                        <span className="flex items-center gap-2 font-mono">
+                          $ {formatMoney(Number(c.amount) || 0)}
+                          <button
+                            type="button"
+                            onClick={() => setChanges((current) => current.filter((x) => x.key !== c.key))}
+                            aria-label="Quitar tramo del vuelto"
+                            className="text-text-soft transition-colors hover:text-danger"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {remainingForChange > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={changeKind}
+                      onChange={(e) => handleChangeKindChange(e.target.value as ChangeInput['kind'])}
+                      className={cn(compactFieldClass, 'bg-panel')}
+                    >
+                      <option value="MEDIO_PAGO">{CHANGE_KIND_LABELS.MEDIO_PAGO}</option>
+                      <option value="CHEQUE_PROPIO">{CHANGE_KIND_LABELS.CHEQUE_PROPIO}</option>
+                      {availableWalletChecks.length > 0 && (
+                        <option value="CHEQUE_ENDOSADO">{CHANGE_KIND_LABELS.CHEQUE_ENDOSADO}</option>
+                      )}
+                    </select>
+
+                    {changeKind === 'MEDIO_PAGO' && (
                       <select
-                        value={change.kind}
-                        onChange={(e) => {
-                          const kind = e.target.value as ChangeInput['kind'];
-                          setChange((c) =>
-                            c && {
-                              ...c,
-                              kind,
-                              paymentMethodId: kind === 'MEDIO_PAGO' ? methods[0]?.id : undefined,
-                              note: kind === 'CHEQUE_PROPIO' ? c.note ?? '' : undefined,
-                            }
-                          );
-                        }}
-                        className={cn(compactFieldClass, 'bg-panel')}
+                        value={changePaymentMethodId}
+                        onChange={(e) => setChangePaymentMethodId(e.target.value)}
+                        className={cn(compactFieldClass, 'bg-panel', !changePaymentMethodId && 'field-required')}
                       >
-                        <option value="MEDIO_PAGO">{CHANGE_KIND_LABELS.MEDIO_PAGO}</option>
-                        <option value="CHEQUE_PROPIO">{CHANGE_KIND_LABELS.CHEQUE_PROPIO}</option>
+                        <option value="">Elegí un medio</option>
+                        {methods.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
                       </select>
+                    )}
 
-                      {change.kind === 'MEDIO_PAGO' && (
-                        <select
-                          value={change.paymentMethodId ?? ''}
-                          onChange={(e) => setChange((c) => c && { ...c, paymentMethodId: e.target.value })}
-                          className={cn(compactFieldClass, 'bg-panel', !change.paymentMethodId && 'field-required')}
-                        >
-                          <option value="">Elegí un medio</option>
-                          {methods.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {change.kind === 'CHEQUE_PROPIO' && (
-                        <input
-                          value={change.note ?? ''}
-                          onChange={(e) => setChange((c) => c && { ...c, note: e.target.value })}
-                          placeholder="Referencia (banco, número, fecha)"
-                          className={cn(
-                            compactFieldClass,
-                            'min-w-40 flex-1',
-                            !change.note?.trim() && 'field-required'
-                          )}
-                        />
-                      )}
-
+                    {changeKind === 'CHEQUE_PROPIO' && (
                       <input
-                        type="number" step="0.01" min="0" max={onAccount}
-                        value={change.amount || ''}
-                        onChange={(e) => setChange((c) => c && { ...c, amount: Number(e.target.value) })}
+                        value={changeNote}
+                        onChange={(e) => setChangeNote(e.target.value)}
+                        placeholder="Referencia (banco, número, fecha)"
+                        className={cn(compactFieldClass, 'min-w-40 flex-1', !changeNote.trim() && 'field-required')}
+                      />
+                    )}
+
+                    {changeKind !== 'CHEQUE_ENDOSADO' && (
+                      <input
+                        type="number" step="0.01" min="0" max={remainingForChange}
+                        value={changeAmount || ''}
+                        onChange={(e) => setChangeAmount(Number(e.target.value))}
                         className={cn(
                           compactFieldClass,
                           'w-28 text-right font-mono',
-                          (change.amount <= 0 || change.amount > onAccount) && 'field-required'
+                          (changeAmount <= 0 || changeAmount > remainingForChange) && 'field-required'
                         )}
                       />
-                    </div>
+                    )}
 
-                    <p className="text-[10px] text-text-soft">
-                      Lo que no se devuelve (${' '}
-                      {formatMoney(Math.max(0, round2(onAccount - (Number(change.amount) || 0))))}) queda
-                      como saldo a favor.
-                    </p>
+                    <Button variant="ghost" type="button" onClick={handleAddChange}>
+                      <Plus size={14} /> {changeKind === 'CHEQUE_ENDOSADO' ? 'Elegir cheque' : 'Agregar'}
+                    </Button>
                   </div>
                 )}
+
+                <p className="text-[10px] text-text-soft">
+                  Lo que no se devuelve (${' '}
+                  {formatMoney(Math.max(0, round2(onAccount - changesTotal)))}) queda como saldo a favor.
+                </p>
               </div>
             )}
           </dl>

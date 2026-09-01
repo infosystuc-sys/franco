@@ -88,14 +88,17 @@ export interface ThirdPartyCheck {
   depositedAt: string | null;
   endorsedToSupplierId: string | null;
   endorsedToSupplierName: string | null;
+  /** Un cheque también se puede entregar de vuelto en una cobranza — ahí el destinatario es un cliente, no un proveedor. */
+  endorsedToCustomerId: string | null;
+  endorsedToCustomerName: string | null;
   rejectedReason: string | null;
   notes: string | null;
 }
 
 const SELECT =
   `id, number, bank_name, drawer, issue_date, due_date, amount, status,
-   deposited_to_id, deposited_at, endorsed_to_supplier_id, rejected_reason, notes,
-   bank:payment_methods(name), supplier:suppliers(name)`;
+   deposited_to_id, deposited_at, endorsed_to_supplier_id, endorsed_to_customer_id, rejected_reason, notes,
+   bank:payment_methods(name), supplier:suppliers(name), endorsed_customer:customers(name)`;
 
 function mapCheck(row: any): ThirdPartyCheck {
   return {
@@ -112,6 +115,8 @@ function mapCheck(row: any): ThirdPartyCheck {
     depositedAt: row.deposited_at,
     endorsedToSupplierId: row.endorsed_to_supplier_id,
     endorsedToSupplierName: row.supplier?.name ?? null,
+    endorsedToCustomerId: row.endorsed_to_customer_id,
+    endorsedToCustomerName: row.endorsed_customer?.name ?? null,
     rejectedReason: row.rejected_reason,
     notes: row.notes,
   };

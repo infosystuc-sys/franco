@@ -283,8 +283,11 @@ export function Checks() {
                       {check.status === 'DEPOSITADO' && check.depositedToName && (
                         <span className="block text-[10px] text-text-faint">en {check.depositedToName}</span>
                       )}
-                      {check.status === 'ENDOSADO' && check.endorsedToSupplierName && (
-                        <span className="block text-[10px] text-text-faint">a {check.endorsedToSupplierName}</span>
+                      {check.status === 'ENDOSADO' && (check.endorsedToSupplierName || check.endorsedToCustomerName) && (
+                        <span className="block text-[10px] text-text-faint">
+                          a {check.endorsedToSupplierName ?? check.endorsedToCustomerName}
+                          {check.endorsedToCustomerName && ' (vuelto)'}
+                        </span>
                       )}
                       {check.status === 'RECHAZADO' && check.rejectedReason && (
                         <span className="block text-[10px] text-danger">{check.rejectedReason}</span>

@@ -16,11 +16,12 @@ import { supabase } from '@/src/lib/supabase';
 
 export type ReceiptStatus = 'REGISTRADO' | 'ANULADO';
 export type ReceiptValueKind = 'MEDIO_PAGO' | 'CHEQUE' | 'RETENCION' | 'SALDO_A_FAVOR';
-export type ReceiptChangeKind = 'MEDIO_PAGO' | 'CHEQUE_PROPIO';
+export type ReceiptChangeKind = 'MEDIO_PAGO' | 'CHEQUE_PROPIO' | 'CHEQUE_ENDOSADO';
 
 export const CHANGE_KIND_LABELS: Record<ReceiptChangeKind, string> = {
   MEDIO_PAGO: 'Efectivo o transferencia',
   CHEQUE_PROPIO: 'Cheque propio',
+  CHEQUE_ENDOSADO: 'Cheque de cartera',
 };
 
 export const VALUE_KIND_LABELS: Record<ReceiptValueKind, string> = {
@@ -70,6 +71,8 @@ export interface ReceiptChange {
   amount: number;
   paymentMethodName: string | null;
   note: string | null;
+  checkNumber: string | null;
+  checkBank: string | null;
 }
 
 export interface Receipt {
@@ -87,7 +90,8 @@ export interface Receipt {
   voidedReason: string | null;
   allocations: ReceiptAllocation[];
   values: ReceiptValue[];
-  change: ReceiptChange | null;
+  /** El vuelto, si lo hubo. Puede tener varios tramos (efectivo, cheque propio, cheque de cartera). */
+  changes: ReceiptChange[];
 }
 
 const SELECT =
@@ -97,7 +101,8 @@ const SELECT =
    values:receipt_values(kind, amount, check_id, certificate_number,
           method:payment_methods(name), rate:tax_rates(name),
           check:third_party_checks(number, bank_name)),
-   change:receipt_changes(kind, amount, note, method:payment_methods(name))`;
+   changes:receipt_changes(kind, amount, note, method:payment_methods(name),
+          check:third_party_checks(number, bank_name))`;
 
 function mapReceipt(row: any): Receipt {
   return {
@@ -129,17 +134,14 @@ function mapReceipt(row: any): Receipt {
       taxRateName: v.rate?.name ?? null,
       certificateNumber: v.certificate_number,
     })),
-    change: mapChange(Array.isArray(row.change) ? row.change[0] : row.change),
-  };
-}
-
-function mapChange(raw: any): ReceiptChange | null {
-  if (!raw) return null;
-  return {
-    kind: raw.kind,
-    amount: Number(raw.amount),
-    paymentMethodName: raw.method?.name ?? null,
-    note: raw.note ?? null,
+    changes: ((row.changes ?? []) as any[]).map((c) => ({
+      kind: c.kind,
+      amount: Number(c.amount),
+      paymentMethodName: c.method?.name ?? null,
+      note: c.note ?? null,
+      checkNumber: c.check?.number ?? null,
+      checkBank: c.check?.bank_name ?? null,
+    })),
   };
 }
 
@@ -271,13 +273,15 @@ export interface ChangeInput {
   amount: number;
   paymentMethodId?: string;
   note?: string;
+  /** Solo para CHEQUE_ENDOSADO: el cheque de la cartera que se entrega. */
+  checkId?: string;
 }
 
 export async function saveReceipt(
   header: { customerId: string; receiptDate: string; notes: string },
   allocations: AllocationInput[],
   values: ValueInput[],
-  change?: ChangeInput | null
+  changes?: ChangeInput[]
 ): Promise<{ id: string; fullNumber: string }> {
   const { data, error } = await supabase.rpc('save_receipt', {
     p_header: {
@@ -298,13 +302,14 @@ export async function saveReceipt(
       check_issue_date: v.checkIssueDate || null,
       check_due_date: v.checkDueDate || null,
     })),
-    p_change: change
-      ? {
+    p_changes: changes && changes.length > 0
+      ? changes.map((change) => ({
           kind: change.kind,
           amount: change.amount,
           payment_method_id: change.paymentMethodId ?? null,
           note: change.note?.trim() || null,
-        }
+          check_id: change.checkId ?? null,
+        }))
       : null,
   });
 
