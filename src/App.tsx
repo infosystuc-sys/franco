@@ -33,6 +33,8 @@ import { ReceiptDetails } from './pages/ReceiptDetails';
 import { ReceiptNew } from './pages/ReceiptNew';
 import { Receipts } from './pages/Receipts';
 import { Treasury } from './pages/Treasury';
+import { PurchaseAIHome } from './pages/PurchaseAIHome';
+import { PurchaseAIUpload } from './pages/PurchaseAIUpload';
 import { PurchaseDetails } from './pages/PurchaseDetails';
 import { PurchaseNew } from './pages/PurchaseNew';
 import { Purchases } from './pages/Purchases';
@@ -101,6 +103,8 @@ export default function App() {
                     <Route path="/compras" element={<Purchases />} />
                     <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />
+                    <Route path="/compras-ia" element={<PurchaseAIHome />} />
+                    <Route path="/compras-ia/nueva/:kind" element={<PurchaseAIUpload />} />
                     <Route path="/informes" element={<Reports />} />
                     <Route path="/informe/:id" element={<ReportView />} />
                     <Route path="/cobranzas" element={<Receipts />} />
