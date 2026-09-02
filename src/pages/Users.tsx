@@ -330,11 +330,8 @@ function UserModal({
   // El cargo actual se sigue localmente por el mismo motivo que hasAccess.
   const [cargo, setCargo] = React.useState<Cargo | null>(employee?.cargo ?? null);
   const [workplace, setWorkplace] = React.useState<Workplace | null>(employee?.workplace ?? null);
-  const [editingCargo, setEditingCargo] = React.useState(false);
   const [cargoDraft, setCargoDraft] = React.useState<Cargo>(employee?.cargo ?? 'operario');
   const [workplaceDraft, setWorkplaceDraft] = React.useState<Workplace | ''>(employee?.workplace ?? '');
-  const [savingCargo, setSavingCargo] = React.useState(false);
-  const [cargoError, setCargoError] = React.useState<string | null>(null);
 
   async function handleGrantAccess() {
     if (!employee) return;
@@ -348,6 +345,10 @@ function UserModal({
       setHasAccess(true);
       setCargo(accessCargo);
       setWorkplace(accessCargo === 'operario' ? (accessWorkplace || null) : null);
+      // Los campos de cargo aparecen recién ahora: se alinean con lo que se
+      // acaba de crear, para que el "Guardar" del modal no los pise.
+      setCargoDraft(accessCargo);
+      setWorkplaceDraft(accessCargo === 'operario' ? (accessWorkplace || '') : '');
       setAccessSuccess(`Usuario creado: ${usuario} / contraseña inicial 1234. Se la pide cambiar en el primer ingreso.`);
       onAccessChanged();
     } catch (err) {
@@ -378,23 +379,6 @@ function UserModal({
     }
   }
 
-  async function handleChangeCargo() {
-    if (!employee) return;
-    setSavingCargo(true);
-    setCargoError(null);
-    try {
-      await cambiarCargo(employee.id, cargoDraft, cargoDraft === 'operario' ? (workplaceDraft || null) : null);
-      setCargo(cargoDraft);
-      setWorkplace(cargoDraft === 'operario' ? (workplaceDraft || null) : null);
-      setEditingCargo(false);
-      onAccessChanged();
-    } catch (err) {
-      setCargoError(getErrorMessage(err));
-    } finally {
-      setSavingCargo(false);
-    }
-  }
-
   function patch(changes: Partial<EmployeeInput>) {
     setForm((prev) => ({ ...prev, ...changes }));
   }
@@ -410,6 +394,16 @@ function UserModal({
     try {
       if (employee) {
         await updateEmployee(employee.id, form);
+        // El cargo y el lugar de trabajo viven en la Edge Function (tocan el
+        // perfil de acceso), pero se guardan con este mismo botón: tenerlos
+        // en un sub-formulario aparte hacía que elegir un lugar y apretar
+        // "Guardar" descartara el cambio sin avisar.
+        if (hasAccess) {
+          const lugarElegido = cargoDraft === 'operario' ? (workplaceDraft || null) : null;
+          if (cargoDraft !== cargo || lugarElegido !== workplace) {
+            await cambiarCargo(employee.id, cargoDraft, lugarElegido);
+          }
+        }
         onSaved();
       } else {
         const input: NewUserInput = {
@@ -573,71 +567,36 @@ function UserModal({
                     {employee.email ?? 'Tiene usuario, pero no vemos su email desde acá.'}
                   </p>
 
-                  {!editingCargo ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-text-soft">Cargo:</span>
-                      <span className="text-xs font-semibold text-text">
-                        {cargo ? CARGO_LABELS[cargo] : '—'}
-                        {cargo === 'operario' && workplace && ` · ${workplace}`}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCargoDraft(cargo ?? 'operario');
-                          setWorkplaceDraft(workplace ?? '');
-                          setCargoError(null);
-                          setEditingCargo(true);
-                        }}
-                        className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
-                      >
-                        Cambiar
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 border border-line p-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Label>
+                      Cargo
                       <select
                         value={cargoDraft}
                         onChange={(e) => setCargoDraft(e.target.value as Cargo)}
-                        className="border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
+                        className={fieldClass(false, 'font-normal normal-case bg-panel')}
                       >
                         {CARGOS.map((c) => (
                           <option key={c} value={c}>{CARGO_LABELS[c]}</option>
                         ))}
                       </select>
-                      {cargoDraft === 'operario' && (
+                    </Label>
+
+                    {cargoDraft === 'operario' && (
+                      <Label>
+                        Lugar de trabajo
                         <select
                           value={workplaceDraft}
                           onChange={(e) => setWorkplaceDraft(e.target.value as Workplace | '')}
-                          className="ml-2 border border-line bg-panel px-2 py-1 text-xs normal-case focus:border-accent-deep focus:outline-none"
+                          className={fieldClass(false, 'font-normal normal-case bg-panel')}
                         >
                           <option value="">Sin asignar</option>
                           {WORKPLACES.map((w) => (
                             <option key={w} value={w}>{w}</option>
                           ))}
                         </select>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleChangeCargo}
-                          disabled={savingCargo}
-                          className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
-                        >
-                          {savingCargo ? 'Guardando...' : 'Guardar'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingCargo(false)}
-                          className="text-[11px] font-semibold uppercase tracking-wider text-text-soft hover:text-text"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {cargoError && (
-                    <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{cargoError}</div>
-                  )}
+                      </Label>
+                    )}
+                  </div>
 
                   {changeSuccess && <p className="text-xs text-state-done">Contraseña actualizada.</p>}
                   {!showChangePassword ? (
