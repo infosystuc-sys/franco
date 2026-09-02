@@ -1,0 +1,223 @@
+# Capacidad de recepción de la playa — Diseño
+
+**Fecha:** 2 de septiembre de 2026
+**Estado:** en revisión
+
+## Qué se va a construir
+
+Saber cuántos vehículos más entran en la playa, hoy y en los próximos días.
+
+Se configura un cupo por tamaño de vehículo (chico, mediano, grande), cada
+vehículo que está físicamente en el taller descuenta del cupo de su tamaño, y
+la fecha estimada de finalización de la OT proyecta cuándo se libera cada
+lugar. Al recibir un vehículo, la pantalla de ingreso muestra cuánto lugar
+queda para ese tamaño.
+
+**Los laboratorios quedan afuera.** El cupo de Laboratorio 1 y Laboratorio 2
+sigue funcionando como hasta ahora, sin cambios: el problema a resolver es la
+playa.
+
+---
+
+## Decisiones tomadas
+
+| Decisión | Elegido | Por qué |
+|---|---|---|
+| Unidad del cupo | **Tamaño** (chico/mediano/grande), no tipo de vehículo | El sistema clasifica por tipo (Camión/Utilitario, Maquinaria vial, Agrícola, Grupo electrógeno, Embarcación, Otro), pero eso no dice cuánto lugar ocupa: un grupo electrógeno y un camión son tipos distintos y espacios muy distintos. |
+| De dónde sale el tamaño | **Por vehículo, con default por tipo** | "Camión / Utilitario" mete en la misma bolsa una Transit y un Scania. El default evita cargarlo a mano siempre; la corrección evita mentir. |
+| Qué ocupa lugar | **Ingresos sin OT + OT activas** | Es lo único que refleja el lugar real. Hoy la ocupación cuenta solo OT según el sector del empleado asignado, y deja afuera vehículos que están físicamente en el taller. |
+| Cuándo se libera | **Al retirar el vehículo**, no al terminar la OT | Un vehículo terminado que nadie retiró sigue ocupando lugar. |
+| Proyección | Fecha estimada de finalización **más un margen configurable** | Casi nadie retira el mismo día que termina. Sin margen, la pantalla promete lugar que no va a haber. |
+
+---
+
+## Dos hallazgos del código que condicionan el diseño
+
+### `is_terminal` habilita facturar, así que "Retirado" no puede reemplazar a "Terminado"
+
+El flujo de estados hoy termina en "Terminado", marcado como terminal. Y
+`is_terminal` es lo que habilita emitir la factura de una OT
+([`workOrders.ts:36`](../../../src/lib/workOrders.ts),
+[`invoices.ts:351`](../../../src/lib/invoices.ts),
+[`InvoiceNew.tsx:156`](../../../src/pages/InvoiceNew.tsx)).
+
+Si "Retirado" pasara a ser el estado final y "Terminado" dejara de serlo, no
+se podría facturar una OT hasta que el cliente retire el vehículo — al revés
+de como funciona un taller, donde se factura para que se lo lleve.
+
+**Por eso "Retirado" se agrega como estado terminal adicional**, sin tocar
+"Terminado". No hay reglas de transición entre estados, así que pasar de uno
+al otro no necesita nada especial.
+
+### Los ingresos necesitan un cierre propio
+
+De los 10 ingresos cargados, 5 están pendientes y 5 cotizados — pero solo 2 de
+esos derivaron en una OT. Los **3 restantes son vehículos cotizados sin orden
+de trabajo**: están en el taller y no los cuenta nadie.
+
+Peor: si el cliente rechaza el presupuesto y se lleva el vehículo, hoy no hay
+forma de registrarlo. Ese ingreso ocuparía lugar para siempre.
+
+**Por eso el ingreso suma un estado de cierre**, para la salida que no pasa por
+una OT.
+
+---
+
+## Modelo de datos
+
+### `vehicles`: tamaño
+
+Columna nueva `size_class` con valores `CHICO`, `MEDIANO`, `GRANDE`.
+
+Al dar de alta o editar un vehículo se propone según el tipo, y queda
+editable:
+
+| Tipo de vehículo | Tamaño propuesto |
+|---|---|
+| Camión / Utilitario | GRANDE |
+| Maquinaria vial | GRANDE |
+| Maquinaria agrícola | GRANDE |
+| Embarcación | MEDIANO |
+| Otro | MEDIANO |
+| Grupo electrógeno | CHICO |
+
+Los 8 vehículos ya cargados se completan con el valor que les corresponde por
+tipo. La columna es `not null` con default `MEDIANO`: un vehículo sin tamaño
+haría que la cuenta mienta en silencio, que es peor que asumir el caso medio.
+
+### Tabla nueva `yard_capacity`
+
+Una fila por tamaño, con el cupo de la playa.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `size_class` | text, PK | `CHICO`, `MEDIANO`, `GRANDE`. |
+| `capacity` | int not null | Cuántos entran de ese tamaño. |
+| `updated_at` | timestamptz | |
+
+Sembrada con las tres filas en cero: un cupo en cero es honesto —significa "no
+configurado"— mientras que sembrar un número inventado haría que la pantalla
+afirme algo que nadie decidió.
+
+RLS: lectura para cualquier usuario autenticado (la pantalla de ingreso la
+consulta), escritura solo admin.
+
+### `work_order_statuses`: qué estado libera la playa
+
+Columna nueva `frees_yard boolean not null default false`, marcada en el
+estado "Retirado".
+
+**La regla no se ata al nombre del estado.** Los estados son un ABM que el
+usuario administra: si mañana renombra "Retirado" a "Entregado", una regla
+basada en el texto se rompería sin aviso. La marca sigue el mismo criterio que
+`is_initial` y `is_terminal`, que ya existen.
+
+Se agrega el estado "Retirado" con `is_terminal = true` y `frees_yard = true`,
+después de "Terminado".
+
+### `vehicle_intakes`: cierre sin OT
+
+El enum `vehicle_intake_status` suma el valor `CERRADO`, para el ingreso cuyo
+vehículo se fue sin llegar a una orden de trabajo.
+
+### `company_settings`: margen de retiro
+
+Columna nueva `yard_pickup_grace_days int not null default 2`: cuántos días
+después de la fecha estimada de finalización se asume que el vehículo se
+retira, a los fines de la proyección.
+
+---
+
+## Qué ocupa lugar, exactamente
+
+Un vehículo ocupa un lugar en la playa si se cumple una de estas dos, que son
+excluyentes entre sí:
+
+1. **Tiene un ingreso abierto sin OT:** el ingreso no está `CERRADO` y su
+   cotización todavía no derivó en una orden de trabajo.
+2. **Tiene una OT en la playa:** el estado de la orden no está marcado con
+   `frees_yard`.
+
+Cuando el ingreso deriva en OT, la ocupación pasa del punto 1 al 2 sin contar
+dos veces. Cuando la OT llega a "Retirado", el lugar se libera. Cuando el
+ingreso se cierra sin OT, también.
+
+**Nota sobre el sector del empleado.** La ocupación de la playa deja de
+depender de a qué sector pertenece el empleado asignado, que es como se calcula
+hoy. Es lo correcto para medir espacio físico: dónde está el vehículo no
+depende de quién lo atiende, y una OT sin empleado asignado igual ocupa lugar.
+
+---
+
+## La proyección
+
+Para cada vehículo ocupando lugar, la fecha en que se espera que se libere:
+
+- **Con OT y fecha estimada de finalización:** esa fecha más
+  `yard_pickup_grace_days`.
+- **Con OT sin fecha estimada, o ingreso sin OT:** no hay fecha. Estos
+  vehículos se muestran aparte, como "sin fecha de salida", en vez de
+  inventarles una.
+
+La pantalla muestra, por tamaño y para los próximos días, cuántos lugares
+habría libres si todo saliera según lo estimado. Es una proyección, no una
+promesa: se rotula como tal, porque una fecha estimada que se corre arrastra
+todo lo demás.
+
+---
+
+## Dónde se ve
+
+### Disponibilidad del taller
+
+Se suma un panel de playa por tamaño: cupo configurado, ocupado, libre, y la
+proyección de los próximos días. La sección de laboratorios queda como está.
+
+### Alta de ingreso de vehículo
+
+Al elegir el vehículo, se muestra cuánto lugar queda para su tamaño: por
+ejemplo, "Quedan 2 de 5 lugares para vehículos grandes".
+
+**No bloquea el ingreso.** Si no hay lugar, avisa pero deja continuar: el
+vehículo ya está en la puerta del taller, y un sistema que impide registrarlo
+solo consigue que el dato deje de cargarse.
+
+### Configuración
+
+Los tres cupos y el margen de días de retiro.
+
+---
+
+## No entra en esta versión
+
+- **Reservar un lugar para una fecha futura.** Esto mide ocupación, no agenda
+  turnos.
+- **Ubicaciones dentro de la playa.** No hay mapa ni número de lugar: se cuenta
+  cuántos entran, no dónde va cada uno.
+- **Cupo por tamaño en los laboratorios.** Siguen con su cupo único actual.
+- **Histórico de ocupación.** Se calcula el estado de hoy y la proyección
+  hacia adelante; no se guarda una serie para mirar hacia atrás.
+
+---
+
+## Pruebas
+
+Sin test runner nuevo: la convención del proyecto es `npx tsc --noEmit`,
+`npm run build` y prueba manual con Playwright sobre datos reales.
+
+- Con los datos actuales, la ocupación tiene que dar **11 vehículos**: 8
+  ingresos sin OT (5 pendientes y 3 cotizados) más 3 OT activas. Las 2 OT que
+  vienen de un ingreso cuentan una sola vez, no dos.
+- Con el default de tamaño por tipo, esos 11 caen **todos en GRANDE** (6
+  camiones, 4 agrícolas, 1 maquinaria vial): no hay ni un vehículo chico ni
+  mediano cargado hoy. Sirve para verificar el reparto por tamaño, pero
+  conviene además cambiarle el tamaño a alguno a mano y confirmar que se mueve
+  de columna.
+- El contraste con lo que se ve hoy: la pantalla actual muestra 3 vehículos
+  ocupando el taller. Son 11.
+- Marcar una OT como "Retirado" tiene que liberar su lugar, y **no** tiene que
+  afectar si esa OT se puede facturar.
+- Cerrar un ingreso sin OT tiene que liberar su lugar.
+- Cambiar el margen de días tiene que correr las fechas de la proyección.
+- Un vehículo sin fecha estimada tiene que aparecer en "sin fecha de salida" y
+  no romper el cálculo.
