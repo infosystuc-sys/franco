@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, X, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
@@ -54,6 +54,19 @@ export function WorkOrderStatuses() {
   const [error, setError] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<WorkOrderStatusDef | null>(null);
   const [creating, setCreating] = React.useState(false);
+  // El "+" del menu entra con ?nuevo=1 y abre el alta directo. Se limpia el
+  // parametro para que recargar la pagina no vuelva a abrir el modal.
+  const [searchParams, setSearchParams] = useSearchParams();
+  React.useEffect(() => {
+    if (searchParams.get('nuevo') !== '1') return;
+    setCreating(true);
+    setSearchParams((actuales) => {
+      const proximos = new URLSearchParams(actuales);
+      proximos.delete('nuevo');
+      return proximos;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const [reordering, setReordering] = React.useState(false);
 
   const load = React.useCallback(async () => {

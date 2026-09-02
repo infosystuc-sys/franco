@@ -384,7 +384,7 @@ export function ReceiptNew() {
           ? changes.map(({ key: _key, ...c }) => ({ ...c, amount: Number(c.amount) || 0 }))
           : undefined
       );
-      navigate(`/recibo/${saved.id}`);
+      navigate('/cobranzas');
     } catch (err) {
       setError(describeReceiptError(getErrorMessage(err)));
       setSaving(false);

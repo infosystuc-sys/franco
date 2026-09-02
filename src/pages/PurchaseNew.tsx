@@ -254,7 +254,7 @@ export function PurchaseNew() {
         lines,
         footTaxes
       );
-      navigate(`/compra/${saved.id}`);
+      navigate('/compras');
     } catch (err) {
       setError(describePurchaseError(getErrorMessage(err)));
       setSaving(false);

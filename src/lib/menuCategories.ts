@@ -104,9 +104,9 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'padrones',
         cards: [
-          { icon: Users, label: 'Clientes', path: '/clientes', adminOnly: true },
-          { icon: Truck, label: 'Vehículos', path: '/vehiculos', adminOnly: true },
-          { icon: Wrench, label: 'Estados de OT', path: '/estados-ot', adminOnly: true },
+          { icon: Users, label: 'Clientes', path: '/clientes', newPath: '/clientes?nuevo=1', adminOnly: true },
+          { icon: Truck, label: 'Vehículos', path: '/vehiculos', newPath: '/vehiculos?nuevo=1', adminOnly: true },
+          { icon: Wrench, label: 'Estados de OT', path: '/estados-ot', newPath: '/estados-ot?nuevo=1', adminOnly: true },
         ],
       },
       {
@@ -130,13 +130,13 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: ShoppingCart, label: 'Compras', path: '/compras', adminOnly: true },
-          { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', adminOnly: true },
+          { icon: ShoppingCart, label: 'Compras', path: '/compras', newPath: '/compras/nueva/articulos', adminOnly: true },
+          { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', newPath: '/compras-ia/nueva/articulos', adminOnly: true },
         ],
       },
       {
         color: 'padrones',
-        cards: [{ icon: Factory, label: 'Proveedores', path: '/proveedores', adminOnly: true }],
+        cards: [{ icon: Factory, label: 'Proveedores', path: '/proveedores', newPath: '/proveedores?nuevo=1', adminOnly: true }],
       },
       {
         color: 'informes',
@@ -183,7 +183,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'padrones',
         cards: [
-          { icon: Package, label: 'Inventario', path: '/inventario', adminOnly: true },
+          { icon: Package, label: 'Inventario', path: '/inventario', newPath: '/inventario?nuevo=1', adminOnly: true },
           { icon: Tags, label: 'Listas de precios', path: '/listas-precios', adminOnly: true },
         ],
       },
@@ -203,8 +203,8 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         cards: [
           { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
           { icon: ArrowRightLeft, label: 'Endosar cheques', path: '/tesoreria/endosar-cheque', adminOnly: true },
-          { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', adminOnly: true },
-          { icon: Landmark, label: 'Bancos', path: '/bancos', adminOnly: true },
+          { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', newPath: '/medios-pago?nuevo=1', adminOnly: true },
+          { icon: Landmark, label: 'Bancos', path: '/bancos', newPath: '/bancos?nuevo=1', adminOnly: true },
         ],
       },
       {
@@ -221,7 +221,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'padrones',
         cards: [
-          { icon: Percent, label: 'Alícuotas', path: '/alicuotas', adminOnly: true },
+          { icon: Percent, label: 'Alícuotas', path: '/alicuotas', newPath: '/alicuotas?nuevo=1', adminOnly: true },
           { icon: ClipboardList, label: 'Conceptos de gasto', path: '/conceptos', adminOnly: true },
         ],
       },
@@ -241,7 +241,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
 
 /** Enlaces directos, fuera de la grilla — igual que Configuración/Aplicaciones en Tango. */
 export const MENU_DIRECT_LINKS: MenuCard[] = [
-  { icon: Users, label: 'Usuarios', path: '/usuarios', adminOnly: true },
+  { icon: Users, label: 'Usuarios', path: '/usuarios', newPath: '/usuarios?nuevo=1', adminOnly: true },
   { icon: MessageSquare, label: 'Mensajes', path: '/mensajes', adminOnly: true },
   { icon: Settings, label: 'Configuración', path: '/configuracion', adminOnly: true },
 ];

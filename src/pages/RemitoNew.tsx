@@ -59,7 +59,7 @@ export function RemitoNew() {
     setError(null);
     try {
       const created = await createRemito(customer.id, items, notes);
-      navigate(`/remito/${created.id}`);
+      navigate('/remitos');
     } catch (err) {
       setError(describeRemitoError(getErrorMessage(err)));
       setSaving(false);

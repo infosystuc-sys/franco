@@ -612,7 +612,7 @@ export function PurchaseAIReview() {
       return;
     }
 
-    navigate(`/compra/${saved.id}`);
+    navigate('/compras');
   }
 
   return (

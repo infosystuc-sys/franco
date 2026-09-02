@@ -434,7 +434,7 @@ export function PaymentOrderNew() {
         values.map(({ key: _key, ...value }) => ({ ...value, amount: Number(value.amount) || 0 })),
         newProvisionalCreditNotes
       );
-      navigate(`/pago/${saved.id}`);
+      navigate('/pagos');
     } catch (err) {
       setError(describePaymentOrderError(getErrorMessage(err)));
       setSaving(false);

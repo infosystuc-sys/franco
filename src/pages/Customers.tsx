@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Search, Truck } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -23,6 +23,19 @@ export function Customers() {
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [editing, setEditing] = React.useState<Customer | 'new' | null>(null);
+
+  // El "+" del menú entra con ?nuevo=1 y abre el alta directo. Se limpia el
+  // parámetro para que recargar la página no vuelva a abrir el modal.
+  const [searchParams, setSearchParams] = useSearchParams();
+  React.useEffect(() => {
+    if (searchParams.get('nuevo') !== '1') return;
+    setEditing('new');
+    setSearchParams((actuales) => {
+      const proximos = new URLSearchParams(actuales);
+      proximos.delete('nuevo');
+      return proximos;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const loadCustomers = React.useCallback(async () => {
     setLoading(true);

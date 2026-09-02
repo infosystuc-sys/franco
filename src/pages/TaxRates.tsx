@@ -36,7 +36,7 @@ import {
  */
 export function TaxRates() {
   const { role } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // Se llega filtrado desde Tesorería → Medios de pago (las retenciones no
   // son un medio de pago, pero es donde el taller las va a buscar primero).
   const kindFilter = searchParams.get('kind');
@@ -48,6 +48,19 @@ export function TaxRates() {
   const [error, setError] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<TaxRate | null>(null);
   const [creating, setCreating] = React.useState(false);
+
+  // El "+" del menú entra con ?nuevo=1 y abre el alta directo. Se borra solo
+  // ese parámetro: el filtro ?kind con el que se llega desde Medios de pago
+  // tiene que sobrevivir.
+  React.useEffect(() => {
+    if (searchParams.get('nuevo') !== '1') return;
+    setCreating(true);
+    setSearchParams((actuales) => {
+      const proximos = new URLSearchParams(actuales);
+      proximos.delete('nuevo');
+      return proximos;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const load = React.useCallback(async () => {
     setLoading(true);

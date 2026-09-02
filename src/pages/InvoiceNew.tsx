@@ -236,7 +236,7 @@ export function InvoiceNew() {
           );
         }
       }
-      navigate(`/factura/${issued.id}`);
+      navigate('/facturas');
     } catch (err) {
       setError(describeInvoiceError(getErrorMessage(err)));
       setIssuing(false);
