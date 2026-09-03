@@ -9,11 +9,15 @@ import {
   EMPTY_VEHICLE_FORM,
   INJECTION_SYSTEMS,
   ODOMETER_UNIT_LABELS,
+  SIZE_BY_VEHICLE_TYPE,
+  SIZE_CLASS_LABELS,
+  SIZE_CLASSES,
   updateVehicle,
   VEHICLE_TYPE_LABELS,
   VEHICLE_TYPES,
   vehicleToForm,
   type OdometerUnit,
+  type SizeClass,
   type Vehicle,
   type VehicleInput,
   type VehicleType,
@@ -122,11 +126,29 @@ export function VehicleModal({
                 Tipo
                 <select
                   value={form.vehicleType}
-                  onChange={(e) => patch({ vehicleType: e.target.value as VehicleType })}
+                  onChange={(e) => {
+                    const vehicleType = e.target.value as VehicleType;
+                    // Cambiar el tipo repropone el tamaño típico. Pisa lo que
+                    // hubiera: es más predecible que adivinar si el usuario ya
+                    // lo tocó, y el campo queda al lado para corregirlo.
+                    patch({ vehicleType, sizeClass: SIZE_BY_VEHICLE_TYPE[vehicleType] });
+                  }}
                   className={cn(inputClass, 'bg-panel')}
                 >
                   {VEHICLE_TYPES.map((type) => (
                     <option key={type} value={type}>{VEHICLE_TYPE_LABELS[type]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={cn(labelClass, 'col-span-3')}>
+                Tamaño en playa
+                <select
+                  value={form.sizeClass}
+                  onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
+                  className={cn(inputClass, 'bg-panel')}
+                >
+                  {SIZE_CLASSES.map((size) => (
+                    <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
                   ))}
                 </select>
               </label>
@@ -144,7 +166,7 @@ export function VehicleModal({
                 <input type="number" value={form.year} onChange={(e) => patch({ year: e.target.value })} className={inputClass} placeholder="2019" />
               </label>
 
-              <label className={cn(labelClass, 'col-span-6')}>
+              <label className={cn(labelClass, 'col-span-3')}>
                 N° de chasis (VIN)
                 <input
                   value={form.vin}

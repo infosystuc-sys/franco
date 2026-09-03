@@ -19,6 +19,30 @@ export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
 
 export const VEHICLE_TYPES = Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[];
 
+export type SizeClass = 'CHICO' | 'MEDIANO' | 'GRANDE';
+
+export const SIZE_CLASS_LABELS: Record<SizeClass, string> = {
+  CHICO: 'Chico',
+  MEDIANO: 'Mediano',
+  GRANDE: 'Grande',
+};
+
+export const SIZE_CLASSES = Object.keys(SIZE_CLASS_LABELS) as SizeClass[];
+
+/**
+ * Tamaño que se propone al elegir el tipo. Es solo el punto de partida: el
+ * tipo no dice cuánto lugar ocupa el vehículo — "Camión / Utilitario" mete en
+ * la misma bolsa una Transit y un Scania — así que el campo queda editable.
+ */
+export const SIZE_BY_VEHICLE_TYPE: Record<VehicleType, SizeClass> = {
+  CAMION: 'GRANDE',
+  MAQUINARIA: 'GRANDE',
+  AGRICOLA: 'GRANDE',
+  EMBARCACION: 'MEDIANO',
+  GENERADOR: 'CHICO',
+  OTRO: 'MEDIANO',
+};
+
 export type OdometerUnit = 'KM' | 'HORAS';
 
 export const ODOMETER_UNIT_LABELS: Record<OdometerUnit, string> = {
@@ -47,6 +71,7 @@ export interface Vehicle {
   brand: string | null;
   model: string;
   vehicleType: VehicleType;
+  sizeClass: SizeClass;
   licensePlate: string | null;
   year: number | null;
   vin: string | null;
@@ -65,6 +90,7 @@ export interface VehicleInput {
   brand: string;
   model: string;
   vehicleType: VehicleType;
+  sizeClass: SizeClass;
   licensePlate: string;
   year: string;
   vin: string;
@@ -83,6 +109,7 @@ export const EMPTY_VEHICLE_FORM: VehicleInput = {
   brand: '',
   model: '',
   vehicleType: 'CAMION',
+  sizeClass: 'GRANDE',
   licensePlate: '',
   year: '',
   vin: '',
@@ -110,6 +137,7 @@ function mapVehicle(row: any): Vehicle {
     brand: row.brand,
     model: row.model,
     vehicleType: row.vehicle_type,
+    sizeClass: row.size_class,
     licensePlate: row.license_plate,
     year: row.year,
     vin: row.vin,
@@ -142,6 +170,7 @@ function toRow(input: VehicleInput) {
     brand: nullIfBlank(input.brand),
     model: input.model.trim(),
     vehicle_type: input.vehicleType,
+    size_class: input.sizeClass,
     // Patente y VIN se normalizan en mayúsculas: los índices únicos comparan así.
     license_plate: nullIfBlank(input.licensePlate)?.toUpperCase() ?? null,
     year: numberOrNull(input.year),
@@ -163,6 +192,7 @@ export function vehicleToForm(vehicle: Vehicle): VehicleInput {
     brand: vehicle.brand ?? '',
     model: vehicle.model,
     vehicleType: vehicle.vehicleType,
+    sizeClass: vehicle.sizeClass,
     licensePlate: vehicle.licensePlate ?? '',
     year: vehicle.year === null ? '' : String(vehicle.year),
     vin: vehicle.vin ?? '',
