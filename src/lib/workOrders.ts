@@ -35,6 +35,7 @@ export function getErrorMessage(err: unknown): string {
  *  - isInitial: con qué estado nace una OT (a lo sumo uno).
  *  - isTerminal: cierra la orden — habilita facturar, cuenta como cerrada.
  *  - notifiesClient: al llegar acá se manda WhatsApp.
+ *  - freesYard: al llegar acá el vehículo salió del taller y libera la playa.
  */
 export interface WorkOrderStatusDef {
   id: string;
@@ -46,6 +47,7 @@ export interface WorkOrderStatusDef {
   isInitial: boolean;
   isTerminal: boolean;
   notifiesClient: boolean;
+  freesYard: boolean;
 }
 
 export interface WorkOrderStatusInput {
@@ -57,6 +59,7 @@ export interface WorkOrderStatusInput {
   isInitial: boolean;
   isTerminal: boolean;
   notifiesClient: boolean;
+  freesYard: boolean;
 }
 
 /** Referencia liviana al estado de una OT, tal como viaja embebida en listados y detalle. */
@@ -68,7 +71,7 @@ export interface WorkOrderStatusRef {
 }
 
 const STATUS_SELECT =
-  'id, label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client';
+  'id, label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client, frees_yard';
 
 function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
   return {
@@ -81,6 +84,7 @@ function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
     isInitial: row.is_initial,
     isTerminal: row.is_terminal,
     notifiesClient: row.notifies_client,
+    freesYard: row.frees_yard,
   };
 }
 
@@ -106,6 +110,7 @@ function statusRow(input: WorkOrderStatusInput) {
     is_initial: input.isInitial,
     is_terminal: input.isTerminal,
     notifies_client: input.notifiesClient,
+    frees_yard: input.freesYard,
   };
 }
 

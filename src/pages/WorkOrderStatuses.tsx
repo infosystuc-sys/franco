@@ -25,6 +25,7 @@ const EMPTY_FORM: WorkOrderStatusInput = {
   isInitial: false,
   isTerminal: false,
   notifiesClient: false,
+  freesYard: false,
 };
 
 function statusToForm(status: WorkOrderStatusDef): WorkOrderStatusInput {
@@ -37,6 +38,7 @@ function statusToForm(status: WorkOrderStatusDef): WorkOrderStatusInput {
     isInitial: status.isInitial,
     isTerminal: status.isTerminal,
     notifiesClient: status.notifiesClient,
+    freesYard: status.freesYard,
   };
 }
 
@@ -141,6 +143,7 @@ export function WorkOrderStatuses() {
                 <th className="px-4 py-1">Estado</th>
                 <th className="w-28 px-3 py-1">Inicial</th>
                 <th className="w-28 px-3 py-1">Terminal</th>
+                <th className="w-28 px-3 py-1">Libera playa</th>
                 <th className="w-32 px-3 py-1">Avisa cliente</th>
                 <th className="w-24 px-3 py-1"></th>
               </tr>
@@ -199,6 +202,7 @@ export function WorkOrderStatuses() {
                   </td>
                   <td data-label="Inicial" className="px-3 py-1 text-text-soft">{status.isInitial ? 'Sí' : '—'}</td>
                   <td data-label="Terminal" className="px-3 py-1 text-text-soft">{status.isTerminal ? 'Sí' : '—'}</td>
+                  <td data-label="Libera playa" className="px-3 py-1 text-text-soft">{status.freesYard ? 'Sí' : '—'}</td>
                   <td data-label="Avisa cliente" className="px-3 py-1 text-text-soft">{status.notifiesClient ? 'Sí' : '—'}</td>
                   <td className="px-3 py-1 text-right">
                     <button
@@ -362,6 +366,15 @@ function WorkOrderStatusModal({
                 className="h-4 w-4 accent-accent-deep"
               />
               Terminal (cierra la orden y habilita facturarla)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={form.freesYard}
+                onChange={(e) => patch({ freesYard: e.target.checked })}
+                className="h-4 w-4 accent-accent-deep"
+              />
+              Libera la playa (el vehículo ya salió del taller)
             </label>
             <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
               <input
