@@ -151,7 +151,7 @@ export function WorkOrderStatuses() {
             <tbody>
               {statuses.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-text-soft">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-soft">
                     No hay estados cargados todavía.
                   </td>
                 </tr>
