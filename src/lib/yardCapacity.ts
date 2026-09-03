@@ -40,6 +40,8 @@ export interface YardOccupant {
   kind: 'INGRESO' | 'OT';
   id: string;
   number: string;
+  /** Con qué vehículo físico se corresponde: es la clave para no contarlo dos veces. */
+  vehicleId: string;
   customerName: string;
   vehicleLabel: string;
   sizeClass: SizeClass;
@@ -62,6 +64,18 @@ function diasEnTaller(createdAt: string): number {
 }
 
 /**
+ * El tamaño no se adivina. La columna es NOT NULL, así que si el vehículo no
+ * vino es porque RLS lo ocultó a quien preguntó — y entonces esta cuenta no
+ * puede ser correcta. Mejor un error visible que una playa que miente.
+ */
+function tamanoDe(vehicle: { size_class: string } | null, numero: string): SizeClass {
+  if (!vehicle?.size_class) {
+    throw new Error(`No se pudo leer el tamaño del vehículo de ${numero}. Puede ser un problema de permisos.`);
+  }
+  return vehicle.size_class as SizeClass;
+}
+
+/**
  * Un vehículo ocupa lugar si cumple una de dos, que son excluyentes: tiene un
  * ingreso abierto que todavía no derivó en OT, o tiene una OT cuyo estado no
  * libera la playa.
@@ -75,7 +89,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
     supabase
       .from('work_orders')
       .select(
-        `id, number, created_at, estimated_delivery_date, quotation_id,
+        `id, number, created_at, estimated_delivery_date, quotation_id, vehicle_id,
          status:work_order_statuses(label, color, frees_yard),
          customer:customers(name),
          vehicle:vehicles(brand, model, license_plate, size_class)`
@@ -84,7 +98,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
     supabase
       .from('vehicle_intakes')
       .select(
-        `id, number, created_at, quotation_id,
+        `id, number, created_at, quotation_id, vehicle_id,
          customer:customers(name),
          vehicle:vehicles(brand, model, license_plate, size_class)`
       )
@@ -105,9 +119,10 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       kind: 'OT' as const,
       id: row.id,
       number: row.number,
+      vehicleId: row.vehicle_id,
       customerName: row.customer?.name ?? '—',
       vehicleLabel: labelDeVehiculo(row.vehicle),
-      sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
+      sizeClass: tamanoDe(row.vehicle, row.number),
       statusLabel: row.status?.label ?? '—',
       statusColor: row.status?.color ?? '#6b7280',
       estimatedDeliveryDate: row.estimated_delivery_date,
@@ -121,9 +136,10 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       kind: 'INGRESO' as const,
       id: row.id,
       number: row.number,
+      vehicleId: row.vehicle_id,
       customerName: row.customer?.name ?? '—',
       vehicleLabel: labelDeVehiculo(row.vehicle),
-      sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
+      sizeClass: tamanoDe(row.vehicle, row.number),
       statusLabel: 'Ingreso sin OT',
       statusColor: '#e07b1a',
       estimatedDeliveryDate: null,
@@ -131,7 +147,23 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       createdAt: row.created_at,
     }));
 
-  return [...deIngresos, ...deOrdenes];
+  // Un vehículo ocupa UN lugar, por más registros abiertos que tenga. El mismo
+  // camión puede tener dos ingresos sin cotizar y una OT a la vez: son tres
+  // papeles, pero un solo lugar en la playa. Se queda el registro de la OT si
+  // existe —trae el estado real y la fecha estimada— y si no, el ingreso más
+  // reciente.
+  const porVehiculo = new Map<string, YardOccupant>();
+  for (const candidato of [...deIngresos, ...deOrdenes]) {
+    const actual = porVehiculo.get(candidato.vehicleId);
+    if (!actual || ganaAlOtro(candidato, actual)) porVehiculo.set(candidato.vehicleId, candidato);
+  }
+  return [...porVehiculo.values()];
+}
+
+/** Entre dos registros del mismo vehículo, cuál representa mejor su lugar. */
+function ganaAlOtro(candidato: YardOccupant, actual: YardOccupant): boolean {
+  if (candidato.kind !== actual.kind) return candidato.kind === 'OT';
+  return candidato.createdAt > actual.createdAt;
 }
 
 export interface YardSizeSummary {
