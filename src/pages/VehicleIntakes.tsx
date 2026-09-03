@@ -8,7 +8,8 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { VehicleModal } from '@/src/components/VehicleModal';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
-import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
+import { vehicleLabel, SIZE_CLASS_LABELS, type Vehicle } from '@/src/lib/vehicles';
+import { fetchYardCapacities, fetchYardOccupancy, summarizeYard, type YardSizeSummary } from '@/src/lib/yardCapacity';
 import {
   createVehicleIntake,
   describeVehicleIntakeError,
@@ -208,6 +209,21 @@ function NewVehicleIntakeModal({
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
   const vehicles = (selectedCustomer?.vehicles ?? []).filter((v) => v.active);
 
+  const [resumenPlaya, setResumenPlaya] = React.useState<YardSizeSummary[]>([]);
+
+  React.useEffect(() => {
+    Promise.all([fetchYardCapacities(), fetchYardOccupancy()])
+      .then(([caps, rows]) => setResumenPlaya(summarizeYard(caps, rows)))
+      // El aviso de lugar es informativo: si falla, el alta tiene que seguir
+      // funcionando igual.
+      .catch(() => setResumenPlaya([]));
+  }, []);
+
+  const vehiculoElegido = vehicles.find((v) => v.id === vehicleId) ?? null;
+  const lugarDelTamano = vehiculoElegido
+    ? resumenPlaya.find((r) => r.sizeClass === vehiculoElegido.sizeClass) ?? null
+    : null;
+
   function handleCustomerChange(id: string) {
     setCustomerId(id);
     const customer = customers.find((c) => c.id === id);
@@ -297,6 +313,19 @@ function NewVehicleIntakeModal({
                 </button>
               </div>
             </label>
+
+            {lugarDelTamano && lugarDelTamano.capacity > 0 && (
+              <p
+                className={cn(
+                  'text-xs',
+                  lugarDelTamano.free <= 0 ? 'font-semibold text-danger' : 'text-text-soft'
+                )}
+              >
+                {lugarDelTamano.free > 0
+                  ? `Quedan ${lugarDelTamano.free} de ${lugarDelTamano.capacity} lugares para vehículos de tamaño ${SIZE_CLASS_LABELS[lugarDelTamano.sizeClass].toLowerCase()}.`
+                  : `No queda lugar para vehículos de tamaño ${SIZE_CLASS_LABELS[lugarDelTamano.sizeClass].toLowerCase()} (${lugarDelTamano.occupied} de ${lugarDelTamano.capacity}). Podés registrar el ingreso igual.`}
+              </p>
+            )}
 
             <label className={cn(labelClass, 'block')}>
               Observaciones
