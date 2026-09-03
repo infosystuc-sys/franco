@@ -1251,7 +1251,7 @@ export function ShopCapacity() {
                 <tr key={`${row.kind}-${row.id}`} className="border-b border-line hover:bg-panel-alt">
                   <td data-primary className="p-3">
                     <Link
-                      to={row.kind === 'OT' ? `/orden/${row.id}` : `/ingresos/${row.id}`}
+                      to={row.kind === 'OT' ? `/orden/${row.number}` : `/ingresos/${row.id}`}
                       className="font-mono font-semibold text-accent-deep hover:underline"
                     >
                       {row.number}
@@ -1292,7 +1292,12 @@ export function ShopCapacity() {
 }
 ```
 
-**Ojo con las rutas:** el detalle de OT es `/orden/:id` **en singular** ([`App.tsx:95`](../../../src/App.tsx)), mientras que el listado es `/ordenes`. El detalle de ingreso sí es `/ingresos/:id` ([`App.tsx:97`](../../../src/App.tsx)). Las dos están verificadas contra el archivo de rutas; escribir `/ordenes/${row.id}` daría un enlace roto que no falla al compilar.
+**Ojo con las rutas — hay dos trampas, no una:**
+
+1. El detalle de OT es `/orden/:id` **en singular** ([`App.tsx:95`](../../../src/App.tsx)), mientras que el listado es `/ordenes`. El de ingreso sí es `/ingresos/:id` ([`App.tsx:97`](../../../src/App.tsx)).
+2. **El parámetro se llama `:id` pero lleva el NÚMERO de la OT, no su UUID.** [`WorkOrderDetails.tsx:78`](../../../src/pages/WorkOrderDetails.tsx) resuelve con `fetchWorkOrderByNumber`, que hace `.eq('number', ...)`. Todo el resto de la app enlaza con `order.number` (Dashboard, WorkOrders, Invoices, Quotations...). El ingreso, en cambio, sí va por UUID.
+
+Por eso la OT enlaza con `row.number` y el ingreso con `row.id`. Escribirlo al revés compila igual y solo falla al hacer clic.
 
 - [ ] **Step 2: Compilar y construir**
 

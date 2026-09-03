@@ -211,8 +211,13 @@ export function ShopCapacity() {
               {sortedOccupancy.map((row) => (
                 <tr key={`${row.kind}-${row.id}`} className="border-b border-line hover:bg-panel-alt">
                   <td data-primary className="p-3">
+                    {/*
+                      La OT se enlaza por número y el ingreso por id: la ruta
+                      /orden/:id resuelve con fetchWorkOrderByNumber, así que
+                      ese parámetro lleva el número aunque se llame id.
+                    */}
                     <Link
-                      to={row.kind === 'OT' ? `/orden/${row.id}` : `/ingresos/${row.id}`}
+                      to={row.kind === 'OT' ? `/orden/${row.number}` : `/ingresos/${row.id}`}
                       className="font-mono font-semibold text-accent-deep hover:underline"
                     >
                       {row.number}
