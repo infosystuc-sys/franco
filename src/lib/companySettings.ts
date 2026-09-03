@@ -24,6 +24,8 @@ export interface CompanySettings {
   addressZip: string | null;
   phone: string | null;
   email: string | null;
+  /** Días después de la entrega estimada en que se asume que el vehículo se retira. */
+  yardPickupGraceDays: number;
 }
 
 export interface CompanySettingsInput {
@@ -40,11 +42,13 @@ export interface CompanySettingsInput {
   addressZip: string;
   phone: string;
   email: string;
+  yardPickupGraceDays: string;
 }
 
 const SELECT =
   'legal_name, trade_name, tax_id, tax_condition, sales_point, gross_income, ' +
-  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email';
+  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email, ' +
+  'yard_pickup_grace_days';
 
 function mapCompanySettings(row: any): CompanySettings {
   return {
@@ -61,6 +65,7 @@ function mapCompanySettings(row: any): CompanySettings {
     addressZip: row.address_zip,
     phone: row.phone,
     email: row.email,
+    yardPickupGraceDays: Number(row.yard_pickup_grace_days ?? 2),
   };
 }
 
@@ -94,6 +99,9 @@ export async function updateCompanySettings(
       address_zip: nullIfBlank(input.addressZip),
       phone: nullIfBlank(input.phone),
       email: nullIfBlank(input.email),
+      // Un margen vacío o inválido cae en 2, el default de la columna: dejarlo
+      // en 0 diría que todos retiran el mismo día que termina el trabajo.
+      yard_pickup_grace_days: Math.max(0, Number(input.yardPickupGraceDays) || 2),
     })
     .eq('id', true)
     .select(SELECT)
@@ -118,6 +126,7 @@ export function companySettingsToForm(settings: CompanySettings): CompanySetting
     addressZip: settings.addressZip ?? '',
     phone: settings.phone ?? '',
     email: settings.email ?? '',
+    yardPickupGraceDays: String(settings.yardPickupGraceDays),
   };
 }
 

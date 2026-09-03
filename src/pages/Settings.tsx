@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle, Mail } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -15,6 +15,8 @@ import {
   updateCompanySettings,
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
+import { fetchYardCapacities, updateYardCapacity, type YardCapacityRow } from '@/src/lib/yardCapacity';
+import { SIZE_CLASS_LABELS } from '@/src/lib/vehicles';
 
 const EMPTY_FORM: CompanySettingsInput = {
   legalName: '',
@@ -30,6 +32,7 @@ const EMPTY_FORM: CompanySettingsInput = {
   addressZip: '',
   phone: '',
   email: '',
+  yardPickupGraceDays: '2',
 };
 
 /**
@@ -51,6 +54,9 @@ export function Settings() {
   const [gmailSaved, setGmailSaved] = React.useState(false);
   const [gmailError, setGmailError] = React.useState<string | null>(null);
 
+  const [cupos, setCupos] = React.useState<YardCapacityRow[]>([]);
+  const [guardandoCupo, setGuardandoCupo] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     let cancelled = false;
     fetchCompanySettings()
@@ -67,6 +73,21 @@ export function Settings() {
       cancelled = true;
     };
   }, []);
+
+  React.useEffect(() => {
+    fetchYardCapacities().then(setCupos).catch(() => setCupos([]));
+  }, []);
+
+  async function handleCupoChange(sizeClass: YardCapacityRow['sizeClass'], value: string) {
+    const capacity = Math.max(0, Number(value) || 0);
+    setCupos((previos) => previos.map((c) => (c.sizeClass === sizeClass ? { ...c, capacity } : c)));
+    setGuardandoCupo(sizeClass);
+    try {
+      await updateYardCapacity(sizeClass, capacity);
+    } finally {
+      setGuardandoCupo(null);
+    }
+  }
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -356,6 +377,43 @@ export function Settings() {
             {gmailSaving ? 'Guardando…' : gmailSaved ? 'Guardada' : 'Guardar credencial'}
           </Button>
         </div>
+      </Panel>
+
+      <Panel className="space-y-4 p-5">
+        <h3 className={sectionTitleClass}><Warehouse size={14} /> Capacidad de la playa</h3>
+        <p className="text-xs text-text-soft">
+          Cuántos vehículos de cada tamaño entran en la playa. En cero, la pantalla de
+          disponibilidad avisa que el cupo todavía no está configurado.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {cupos.map((cupo) => (
+            <label key={cupo.sizeClass} className={labelClass}>
+              {SIZE_CLASS_LABELS[cupo.sizeClass]}
+              <input
+                type="number"
+                min={0}
+                value={cupo.capacity}
+                disabled={guardandoCupo === cupo.sizeClass}
+                onChange={(e) => handleCupoChange(cupo.sizeClass, e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          ))}
+        </div>
+        <label className={labelClass}>
+          Días de margen para el retiro
+          <input
+            type="number"
+            min={0}
+            value={form.yardPickupGraceDays}
+            onChange={(e) => patch({ yardPickupGraceDays: e.target.value })}
+            className={inputClass}
+          />
+          <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            Cuántos días después de la fecha estimada de finalización se asume que el
+            cliente pasa a buscar el vehículo. Se usa solo para proyectar.
+          </span>
+        </label>
       </Panel>
     </div>
   );
