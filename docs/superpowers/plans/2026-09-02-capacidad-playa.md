@@ -1417,7 +1417,7 @@ git commit -m "Aviso de lugar disponible al recibir un vehículo"
 Después de la última tarea, antes de cerrar:
 
 - [ ] `npx tsc --noEmit` sin salida y `npm run build` exitoso.
-- [ ] `grep -rn "shopCapacity" src/` no devuelve nada.
+- [ ] `src/lib/shopCapacity.ts` ya no existe y nadie lo importa. (Un comentario en `yardCapacity.ts` lo menciona a propósito, como referencia histórica de qué reemplazó: eso queda.)
 - [ ] `grep -rn "workplace" src/lib/yardCapacity.ts src/pages/ShopCapacity.tsx` no devuelve nada: la ocupación no mira al empleado por ningún lado.
 - [ ] La ocupación da 5 (vehículos físicos distintos) en la pantalla y en SQL.
 - [ ] Marcar OT-5002 como "Retirado" baja la ocupación a 4 (su vehículo, el John Deere, deja de ocupar aunque tenga 3 ingresos abiertos: el registro elegido para ese vehículo es la OT), y esa OT **sigue pudiendo facturarse** (verificar entrando a Facturación y comprobando que aparece en las OT facturables). Después devolverla a su estado original.
