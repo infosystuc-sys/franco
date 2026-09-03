@@ -55,7 +55,8 @@ export function Settings() {
   const [gmailError, setGmailError] = React.useState<string | null>(null);
 
   const [cupos, setCupos] = React.useState<YardCapacityRow[]>([]);
-  const [guardandoCupo, setGuardandoCupo] = React.useState<string | null>(null);
+  const [cupoError, setCupoError] = React.useState<string | null>(null);
+  const guardadoPendiente = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   React.useEffect(() => {
     let cancelled = false;
@@ -75,18 +76,41 @@ export function Settings() {
   }, []);
 
   React.useEffect(() => {
-    fetchYardCapacities().then(setCupos).catch(() => setCupos([]));
+    fetchYardCapacities()
+      .then(setCupos)
+      .catch((err) => setCupoError(`No se pudo leer el cupo de la playa: ${getErrorMessage(err)}`));
   }, []);
 
-  async function handleCupoChange(sizeClass: YardCapacityRow['sizeClass'], value: string) {
-    const capacity = Math.max(0, Number(value) || 0);
+  // Los timers de guardado quedan referenciados fuera del render (un ref, no
+  // estado) porque no tienen que disparar un re-render propio: solo importan
+  // cuando se cancelan, al tipear de nuevo o al desmontar la pantalla.
+  React.useEffect(() => {
+    const timers = guardadoPendiente.current;
+    return () => { for (const t of Object.values(timers)) clearTimeout(t); };
+  }, []);
+
+  /**
+   * El input no se bloquea mientras guarda: deshabilitarlo hacía que se
+   * perdiera la segunda tecla de un número de dos cifras, y el cupo quedaba
+   * en "2" cuando el usuario había escrito "25". Se escribe con un respiro
+   * después de la última tecla, y un campo vacío no persiste nada — vaciarlo
+   * para reescribirlo no tiene por qué dejar el cupo en cero.
+   */
+  function handleCupoChange(sizeClass: YardCapacityRow['sizeClass'], value: string) {
+    const capacity = Math.max(0, Math.trunc(Number(value)) || 0);
     setCupos((previos) => previos.map((c) => (c.sizeClass === sizeClass ? { ...c, capacity } : c)));
-    setGuardandoCupo(sizeClass);
-    try {
-      await updateYardCapacity(sizeClass, capacity);
-    } finally {
-      setGuardandoCupo(null);
-    }
+
+    clearTimeout(guardadoPendiente.current[sizeClass]);
+    if (value.trim() === '') return;
+
+    guardadoPendiente.current[sizeClass] = setTimeout(async () => {
+      try {
+        await updateYardCapacity(sizeClass, capacity);
+        setCupoError(null);
+      } catch (err) {
+        setCupoError(`No se pudo guardar el cupo de ${SIZE_CLASS_LABELS[sizeClass].toLowerCase()}: ${getErrorMessage(err)}`);
+      }
+    }, 600);
   }
 
   if (role !== 'admin') return <Navigate to="/" replace />;
@@ -385,6 +409,9 @@ export function Settings() {
           Cuántos vehículos de cada tamaño entran en la playa. En cero, la pantalla de
           disponibilidad avisa que el cupo todavía no está configurado.
         </p>
+        {cupoError && (
+          <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{cupoError}</div>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {cupos.map((cupo) => (
             <label key={cupo.sizeClass} className={labelClass}>
@@ -393,7 +420,6 @@ export function Settings() {
                 type="number"
                 min={0}
                 value={cupo.capacity}
-                disabled={guardandoCupo === cupo.sizeClass}
                 onChange={(e) => handleCupoChange(cupo.sizeClass, e.target.value)}
                 className={inputClass}
               />
