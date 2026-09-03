@@ -358,7 +358,7 @@ El corazón del cambio: cuenta la ocupación sin mirar al empleado.
   - `interface YardCapacityRow { sizeClass: SizeClass; capacity: number; }`
   - `fetchYardCapacities(): Promise<YardCapacityRow[]>`
   - `updateYardCapacity(sizeClass: SizeClass, capacity: number): Promise<void>`
-  - `interface YardOccupant { kind: 'INGRESO' | 'OT'; id: string; number: string; customerName: string; vehicleLabel: string; sizeClass: SizeClass; statusLabel: string; statusColor: string; estimatedDeliveryDate: string | null; daysInShop: number; createdAt: string; }`
+  - `interface YardOccupant { kind: 'INGRESO' | 'OT'; id: string; number: string; vehicleId: string; customerName: string; vehicleLabel: string; sizeClass: SizeClass; statusLabel: string; statusColor: string; estimatedDeliveryDate: string | null; daysInShop: number; createdAt: string; }`
   - `fetchYardOccupancy(): Promise<YardOccupant[]>`
   - `interface YardSizeSummary { sizeClass: SizeClass; capacity: number; occupied: number; free: number; }`
   - `summarizeYard(capacities: YardCapacityRow[], occupants: YardOccupant[]): YardSizeSummary[]`
@@ -413,6 +413,8 @@ export interface YardOccupant {
   kind: 'INGRESO' | 'OT';
   id: string;
   number: string;
+  /** Con qué vehículo físico se corresponde: es la clave para no contarlo dos veces. */
+  vehicleId: string;
   customerName: string;
   vehicleLabel: string;
   sizeClass: SizeClass;
@@ -448,7 +450,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
     supabase
       .from('work_orders')
       .select(
-        `id, number, created_at, estimated_delivery_date, quotation_id,
+        `id, number, created_at, estimated_delivery_date, quotation_id, vehicle_id,
          status:work_order_statuses(label, color, frees_yard),
          customer:customers(name),
          vehicle:vehicles(brand, model, license_plate, size_class)`
@@ -457,7 +459,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
     supabase
       .from('vehicle_intakes')
       .select(
-        `id, number, created_at, quotation_id,
+        `id, number, created_at, quotation_id, vehicle_id,
          customer:customers(name),
          vehicle:vehicles(brand, model, license_plate, size_class)`
       )
@@ -478,6 +480,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       kind: 'OT' as const,
       id: row.id,
       number: row.number,
+      vehicleId: row.vehicle_id,
       customerName: row.customer?.name ?? '—',
       vehicleLabel: labelDeVehiculo(row.vehicle),
       sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
@@ -494,6 +497,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       kind: 'INGRESO' as const,
       id: row.id,
       number: row.number,
+      vehicleId: row.vehicle_id,
       customerName: row.customer?.name ?? '—',
       vehicleLabel: labelDeVehiculo(row.vehicle),
       sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
@@ -504,7 +508,23 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       createdAt: row.created_at,
     }));
 
-  return [...deIngresos, ...deOrdenes];
+  // Un vehículo ocupa UN lugar, por más registros abiertos que tenga. El mismo
+  // camión puede tener dos ingresos sin cotizar y una OT a la vez: son tres
+  // papeles, pero un solo lugar en la playa. Se queda el registro de la OT si
+  // existe —trae el estado real y la fecha estimada— y si no, el ingreso más
+  // reciente.
+  const porVehiculo = new Map<string, YardOccupant>();
+  for (const candidato of [...deIngresos, ...deOrdenes]) {
+    const actual = porVehiculo.get(candidato.vehicleId);
+    if (!actual || ganaAlOtro(candidato, actual)) porVehiculo.set(candidato.vehicleId, candidato);
+  }
+  return [...porVehiculo.values()];
+}
+
+/** Entre dos registros del mismo vehículo, cuál representa mejor su lugar. */
+function ganaAlOtro(candidato: YardOccupant, actual: YardOccupant): boolean {
+  if (candidato.kind !== actual.kind) return candidato.kind === 'OT';
+  return candidato.createdAt > actual.createdAt;
 }
 
 export interface YardSizeSummary {
@@ -606,7 +626,9 @@ const rows = await fetchYardOccupancy();
 })
 ```
 
-Esperado exactamente: `total: 11`, `ingresos: 8`, `ots: 3`, `grandes: 11`, `conFecha: 3`.
+Esperado exactamente: `total: 5`, `ingresos: 3`, `ots: 2`, `grandes: 5`, `conFecha: 2`.
+
+Son **vehículos físicos distintos**, no registros: hoy el mismo John Deere tiene 3 ingresos abiertos y una OT activa, y otro vehículo tiene 2 OT. Sin deduplicar por vehículo darían 11, que es la cuenta de registros, no de lugares ocupados en la playa.
 
 - [ ] **Step 5: Commit**
 
@@ -809,7 +831,7 @@ En la app, abrir ese ingreso, apretar "Cerrar sin OT", aceptar. Verificar:
 select number, status from public.vehicle_intakes where number = 'ING-10';
 ```
 
-Esperado: `CERRADO`. Y que la ocupación bajó de 11 a 10:
+Esperado: `CERRADO`. ING-10 comparte vehículo con ING-4, así que cerrarlo **no** libera lugar: el Volvo sigue en la playa por ING-4. La ocupación tiene que seguir en 5. Verificalo:
 
 ```sql
 with con_ot as (select quotation_id from public.work_orders where quotation_id is not null)
@@ -821,7 +843,7 @@ select
      join public.work_order_statuses s on s.id = w.status_id where s.frees_yard = false) as total;
 ```
 
-Esperado: 10.
+Esperado: 5 — el mismo número que antes.
 
 **Devolver el dato de prueba** (era `PENDIENTE`):
 
@@ -829,7 +851,7 @@ Esperado: 10.
 update public.vehicle_intakes set status = 'PENDIENTE' where number = 'ING-10';
 ```
 
-Y confirmar que el total volvió a 11 con la consulta anterior.
+Y confirmar que el total sigue en 5 con la consulta anterior.
 
 - [ ] **Step 6: Commit**
 
@@ -1271,14 +1293,14 @@ Esperado: `tsc` sin salida y el build terminando en `✓ built in ...`.
 
 En `localhost:4000/disponibilidad-taller`, con los cupos de la Task 6 (Grande 12, Mediano 4, Chico 6):
 
-1. El panel "Grande" muestra `11 / 12 cupo` y "Quedan 1 lugar".
+1. El panel "Grande" muestra `5 / 12 cupo` y "Quedan 7 lugares".
 2. "Mediano" y "Chico" muestran 0 ocupado.
-3. La tabla lista **11 filas**: 8 con estado "Ingreso sin OT" y 3 con el estado de la OT.
+3. La tabla lista **5 filas**: 3 con estado "Ingreso sin OT" y 2 con el estado de la OT (una fila por vehículo físico).
 4. No aparece por ningún lado la palabra "Sector", ni un aviso de "sin empleado asignado".
-5. El aviso de "sin fecha de salida" dice 8.
-6. "Próximas salidas" lista las 3 OT con fecha, corridas 3 días respecto de su entrega estimada (OT-5010 entrega 2026-09-02 → aparece 2026-09-05).
+5. El aviso de "sin fecha de salida" dice 3.
+6. "Próximas salidas" lista las 2 OT con fecha, corridas 3 días respecto de su entrega estimada (OT-5010 entrega 2026-09-02 → aparece 2026-09-05).
 
-Prueba de que la ocupación ya no depende del empleado: en una OT activa, quitarle el empleado asignado y volver a esta pantalla — la ocupación tiene que seguir en 11. Después devolver el empleado.
+Prueba de que la ocupación ya no depende del empleado: en una OT activa, quitarle el empleado asignado y volver a esta pantalla — la ocupación tiene que seguir en 5. Después devolver el empleado.
 
 - [ ] **Step 4: Commit**
 
@@ -1357,9 +1379,9 @@ Esperado: `tsc` sin salida, build exitoso.
 
 - [ ] **Step 4: Probar a mano**
 
-En `localhost:4000/ingresos`, "Nuevo ingreso": elegir un cliente y un vehículo. Con los cupos de la Task 6 (Grande 12, ocupado 11) tiene que decir "Quedan 1 de 12 lugares para vehículos de tamaño grande."
+En `localhost:4000/ingresos`, "Nuevo ingreso": elegir un cliente y un vehículo. Con los cupos de la Task 6 (Grande 12, ocupado 5) tiene que decir "Quedan 7 de 12 lugares para vehículos de tamaño grande."
 
-Para probar el caso sin lugar: bajar temporalmente el cupo de Grande a 11 en Configuración, volver al alta y confirmar que aparece el aviso rojo "No queda lugar..." y que el botón de guardar **sigue habilitado**. Después devolver el cupo a 12.
+Para probar el caso sin lugar: bajar temporalmente el cupo de Grande a 5 en Configuración, volver al alta y confirmar que aparece el aviso rojo "No queda lugar..." y que el botón de guardar **sigue habilitado**. Después devolver el cupo a 12.
 
 Cerrar el formulario sin crear el ingreso, para no dejar datos de prueba.
 
@@ -1379,6 +1401,6 @@ Después de la última tarea, antes de cerrar:
 - [ ] `npx tsc --noEmit` sin salida y `npm run build` exitoso.
 - [ ] `grep -rn "shopCapacity" src/` no devuelve nada.
 - [ ] `grep -rn "workplace" src/lib/yardCapacity.ts src/pages/ShopCapacity.tsx` no devuelve nada: la ocupación no mira al empleado por ningún lado.
-- [ ] La ocupación da 11 en la pantalla y en SQL.
-- [ ] Marcar una OT activa como "Retirado" baja la ocupación a 10, y esa OT **sigue pudiendo facturarse** (verificar entrando a Facturación y comprobando que aparece en las OT facturables). Después devolverla a su estado original.
+- [ ] La ocupación da 5 (vehículos físicos distintos) en la pantalla y en SQL.
+- [ ] Marcar OT-5002 como "Retirado" baja la ocupación a 4 (su vehículo, el John Deere, deja de ocupar aunque tenga 3 ingresos abiertos: el registro elegido para ese vehículo es la OT), y esa OT **sigue pudiendo facturarse** (verificar entrando a Facturación y comprobando que aparece en las OT facturables). Después devolverla a su estado original.
 - [ ] Los datos de prueba quedaron devueltos: ING-10 en `PENDIENTE`, empleados y vehículos como estaban, cupos en los valores que confirme el usuario.
