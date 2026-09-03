@@ -6,28 +6,25 @@ import { useAuth } from '@/src/lib/auth';
 import { PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage, setEstimatedDeliveryDate } from '@/src/lib/workOrders';
 import {
-  fetchShopOccupancy,
-  fetchWorkplaceCapacities,
-  updateWorkplaceCapacity,
-  type ShopOccupancyRow,
-  type WorkplaceCapacity,
-} from '@/src/lib/shopCapacity';
+  fetchYardCapacities,
+  fetchYardOccupancy,
+  updateYardCapacity,
+  type YardCapacityRow,
+  type YardOccupant,
+} from '@/src/lib/yardCapacity';
 
 /**
- * "Cashflow de espacio": no es plata, es lugar físico. Cada sector tiene un
- * cupo fijo (Laboratorio 1, Laboratorio 2, Playa) y la ocupación sale de
- * contar las OT activas asignadas a un empleado de ese sector — no hay una
- * tabla de ocupación separada para no duplicar lo que ya vive en work_orders.
- *
- * La proyección de cuándo se libera un lugar depende de que el admin haya
- * cargado la entrega estimada en la OT: sin ese dato no hay forma confiable
- * de saber cuánto falta, así que esas órdenes quedan afuera de "Próximas
- * salidas" pero siguen contando en la ocupación actual.
+ * PARCHE TRANSITORIO (Task 3): esta pantalla se reescribe entera en la Task 7.
+ * Acá solo se la deja compilando contra el módulo nuevo (yardCapacity.ts),
+ * cambiando "sector del empleado" por "tamaño del vehículo" en los lugares
+ * mínimos indispensables. No se invirtió en que la lógica tenga sentido de
+ * negocio (ej.: "sin sector" ya no puede pasar porque sizeClass nunca es
+ * null, así que esa sección queda muerta) ni en la UI — eso es la Task 7.
  */
 export function ShopCapacity() {
   const { role } = useAuth();
-  const [capacities, setCapacities] = React.useState<WorkplaceCapacity[]>([]);
-  const [occupancy, setOccupancy] = React.useState<ShopOccupancyRow[]>([]);
+  const [capacities, setCapacities] = React.useState<YardCapacityRow[]>([]);
+  const [occupancy, setOccupancy] = React.useState<YardOccupant[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [savingCapacity, setSavingCapacity] = React.useState<string | null>(null);
@@ -36,7 +33,7 @@ export function ShopCapacity() {
     setLoading(true);
     setError(null);
     try {
-      const [caps, rows] = await Promise.all([fetchWorkplaceCapacities(), fetchShopOccupancy()]);
+      const [caps, rows] = await Promise.all([fetchYardCapacities(), fetchYardOccupancy()]);
       setCapacities(caps);
       setOccupancy(rows);
     } catch (err) {
@@ -52,12 +49,12 @@ export function ShopCapacity() {
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
-  async function handleCapacityChange(workplace: string, value: string) {
+  async function handleCapacityChange(sizeClass: string, value: string) {
     const capacity = Math.max(0, Number(value) || 0);
-    setSavingCapacity(workplace);
+    setSavingCapacity(sizeClass);
     setError(null);
     try {
-      await updateWorkplaceCapacity(workplace as any, capacity);
+      await updateYardCapacity(sizeClass as any, capacity);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -66,10 +63,13 @@ export function ShopCapacity() {
     }
   }
 
-  async function handleDeliveryChange(workOrderId: string, date: string) {
+  async function handleDeliveryChange(occupant: YardOccupant, date: string) {
+    // Solo las OT tienen fecha estimada de entrega; un ingreso sin OT no
+    // tiene contra qué guardarla.
+    if (occupant.kind !== 'OT') return;
     setError(null);
     try {
-      await setEstimatedDeliveryDate(workOrderId, date || null);
+      await setEstimatedDeliveryDate(occupant.id, date || null);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -77,15 +77,17 @@ export function ShopCapacity() {
   }
 
   const occupancyByWorkplace = React.useMemo(() => {
-    const map = new Map<string, ShopOccupancyRow[]>();
+    const map = new Map<string, YardOccupant[]>();
     for (const row of occupancy) {
-      if (!row.workplace) continue;
-      map.set(row.workplace, [...(map.get(row.workplace) ?? []), row]);
+      map.set(row.sizeClass, [...(map.get(row.sizeClass) ?? []), row]);
     }
     return map;
   }, [occupancy]);
 
-  const sinSector = occupancy.filter((r) => !r.workplace);
+  // sizeClass nunca es null (a diferencia del sector del empleado, que podía
+  // faltar), así que esta lista queda siempre vacía. Se deja el bloque de
+  // abajo inerte a propósito: la Task 7 reescribe toda la pantalla.
+  const sinSector: YardOccupant[] = [];
 
   const sortedOccupancy = React.useMemo(() => {
     return [...occupancy].sort((a, b) => {
@@ -100,9 +102,9 @@ export function ShopCapacity() {
   const upcoming = React.useMemo(() => {
     const map = new Map<string, Map<string, number>>();
     for (const row of occupancy) {
-      if (!row.estimatedDeliveryDate || row.estimatedDeliveryDate < today || !row.workplace) continue;
+      if (!row.estimatedDeliveryDate || row.estimatedDeliveryDate < today) continue;
       const bySector = map.get(row.estimatedDeliveryDate) ?? new Map<string, number>();
-      bySector.set(row.workplace, (bySector.get(row.workplace) ?? 0) + 1);
+      bySector.set(row.sizeClass, (bySector.get(row.sizeClass) ?? 0) + 1);
       map.set(row.estimatedDeliveryDate, bySector);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(0, 14);
@@ -121,13 +123,13 @@ export function ShopCapacity() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {capacities.map((cap) => {
-          const count = occupancyByWorkplace.get(cap.workplace)?.length ?? 0;
+          const count = occupancyByWorkplace.get(cap.sizeClass)?.length ?? 0;
           const over = count > cap.capacity;
           const full = count === cap.capacity && cap.capacity > 0;
           return (
-            <Panel key={cap.workplace} className="p-4">
+            <Panel key={cap.sizeClass} className="p-4">
               <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-                {cap.workplace}
+                {cap.sizeClass}
               </span>
               <div className="flex items-baseline gap-2">
                 <span
@@ -143,8 +145,8 @@ export function ShopCapacity() {
                     type="number"
                     min={0}
                     value={cap.capacity}
-                    disabled={savingCapacity === cap.workplace}
-                    onChange={(e) => handleCapacityChange(cap.workplace, e.target.value)}
+                    disabled={savingCapacity === cap.sizeClass}
+                    onChange={(e) => handleCapacityChange(cap.sizeClass, e.target.value)}
                     className="w-14 rounded border border-line bg-panel px-1.5 py-0.5 text-sm focus:border-accent-deep focus:outline-none"
                   /> cupo
                 </span>
@@ -158,7 +160,7 @@ export function ShopCapacity() {
       {sinSector.length > 0 && (
         <div className="rounded-md border border-line bg-panel-alt px-4 py-3 text-sm text-text-soft">
           {sinSector.length} orden{sinSector.length === 1 ? '' : 'es'} activa{sinSector.length === 1 ? '' : 's'} sin
-          empleado asignado (y por lo tanto sin sector conocido): {sinSector.map((r) => r.workOrderNumber).join(', ')}.
+          tamaño conocido: {sinSector.map((r) => r.number).join(', ')}.
         </div>
       )}
 
@@ -206,15 +208,19 @@ export function ShopCapacity() {
                 </tr>
               )}
               {sortedOccupancy.map((row) => (
-                <tr key={row.workOrderId} className="border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt">
+                <tr key={row.id} className="border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt">
                   <td data-primary className="p-3">
-                    <Link to={`/orden/${row.workOrderNumber}`} className="font-mono font-semibold text-text hover:text-accent-deep hover:underline">
-                      {row.workOrderNumber}
-                    </Link>
+                    {row.kind === 'OT' ? (
+                      <Link to={`/orden/${row.number}`} className="font-mono font-semibold text-text hover:text-accent-deep hover:underline">
+                        {row.number}
+                      </Link>
+                    ) : (
+                      <span className="font-mono font-semibold text-text">{row.number}</span>
+                    )}
                   </td>
                   <td data-label="Cliente" className="p-3">{row.customerName}</td>
                   <td data-label="Vehículo" className="p-3">{row.vehicleLabel}</td>
-                  <td data-label="Sector" className="p-3 text-text-soft">{row.workplace ?? '—'}</td>
+                  <td data-label="Sector" className="p-3 text-text-soft">{row.sizeClass}</td>
                   <td data-label="Estado" className="p-3">
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                       <span aria-hidden className="inline-block h-2 w-2" style={{ backgroundColor: row.statusColor }} />
@@ -226,8 +232,9 @@ export function ShopCapacity() {
                     <input
                       type="date"
                       value={row.estimatedDeliveryDate ?? ''}
-                      onChange={(e) => handleDeliveryChange(row.workOrderId, e.target.value)}
-                      className="w-full rounded border border-line bg-panel px-2 py-1 text-xs focus:border-accent-deep focus:outline-none"
+                      disabled={row.kind !== 'OT'}
+                      onChange={(e) => handleDeliveryChange(row, e.target.value)}
+                      className="w-full rounded border border-line bg-panel px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-50"
                     />
                   </td>
                 </tr>

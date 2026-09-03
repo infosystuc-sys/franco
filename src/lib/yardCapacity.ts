@@ -1,0 +1,197 @@
+import { supabase } from '@/src/lib/supabase';
+import { SIZE_CLASSES, type SizeClass } from '@/src/lib/vehicles';
+
+/**
+ * Cuánto lugar hay en la playa y cuánto queda.
+ *
+ * La ocupación no se guarda en ninguna tabla: se calcula cada vez leyendo lo
+ * que está físicamente en el taller. Reemplaza al cálculo por sector del
+ * empleado (shopCapacity.ts), que dejaba afuera las OT sin empleado asignado
+ * y "movía" vehículos de lugar cuando se reasignaba un mecánico.
+ */
+
+export interface YardCapacityRow {
+  sizeClass: SizeClass;
+  capacity: number;
+}
+
+/**
+ * Siempre devuelve los tres tamaños, en orden. Un tamaño sin fila se completa
+ * con cupo 0 —que es lo mismo que dice la fila sembrada— en vez de romper la
+ * vista.
+ */
+export async function fetchYardCapacities(): Promise<YardCapacityRow[]> {
+  const { data, error } = await supabase.from('yard_capacity').select('size_class, capacity');
+  if (error) throw error;
+
+  const bySize = new Map((data ?? []).map((r: any) => [r.size_class as SizeClass, Number(r.capacity)]));
+  return SIZE_CLASSES.map((sizeClass) => ({ sizeClass, capacity: bySize.get(sizeClass) ?? 0 }));
+}
+
+export async function updateYardCapacity(sizeClass: SizeClass, capacity: number): Promise<void> {
+  const { error } = await supabase
+    .from('yard_capacity')
+    .update({ capacity })
+    .eq('size_class', sizeClass);
+  if (error) throw error;
+}
+
+export interface YardOccupant {
+  kind: 'INGRESO' | 'OT';
+  id: string;
+  number: string;
+  customerName: string;
+  vehicleLabel: string;
+  sizeClass: SizeClass;
+  statusLabel: string;
+  statusColor: string;
+  /** Solo las OT la tienen; un ingreso sin OT no tiene fecha de salida. */
+  estimatedDeliveryDate: string | null;
+  daysInShop: number;
+  createdAt: string;
+}
+
+function labelDeVehiculo(vehicle: { brand: string | null; model: string; license_plate: string | null } | null): string {
+  if (!vehicle) return '—';
+  const nombre = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
+  return vehicle.license_plate ? `${nombre} — ${vehicle.license_plate}` : nombre || '—';
+}
+
+function diasEnTaller(createdAt: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
+}
+
+/**
+ * Un vehículo ocupa lugar si cumple una de dos, que son excluyentes: tiene un
+ * ingreso abierto que todavía no derivó en OT, o tiene una OT cuyo estado no
+ * libera la playa.
+ *
+ * El vínculo entre las dos es la cotización. Se leen TODAS las OT para armar
+ * ese vínculo —incluidas las que ya liberaron— porque un ingreso cuya OT está
+ * retirada tampoco ocupa: el vehículo se fue.
+ */
+export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
+  const [ordenes, ingresos] = await Promise.all([
+    supabase
+      .from('work_orders')
+      .select(
+        `id, number, created_at, estimated_delivery_date, quotation_id,
+         status:work_order_statuses(label, color, frees_yard),
+         customer:customers(name),
+         vehicle:vehicles(brand, model, license_plate, size_class)`
+      )
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('vehicle_intakes')
+      .select(
+        `id, number, created_at, quotation_id,
+         customer:customers(name),
+         vehicle:vehicles(brand, model, license_plate, size_class)`
+      )
+      .neq('status', 'CERRADO')
+      .order('created_at', { ascending: true }),
+  ]);
+
+  if (ordenes.error) throw ordenes.error;
+  if (ingresos.error) throw ingresos.error;
+
+  const cotizacionesConOrden = new Set(
+    (ordenes.data ?? []).map((row: any) => row.quotation_id).filter(Boolean)
+  );
+
+  const deOrdenes: YardOccupant[] = (ordenes.data ?? [])
+    .filter((row: any) => !row.status?.frees_yard)
+    .map((row: any) => ({
+      kind: 'OT' as const,
+      id: row.id,
+      number: row.number,
+      customerName: row.customer?.name ?? '—',
+      vehicleLabel: labelDeVehiculo(row.vehicle),
+      sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
+      statusLabel: row.status?.label ?? '—',
+      statusColor: row.status?.color ?? '#6b7280',
+      estimatedDeliveryDate: row.estimated_delivery_date,
+      daysInShop: diasEnTaller(row.created_at),
+      createdAt: row.created_at,
+    }));
+
+  const deIngresos: YardOccupant[] = (ingresos.data ?? [])
+    .filter((row: any) => !row.quotation_id || !cotizacionesConOrden.has(row.quotation_id))
+    .map((row: any) => ({
+      kind: 'INGRESO' as const,
+      id: row.id,
+      number: row.number,
+      customerName: row.customer?.name ?? '—',
+      vehicleLabel: labelDeVehiculo(row.vehicle),
+      sizeClass: (row.vehicle?.size_class as SizeClass) ?? 'MEDIANO',
+      statusLabel: 'Ingreso sin OT',
+      statusColor: '#e07b1a',
+      estimatedDeliveryDate: null,
+      daysInShop: diasEnTaller(row.created_at),
+      createdAt: row.created_at,
+    }));
+
+  return [...deIngresos, ...deOrdenes];
+}
+
+export interface YardSizeSummary {
+  sizeClass: SizeClass;
+  capacity: number;
+  occupied: number;
+  /** Puede ser negativo: hay más vehículos que cupo. La pantalla lo marca. */
+  free: number;
+}
+
+export function summarizeYard(
+  capacities: YardCapacityRow[],
+  occupants: YardOccupant[]
+): YardSizeSummary[] {
+  return capacities.map(({ sizeClass, capacity }) => {
+    const occupied = occupants.filter((o) => o.sizeClass === sizeClass).length;
+    return { sizeClass, capacity, occupied, free: capacity - occupied };
+  });
+}
+
+/**
+ * Cuándo se espera que el vehículo libere el lugar: la fecha estimada de
+ * finalización más el margen de retiro. Sin fecha estimada no se inventa una.
+ */
+export function expectedFreeDate(estimatedDeliveryDate: string | null, graceDays: number): string | null {
+  if (!estimatedDeliveryDate) return null;
+  const fecha = new Date(`${estimatedDeliveryDate}T00:00:00`);
+  if (Number.isNaN(fecha.getTime())) return null;
+  fecha.setDate(fecha.getDate() + graceDays);
+  return fecha.toISOString().slice(0, 10);
+}
+
+export interface YardReleaseDay {
+  date: string;
+  bySize: Partial<Record<SizeClass, number>>;
+}
+
+/**
+ * Cuántos lugares se liberarían cada día si todo saliera según lo estimado.
+ * Es una proyección, no una promesa: una fecha estimada que se corre arrastra
+ * todo lo que viene atrás.
+ */
+export function projectReleases(
+  occupants: YardOccupant[],
+  graceDays: number,
+  maxDays = 14
+): YardReleaseDay[] {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const porFecha = new Map<string, Partial<Record<SizeClass, number>>>();
+
+  for (const occupant of occupants) {
+    const fecha = expectedFreeDate(occupant.estimatedDeliveryDate, graceDays);
+    if (!fecha || fecha < hoy) continue;
+    const delDia = porFecha.get(fecha) ?? {};
+    delDia[occupant.sizeClass] = (delDia[occupant.sizeClass] ?? 0) + 1;
+    porFecha.set(fecha, delDia);
+  }
+
+  return [...porFecha.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, maxDays)
+    .map(([date, bySize]) => ({ date, bySize }));
+}
