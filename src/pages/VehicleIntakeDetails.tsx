@@ -150,7 +150,12 @@ export function VehicleIntakeDetails() {
                 <Receipt size={16} /> {converting ? 'Creando...' : 'Crear cotización'} <ArrowRight size={14} />
               </Button>
             )}
-            {isAdmin && intake.status !== 'CERRADO' && (
+            {/*
+              Solo tiene sentido en un ingreso que no derivó en nada: si ya
+              tiene cotización (quotationId), "cerrado sin OT" sería falso, y
+              además no hay forma de deshacerlo desde la app.
+            */}
+            {isAdmin && intake.status !== 'CERRADO' && !intake.quotationId && (
               <Button variant="ghost" type="button" onClick={handleCerrar} disabled={cerrando}>
                 <Archive size={16} /> {cerrando ? 'Cerrando…' : 'Cerrar sin OT'}
               </Button>

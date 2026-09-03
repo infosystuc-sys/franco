@@ -28,11 +28,17 @@ export async function fetchYardCapacities(): Promise<YardCapacityRow[]> {
   return SIZE_CLASSES.map((sizeClass) => ({ sizeClass, capacity: bySize.get(sizeClass) ?? 0 }));
 }
 
+/**
+ * upsert, no update: si falta la fila del tamaño (base sin sembrar del todo),
+ * un update no la crea, afecta 0 filas y no tira error — la pantalla muestra
+ * el número tipeado como si hubiera guardado y en realidad no pasó nada.
+ * fetchYardCapacities ya está preparada para filas faltantes; esta función
+ * tiene que dejar de asumir que siempre existen.
+ */
 export async function updateYardCapacity(sizeClass: SizeClass, capacity: number): Promise<void> {
   const { error } = await supabase
     .from('yard_capacity')
-    .update({ capacity })
-    .eq('size_class', sizeClass);
+    .upsert({ size_class: sizeClass, capacity }, { onConflict: 'size_class' });
   if (error) throw error;
 }
 
@@ -51,6 +57,12 @@ export interface YardOccupant {
   estimatedDeliveryDate: string | null;
   daysInShop: number;
   createdAt: string;
+  /**
+   * Cuántos otros registros del mismo vehículo perdieron el desempate (ver
+   * ganaAlOtro). La tabla deduplica por vehículo, así que un ingreso que no
+   * se ve acá no desapareció: quedó representado por este registro.
+   */
+  otrosRegistros: number;
 }
 
 function labelDeVehiculo(vehicle: { brand: string | null; model: string; license_plate: string | null } | null): string {
@@ -128,6 +140,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       estimatedDeliveryDate: row.estimated_delivery_date,
       daysInShop: diasEnTaller(row.created_at),
       createdAt: row.created_at,
+      otrosRegistros: 0,
     }));
 
   const deIngresos: YardOccupant[] = (ingresos.data ?? [])
@@ -145,17 +158,26 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       estimatedDeliveryDate: null,
       daysInShop: diasEnTaller(row.created_at),
       createdAt: row.created_at,
+      otrosRegistros: 0,
     }));
 
   // Un vehículo ocupa UN lugar, por más registros abiertos que tenga. El mismo
   // camión puede tener dos ingresos sin cotizar y una OT a la vez: son tres
   // papeles, pero un solo lugar en la playa. Se queda el registro de la OT si
   // existe —trae el estado real y la fecha estimada— y si no, el ingreso más
-  // reciente.
+  // reciente. El que pierde el desempate no se descarta en silencio: suma a
+  // otrosRegistros del que gana, para que la pantalla pueda avisar que hay
+  // más papeles del mismo vehículo aunque solo se vea una fila.
   const porVehiculo = new Map<string, YardOccupant>();
   for (const candidato of [...deIngresos, ...deOrdenes]) {
     const actual = porVehiculo.get(candidato.vehicleId);
-    if (!actual || ganaAlOtro(candidato, actual)) porVehiculo.set(candidato.vehicleId, candidato);
+    if (!actual) {
+      porVehiculo.set(candidato.vehicleId, candidato);
+    } else if (ganaAlOtro(candidato, actual)) {
+      porVehiculo.set(candidato.vehicleId, { ...candidato, otrosRegistros: actual.otrosRegistros + 1 });
+    } else {
+      actual.otrosRegistros += 1;
+    }
   }
   return [...porVehiculo.values()];
 }
@@ -196,6 +218,31 @@ export function expectedFreeDate(estimatedDeliveryDate: string | null, graceDays
   return fecha.toISOString().slice(0, 10);
 }
 
+/**
+ * El "hoy" (fecha local, sin hora) que decide qué liberación ya venció. Se
+ * exporta para que la pantalla no pueda usar un "hoy" distinto al de
+ * projectReleases al armar el contador de "sin fecha a futuro": los dos
+ * tienen que estar de acuerdo en qué es pasado.
+ */
+export function hoyISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Si el vehículo tiene una fecha de liberación esperada que todavía está por
+ * venir. Sin fecha estimada, o con la fecha ya vencida, no la tiene — y en
+ * los dos casos el vehículo ocupa lugar igual, solo que projectReleases no
+ * puede proyectar nada para él.
+ */
+export function tieneFechaFutura(
+  occupant: Pick<YardOccupant, 'estimatedDeliveryDate'>,
+  graceDays: number,
+  hoy: string = hoyISO()
+): boolean {
+  const fecha = expectedFreeDate(occupant.estimatedDeliveryDate, graceDays);
+  return fecha !== null && fecha >= hoy;
+}
+
 export interface YardReleaseDay {
   date: string;
   bySize: Partial<Record<SizeClass, number>>;
@@ -205,18 +252,28 @@ export interface YardReleaseDay {
  * Cuántos lugares se liberarían cada día si todo saliera según lo estimado.
  * Es una proyección, no una promesa: una fecha estimada que se corre arrastra
  * todo lo que viene atrás.
+ *
+ * maxDays es una ventana de días calendario, no una cantidad de filas: se
+ * descarta toda fecha posterior a hoy + maxDays. Antes hacía slice(0,
+ * maxDays) sobre las fechas con liberaciones, así que una entrega estimada
+ * para dentro de varios meses podía colarse bajo "próximas salidas" con solo
+ * que hubiera pocas fechas distintas cargadas.
  */
 export function projectReleases(
   occupants: YardOccupant[],
   graceDays: number,
   maxDays = 14
 ): YardReleaseDay[] {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyISO();
+  const limite = new Date(`${hoy}T00:00:00`);
+  limite.setDate(limite.getDate() + maxDays);
+  const fechaLimite = limite.toISOString().slice(0, 10);
+
   const porFecha = new Map<string, Partial<Record<SizeClass, number>>>();
 
   for (const occupant of occupants) {
     const fecha = expectedFreeDate(occupant.estimatedDeliveryDate, graceDays);
-    if (!fecha || fecha < hoy) continue;
+    if (!fecha || fecha < hoy || fecha > fechaLimite) continue;
     const delDia = porFecha.get(fecha) ?? {};
     delDia[occupant.sizeClass] = (delDia[occupant.sizeClass] ?? 0) + 1;
     porFecha.set(fecha, delDia);
@@ -224,6 +281,5 @@ export function projectReleases(
 
   return [...porFecha.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(0, maxDays)
     .map(([date, bySize]) => ({ date, bySize }));
 }

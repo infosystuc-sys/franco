@@ -156,3 +156,26 @@ alter type public.vehicle_intake_status add value 'CERRADO';
 -- lugar que no va a haber.
 alter table public.company_settings
   add column yard_pickup_grace_days integer not null default 2;
+
+-- 6) Limpieza del rastro que deja el update masivo -----------------------------
+-- Nota de aplicación: esto se corrió después, al detectarlo la revisión final.
+--
+-- El update de la sección 3 dispara work_orders_log_stage_assignment, que cerró
+-- los tramos de "Terminado" y abrió uno de "Retirado" por cada OT. Pero esas OT
+-- nunca pasaron por esa etapa: las movió una migración, no el taller. Sin esta
+-- limpieza, el informe "Tiempos por etapa" muestra 8 tramos de "Retirado" que
+-- no ocurrieron, y como quedan abiertos sus horas crecen para siempre.
+--
+-- La marca de tiempo es la del update; si se replica esta migración en otro
+-- entorno, hay que usar la de ese momento.
+delete from public.work_order_stage_assignments a
+using public.work_order_statuses s
+where s.id = a.status_id and s.label = 'Retirado'
+  and a.started_at = '2026-09-03 11:52:34.767365+00'
+  and a.ended_at is null;
+
+update public.work_order_stage_assignments a
+set ended_at = null
+from public.work_order_statuses s
+where s.id = a.status_id and s.label = 'Terminado'
+  and a.ended_at = '2026-09-03 11:52:34.767365+00';

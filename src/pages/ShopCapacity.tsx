@@ -12,6 +12,7 @@ import {
   fetchYardOccupancy,
   projectReleases,
   summarizeYard,
+  tieneFechaFutura,
   type YardCapacityRow,
   type YardOccupant,
   type YardSizeSummary,
@@ -69,7 +70,11 @@ export function ShopCapacity() {
     [occupancy, graceDays]
   );
 
-  const sinFecha = occupancy.filter((row) => !row.estimatedDeliveryDate);
+  // Incluye tanto los que nunca tuvieron fecha estimada como los que la
+  // tienen pero ya vencida: projectReleases tampoco puede proyectar esos
+  // últimos, así que para esta pantalla son el mismo caso ("no hay una
+  // fecha de salida a futuro"), aunque ocupen lugar igual que cualquier otro.
+  const sinFechaFutura = occupancy.filter((row) => !tieneFechaFutura(row, graceDays));
 
   const sortedOccupancy = React.useMemo(() => {
     return [...occupancy].sort((a, b) => {
@@ -117,8 +122,13 @@ export function ShopCapacity() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {summary.map((size) => {
-          const over = size.occupied > size.capacity;
-          const full = size.occupied === size.capacity && size.capacity > 0;
+          // Cupo 0 es "no configurado", igual que en VehicleIntakes: no hay
+          // cupo real contra el cual comparar, así que "excedido" no aplica
+          // y no se puede afirmar que alguien se pasó de un límite que nadie
+          // cargó todavía.
+          const sinConfigurarEsteTamano = size.capacity === 0;
+          const over = !sinConfigurarEsteTamano && size.occupied > size.capacity;
+          const full = !sinConfigurarEsteTamano && size.occupied === size.capacity;
           return (
             <Panel key={size.sizeClass} className="p-4">
               <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
@@ -128,14 +138,25 @@ export function ShopCapacity() {
                 <span
                   className={cn(
                     'font-display text-3xl font-medium',
-                    over ? 'text-danger' : full ? 'text-state-wait' : 'text-state-done'
+                    sinConfigurarEsteTamano
+                      ? 'text-text'
+                      : over
+                        ? 'text-danger'
+                        : full
+                          ? 'text-state-wait'
+                          : 'text-state-done'
                   )}
                 >
                   {loading ? '—' : size.occupied}
                 </span>
-                <span className="text-sm text-text-soft">/ {size.capacity} cupo</span>
+                {!sinConfigurarEsteTamano && (
+                  <span className="text-sm text-text-soft">/ {size.capacity} cupo</span>
+                )}
               </div>
-              {!loading && !over && size.capacity > 0 && (
+              {!loading && sinConfigurarEsteTamano && (
+                <span className="mt-1 block text-[11px] text-text-soft">Sin cupo configurado</span>
+              )}
+              {!loading && !sinConfigurarEsteTamano && !over && (
                 <span className="mt-1 block text-[11px] text-text-soft">
                   Quedan {size.free} lugar{size.free === 1 ? '' : 'es'}
                 </span>
@@ -174,10 +195,10 @@ export function ShopCapacity() {
         </Panel>
       )}
 
-      {!loading && sinFecha.length > 0 && (
+      {!loading && sinFechaFutura.length > 0 && (
         <div className="rounded-md border border-line bg-panel-alt px-4 py-3 text-sm text-text-soft">
-          {sinFecha.length} vehículo{sinFecha.length === 1 ? '' : 's'} sin fecha de salida: no
-          entran en la proyección, pero ocupan lugar igual.
+          {sinFechaFutura.length} vehículo{sinFechaFutura.length === 1 ? '' : 's'} sin fecha de
+          salida a futuro: no entran en la proyección, pero ocupan lugar igual.
         </div>
       )}
 
@@ -222,6 +243,14 @@ export function ShopCapacity() {
                     >
                       {row.number}
                     </Link>
+                    {row.otrosRegistros > 0 && (
+                      <span
+                        className="mt-0.5 block text-[10px] font-normal text-text-soft"
+                        title="Este vehículo tiene más ingresos u OT abiertos; se deduplica a un solo lugar en la playa"
+                      >
+                        +{row.otrosRegistros} registro{row.otrosRegistros === 1 ? '' : 's'} del mismo vehículo
+                      </span>
+                    )}
                   </td>
                   <td data-label="Cliente" className="p-3">{row.customerName}</td>
                   <td data-label="Vehículo" className="p-3 text-text-soft">{row.vehicleLabel}</td>

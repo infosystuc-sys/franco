@@ -99,9 +99,14 @@ export async function updateCompanySettings(
       address_zip: nullIfBlank(input.addressZip),
       phone: nullIfBlank(input.phone),
       email: nullIfBlank(input.email),
-      // Un margen vacío o inválido cae en 2, el default de la columna: dejarlo
-      // en 0 diría que todos retiran el mismo día que termina el trabajo.
-      yard_pickup_grace_days: Math.max(0, Number(input.yardPickupGraceDays) || 2),
+      // 0 es un margen legítimo (se retira el mismo día), y el input lo
+      // permite con min={0}. "|| 2" lo pisaba porque Number("0") || 2 da 2:
+      // el fallback a 2 tiene que aplicar solo cuando no hay un número válido,
+      // no cuando ese número es cero.
+      yard_pickup_grace_days: (() => {
+        const dias = Number(input.yardPickupGraceDays);
+        return input.yardPickupGraceDays.trim() === '' || Number.isNaN(dias) ? 2 : Math.max(0, dias);
+      })(),
     })
     .eq('id', true)
     .select(SELECT)

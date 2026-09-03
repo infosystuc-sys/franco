@@ -57,6 +57,10 @@ export function Settings() {
   const [cupos, setCupos] = React.useState<YardCapacityRow[]>([]);
   const [cupoError, setCupoError] = React.useState<string | null>(null);
   const guardadoPendiente = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // El último valor tipeado por tamaño que todavía no se guardó. No alcanza
+  // con el timer: si hay que hacer flush (al desmontar o al perder el foco)
+  // hace falta saber CUÁL era el valor pendiente, no solo que había uno.
+  const valorPendiente = React.useRef<Record<string, number>>({});
 
   React.useEffect(() => {
     let cancelled = false;
@@ -84,10 +88,36 @@ export function Settings() {
   // Los timers de guardado quedan referenciados fuera del render (un ref, no
   // estado) porque no tienen que disparar un re-render propio: solo importan
   // cuando se cancelan, al tipear de nuevo o al desmontar la pantalla.
+  //
+  // Al desmontar, el guardado pendiente se DISPARA en vez de cancelarse: esta
+  // pantalla define el cupo del que depende toda la disponibilidad de la
+  // playa, y cancelar en silencio dejaba a la base con el valor viejo aunque
+  // el usuario ya hubiera visto el nuevo en el input. No hay estado de error
+  // que mostrar en un componente que ya se está yendo, así que este guardado
+  // final no pasa por setCupoError: si falla, se pierde igual que antes, pero
+  // el caso común (clic a otro lado antes de los 600ms) ya no falla.
   React.useEffect(() => {
     const timers = guardadoPendiente.current;
-    return () => { for (const t of Object.values(timers)) clearTimeout(t); };
+    const pendientes = valorPendiente.current;
+    return () => {
+      for (const sizeClass of Object.keys(timers)) {
+        clearTimeout(timers[sizeClass]);
+        if (sizeClass in pendientes) {
+          updateYardCapacity(sizeClass as YardCapacityRow['sizeClass'], pendientes[sizeClass]).catch(() => {});
+        }
+      }
+    };
   }, []);
+
+  async function guardarCupo(sizeClass: YardCapacityRow['sizeClass'], capacity: number) {
+    delete valorPendiente.current[sizeClass];
+    try {
+      await updateYardCapacity(sizeClass, capacity);
+      setCupoError(null);
+    } catch (err) {
+      setCupoError(`No se pudo guardar el cupo de ${SIZE_CLASS_LABELS[sizeClass].toLowerCase()}: ${getErrorMessage(err)}`);
+    }
+  }
 
   /**
    * El input no se bloquea mientras guarda: deshabilitarlo hacía que se
@@ -101,16 +131,23 @@ export function Settings() {
     setCupos((previos) => previos.map((c) => (c.sizeClass === sizeClass ? { ...c, capacity } : c)));
 
     clearTimeout(guardadoPendiente.current[sizeClass]);
-    if (value.trim() === '') return;
+    if (value.trim() === '') {
+      delete valorPendiente.current[sizeClass];
+      return;
+    }
 
-    guardadoPendiente.current[sizeClass] = setTimeout(async () => {
-      try {
-        await updateYardCapacity(sizeClass, capacity);
-        setCupoError(null);
-      } catch (err) {
-        setCupoError(`No se pudo guardar el cupo de ${SIZE_CLASS_LABELS[sizeClass].toLowerCase()}: ${getErrorMessage(err)}`);
-      }
-    }, 600);
+    valorPendiente.current[sizeClass] = capacity;
+    guardadoPendiente.current[sizeClass] = setTimeout(() => guardarCupo(sizeClass, capacity), 600);
+  }
+
+  /**
+   * El caso común de "escribo y hago clic en otro lado" antes de que venza
+   * el debounce: sin esto, ese clic caía igual de mal que un desmontaje.
+   */
+  function handleCupoBlur(sizeClass: YardCapacityRow['sizeClass']) {
+    if (!(sizeClass in valorPendiente.current)) return;
+    clearTimeout(guardadoPendiente.current[sizeClass]);
+    guardarCupo(sizeClass, valorPendiente.current[sizeClass]);
   }
 
   if (role !== 'admin') return <Navigate to="/" replace />;
@@ -421,6 +458,7 @@ export function Settings() {
                 min={0}
                 value={cupo.capacity}
                 onChange={(e) => handleCupoChange(cupo.sizeClass, e.target.value)}
+                onBlur={() => handleCupoBlur(cupo.sizeClass)}
                 className={inputClass}
               />
             </label>
