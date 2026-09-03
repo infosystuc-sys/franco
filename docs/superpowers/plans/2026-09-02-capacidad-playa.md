@@ -834,13 +834,26 @@ select number, status from public.vehicle_intakes where number = 'ING-10';
 Esperado: `CERRADO`. ING-10 comparte vehículo con ING-4, así que cerrarlo **no** libera lugar: el Volvo sigue en la playa por ING-4. La ocupación tiene que seguir en 5. Verificalo:
 
 ```sql
-with con_ot as (select quotation_id from public.work_orders where quotation_id is not null)
-select
-  (select count(*) from public.vehicle_intakes i
-   where i.status::text <> 'CERRADO'
-     and (i.quotation_id is null or i.quotation_id not in (select quotation_id from con_ot)))
-  + (select count(*) from public.work_orders w
-     join public.work_order_statuses s on s.id = w.status_id where s.frees_yard = false) as total;
+-- Cuenta vehículos, no registros: es lo que hace yardCapacity.ts. Sin el
+-- distinct on, el mismo vehículo con varios ingresos abiertos se cuenta
+-- una vez por cada uno y el número no significa nada.
+with con_ot as (select quotation_id from public.work_orders where quotation_id is not null),
+ocupan as (
+  select i.vehicle_id, 'INGRESO' as tipo, i.created_at
+  from public.vehicle_intakes i
+  where i.status::text <> 'CERRADO'
+    and (i.quotation_id is null or i.quotation_id not in (select quotation_id from con_ot))
+  union all
+  select w.vehicle_id, 'OT', w.created_at
+  from public.work_orders w
+  join public.work_order_statuses s on s.id = w.status_id
+  where s.frees_yard = false
+),
+elegido as (
+  select distinct on (vehicle_id) * from ocupan
+  order by vehicle_id, (tipo = 'OT') desc, created_at desc
+)
+select count(*) as total from elegido;
 ```
 
 Esperado: 5 — el mismo número que antes.

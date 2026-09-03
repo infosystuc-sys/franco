@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Camera, Trash2, Receipt, ArrowRight, ImageOff, Plus, Check } from 'lucide-react';
+import { XCircle, Camera, Trash2, Receipt, ArrowRight, ImageOff, Plus, Check, Archive } from 'lucide-react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
@@ -7,6 +7,7 @@ import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   addIntakePart,
+  closeVehicleIntake,
   convertIntakeToQuotation,
   deleteIntakePart,
   deleteIntakePhoto,
@@ -37,6 +38,24 @@ export function VehicleIntakeDetails() {
   const [saving, setSaving] = React.useState(false);
 
   const [converting, setConverting] = React.useState(false);
+
+  const [cerrando, setCerrando] = React.useState(false);
+
+  async function handleCerrar() {
+    if (!intake) return;
+    if (!window.confirm(
+      `¿Cerrar el ingreso ${intake.number}? Se usa cuando el vehículo se fue sin llegar a una orden de trabajo. Deja de ocupar lugar en la playa.`
+    )) return;
+    setCerrando(true);
+    try {
+      await closeVehicleIntake(intake.id);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCerrando(false);
+    }
+  }
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -129,6 +148,11 @@ export function VehicleIntakeDetails() {
             {isAdmin && isPending && (
               <Button onClick={handleConvert} disabled={converting}>
                 <Receipt size={16} /> {converting ? 'Creando...' : 'Crear cotización'} <ArrowRight size={14} />
+              </Button>
+            )}
+            {isAdmin && intake.status !== 'CERRADO' && (
+              <Button variant="ghost" type="button" onClick={handleCerrar} disabled={cerrando}>
+                <Archive size={16} /> {cerrando ? 'Cerrando…' : 'Cerrar sin OT'}
               </Button>
             )}
           </>

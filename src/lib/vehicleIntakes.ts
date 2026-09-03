@@ -1,16 +1,18 @@
 import { supabase } from '@/src/lib/supabase';
 import { createQuotation, defaultValidUntil } from '@/src/lib/quotations';
 
-export type VehicleIntakeStatus = 'PENDIENTE' | 'COTIZADO';
+export type VehicleIntakeStatus = 'PENDIENTE' | 'COTIZADO' | 'CERRADO';
 
 export const VEHICLE_INTAKE_STATUS_LABELS: Record<VehicleIntakeStatus, string> = {
   PENDIENTE: 'Pendiente de cotizar',
   COTIZADO: 'Cotizado',
+  CERRADO: 'Cerrado sin OT',
 };
 
 export const VEHICLE_INTAKE_STATUS_STRIP: Record<VehicleIntakeStatus, string> = {
   PENDIENTE: '#e07b1a',
   COTIZADO: '#2e7d32',
+  CERRADO: '#6b7280',
 };
 
 const BUCKET = 'vehicle-intakes';
@@ -268,4 +270,17 @@ export function describeVehicleIntakeError(message: string): string {
     return 'No se puede eliminar: la cotización que generó todavía existe.';
   }
   return message;
+}
+
+/**
+ * El vehículo se fue sin que el ingreso derivara en una orden de trabajo —
+ * típicamente porque el cliente rechazó el presupuesto. Cierra el ingreso
+ * para que deje de ocupar un lugar en la playa.
+ */
+export async function closeVehicleIntake(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('vehicle_intakes')
+    .update({ status: 'CERRADO' })
+    .eq('id', id);
+  if (error) throw error;
 }
