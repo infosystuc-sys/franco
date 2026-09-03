@@ -611,8 +611,7 @@ Esperado exactamente: `total: 11`, `ingresos: 8`, `ots: 3`, `grandes: 11`, `conF
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/yardCapacity.ts src/pages/ShopCapacity.tsx
-git rm --cached src/lib/shopCapacity.ts 2>/dev/null; git add -A src/lib/
+git add -A src/lib src/pages/ShopCapacity.tsx
 git commit -m "Cálculo de ocupación de playa por tamaño, sin pasar por el empleado"
 ```
 
@@ -853,7 +852,7 @@ git commit -m "Cerrar un ingreso cuyo vehículo se fue sin llegar a una OT"
 
 - [ ] **Step 1: Sumar el margen a los ajustes**
 
-En `src/lib/companySettings.ts`, cinco cambios:
+En `src/lib/companySettings.ts`, seis cambios:
 
 1. En `interface CompanySettings`, después de `email: string | null;`:
 ```ts
