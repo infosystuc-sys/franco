@@ -106,15 +106,17 @@ create policy "admin delete" on public.work_order_received_parts
 -- a terminal si el total difiere del presupuestado sin autorizar, y una OT en
 -- "Cotizado" todavía no tiene renglones copiados. Marcarla terminal haría
 -- imposible registrar un rechazo.
+-- "Autorizada" deja de ser el estado inicial ANTES de insertar el nuevo: hay
+-- un índice único que admite un solo is_initial, así que insertar primero y
+-- desmarcar después falla.
+update public.work_order_statuses set is_initial = false where label = 'Autorizada';
+
 insert into public.work_order_statuses
   (label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client, frees_yard)
 values
   ('Ingresado', 'Recibimos el vehículo en el taller.', '#4a6fa5', 0, true, true, false, false, false),
   ('Cotizado',  'Te enviamos el presupuesto y esperamos tu respuesta.', '#e07b1a', 1, true, false, false, false, false),
   ('Rechazada', 'El presupuesto no fue aceptado.', '#8a8f98', 99, true, false, false, false, true);
-
--- "Autorizada" deja de ser el estado inicial: ahora la OT nace en Ingresado.
-update public.work_order_statuses set is_initial = false where label = 'Autorizada';
 
 -- 4) Los ingresos que hoy están abiertos pasan a ser OT ---------------------
 -- Los que ya derivaron en una OT no se convierten: su información ya vive ahí.
