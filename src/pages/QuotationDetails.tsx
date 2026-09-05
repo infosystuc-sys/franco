@@ -24,7 +24,8 @@ import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import {
-  convertToWorkOrder,
+  applyQuotationToWorkOrder,
+  rejectQuotationWorkOrder,
   fetchQuotationByNumber,
   isExpired,
   isQuotationEditable,
@@ -130,6 +131,9 @@ export function QuotationDetails() {
 
   const handleStatus = (status: QuotationDetail['status'], message: string) => run(async () => {
     await updateQuotationStatus(quotation.id, status);
+    // El rechazo no se queda en la cotización: la orden que la originó deja de
+    // esperar respuesta y libera el lugar que el vehículo ocupaba en la playa.
+    if (status === 'RECHAZADA') await rejectQuotationWorkOrder(quotation.id);
     await loadQuotation();
   }, message);
 
@@ -142,9 +146,38 @@ export function QuotationDetails() {
     handleStatus('ENVIADA', 'Cotización marcada como enviada.');
   }
 
+  /**
+   * Aceptar ya no es un paso previo a "convertir": la orden existe desde que
+   * se recibió el vehículo, así que aceptar copia los renglones adentro de
+   * ella y la autoriza. El paso separado quedó del circuito viejo, cuando la
+   * aceptación era lo que hacía nacer la orden.
+   */
+  const handleAccept = () => run(async () => {
+    await updateQuotationStatus(quotation.id, 'ACEPTADA');
+    const orden = await applyQuotationToWorkOrder(quotation.id);
+    if (orden) {
+      navigate(`/orden/${orden.number}`);
+      return;
+    }
+    setNotice(
+      'Cotización aceptada. Cuando el cliente traiga el vehículo, abrí la orden y enganchale esta cotización desde ahí.'
+    );
+    await loadQuotation();
+  });
+
   const handleConvert = () => run(async () => {
-    const created = await convertToWorkOrder(quotation.id);
-    navigate(`/orden/${created.number}`);
+    const orden = await applyQuotationToWorkOrder(quotation.id);
+    if (orden) {
+      navigate(`/orden/${orden.number}`);
+      return;
+    }
+    // Cotización suelta: se aceptó un presupuesto hecho antes de que el
+    // vehículo llegara, así que no hay orden que llenar todavía. Se avisa en
+    // vez de dejar al usuario esperando una navegación que no va a pasar.
+    setNotice(
+      'Cotización aceptada. Cuando el cliente traiga el vehículo, abrí la orden y enganchale esta cotización desde ahí.'
+    );
+    await loadQuotation();
   });
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
@@ -196,7 +229,7 @@ export function QuotationDetails() {
                 hasItems={hasItems}
                 onSave={handleSave}
                 onSend={handleSend}
-                onAccept={() => handleStatus('ACEPTADA', 'Cotización aceptada. Ya podés convertirla en orden de trabajo.')}
+                onAccept={handleAccept}
                 onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
                 onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
                 onConvert={handleConvert}
@@ -483,9 +516,12 @@ function ActionBar({
         </>
       )}
 
-      {quotation.status === 'ACEPTADA' && !quotation.workOrderNumber && (
+      {/* Para la cotización que se aceptó suelta y recién después se enganchó
+          a una orden: aceptar ya la aplicó cuando había orden, pero en ese
+          camino no la había. Aplicarla de nuevo no duplica nada. */}
+      {quotation.status === 'ACEPTADA' && quotation.workOrderNumber && (
         <button onClick={onConvert} disabled={busy} className={cn(btn, 'bg-accent text-accent-ink hover:bg-accent-deep hover:text-white')}>
-          <FileCheck2 size={16} /> {busy ? 'Convirtiendo...' : 'Convertir en orden de trabajo'}
+          <FileCheck2 size={16} /> {busy ? 'Aplicando...' : 'Aplicar a la orden'}
         </button>
       )}
 

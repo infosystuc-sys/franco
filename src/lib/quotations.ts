@@ -269,17 +269,52 @@ export async function saveQuotationItems(quotationId: string, items: WorkOrderIt
 }
 
 /**
- * Convierte la cotización aceptada en OT. La RPC hace todo en una transacción:
- * crea la OT, copia los renglones y descuenta el stock. Si el stock no alcanza
- * no se crea nada y la cotización queda intacta.
+ * Aceptar la cotización llena la OT que ya existe: copia los renglones,
+ * descuenta el stock y la autoriza, todo en una transacción. Si el stock no
+ * alcanza, no cambia nada.
+ *
+ * Devuelve null cuando la cotización no tiene OT enganchada —el presupuesto
+ * que se hizo por teléfono, antes de que el vehículo llegara—: ahí solo queda
+ * aceptada, y la orden se abre cuando el cliente trae el vehículo.
  */
-export async function convertToWorkOrder(quotationId: string): Promise<{ id: string; number: string }> {
-  const { data, error } = await supabase.rpc('convert_quotation_to_work_order', {
+export async function applyQuotationToWorkOrder(
+  quotationId: string
+): Promise<{ id: string; number: string } | null> {
+  const { data, error } = await supabase.rpc('apply_quotation_to_work_order', {
     p_quotation_id: quotationId,
   });
   if (error) throw error;
-  const result = Array.isArray(data) ? data[0] : data;
-  return result as { id: string; number: string };
+  const row: any = Array.isArray(data) ? data[0] : data;
+  return row ? { id: row.result_id, number: row.result_number } : null;
+}
+
+/**
+ * Rechazar mueve la OT enganchada a "Rechazada", que libera el lugar en la
+ * playa. La cotización ya quedó rechazada por updateQuotationStatus; esto es
+ * el efecto sobre la orden.
+ */
+export async function rejectQuotationWorkOrder(quotationId: string): Promise<void> {
+  const { data: quotation, error } = await supabase
+    .from('quotations')
+    .select('work_order_id')
+    .eq('id', quotationId)
+    .single();
+  if (error) throw error;
+  if (!quotation?.work_order_id) return;
+
+  const { data: estado, error: errorEstado } = await supabase
+    .from('work_order_statuses')
+    .select('id')
+    .eq('label', 'Rechazada')
+    .maybeSingle();
+  if (errorEstado) throw errorEstado;
+  if (!estado) throw new Error('Falta el estado "Rechazada" en el ABM de estados de OT.');
+
+  const { error: errorUpdate } = await supabase
+    .from('work_orders')
+    .update({ status_id: estado.id })
+    .eq('id', quotation.work_order_id);
+  if (errorUpdate) throw errorUpdate;
 }
 
 /**
