@@ -148,6 +148,10 @@ export async function fetchUnlinkedQuotations(customerId: string): Promise<Quota
     .select(LIST_SELECT)
     .eq('customer_id', customerId)
     .is('work_order_id', null)
+    // Una cotización ya resuelta no sirve para enganchar: aceptarla otra vez
+    // no haría nada, y engancharle una rechazada a una orden la dejaría
+    // esperando una respuesta que ya llegó y fue que no.
+    .in('status', ['EMITIDA', 'ENVIADA'])
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapQuotationRow);

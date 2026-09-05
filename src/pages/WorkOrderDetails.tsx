@@ -373,7 +373,13 @@ export function WorkOrderDetails() {
   const locked = !!invoice;
   const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
   const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
+  // Una orden sin renglones y con presupuesto es una que todavía espera la
+  // respuesta del cliente: los renglones se copian recién al aceptar. Sin esta
+  // condición, toda orden recién cotizada avisaría que su monto ($0) difiere
+  // del presupuesto, y ofrecería pedirle al cliente que autorice cero pesos.
+  const esperandoRespuesta = order.items.length === 0;
   const priceDiffers =
+    !esperandoRespuesta &&
     order.quotedTotal !== null && Math.abs(currentTotal - order.quotedTotal) > 0.005;
   const priceAuthCoversCurrent =
     order.priceAuth.status === 'AUTORIZADO' &&

@@ -262,10 +262,16 @@ export interface WorkOrderListRow {
   publicToken: string;
 }
 
+/**
+ * Con qué se identifica la orden en un listado. Una sin vehículo no es un dato
+ * faltante: es una pieza que llegó sola al mostrador, y conviene que se lea
+ * así — con el módulo de ingresos retirado, el listado de OT es el único lugar
+ * donde mirar qué hay en el taller.
+ */
 function vehicleLabel(
   vehicle: { brand: string | null; model: string; license_plate: string | null } | null
 ): string {
-  if (!vehicle) return '—';
+  if (!vehicle) return 'Pieza suelta';
   const name = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
   return vehicle.license_plate ? `${name} - Placa ${vehicle.license_plate}` : name;
 }
