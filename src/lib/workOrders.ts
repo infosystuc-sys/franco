@@ -476,6 +476,9 @@ export interface WorkOrderDetail {
     | null;
   vehicle:
     | {
+        // Se necesita para cotizar desde la OT (createQuotation exige un
+        // vehicleId): sin este id habría que volver a buscar el vehículo.
+        id: string;
         brand: string | null;
         model: string;
         license_plate: string | null;
@@ -524,7 +527,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
-       vehicle:vehicles(brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
+       vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees(id, name),
        quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
-import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
+import { Button, inputClass, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
 import { fetchOperarios, type Employee } from '@/src/lib/employees';
@@ -13,6 +13,13 @@ import {
   INVOICE_TYPE_LABELS,
   type WorkOrderInvoiceRef,
 } from '@/src/lib/invoices';
+import {
+  createQuotation,
+  defaultValidUntil,
+  fetchUnlinkedQuotations,
+  linkQuotationToWorkOrder,
+  type QuotationListRow,
+} from '@/src/lib/quotations';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
   addReceivedPart,
@@ -42,6 +49,7 @@ export function WorkOrderDetails() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const { id } = useParams();
+  const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
   const [items, setItems] = useState<WorkOrderItemInput[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +67,12 @@ export function WorkOrderDetails() {
   const [observations, setObservations] = useState('');
   const [partName, setPartName] = useState('');
   const [partSerial, setPartSerial] = useState('');
+  const [cotizando, setCotizando] = useState(false);
+  // Cotizaciones del cliente de esta OT que todavía no están enganchadas a
+  // ninguna orden: el presupuesto hecho por teléfono, antes de que llegara
+  // el vehículo. Solo tiene sentido buscarlas mientras la OT no tenga ya
+  // una cotización propia.
+  const [candidatas, setCandidatas] = useState<QuotationListRow[]>([]);
 
   // Qué OT ya sincronizó `items` desde la base — no un booleano, porque el
   // mismo componente sigue vivo al navegar de una OT a otra (useParams solo
@@ -175,6 +189,14 @@ export function WorkOrderDetails() {
     };
   }, [isAdmin]);
 
+  // Se cargan apenas se conoce el cliente de la orden. Si la OT ya tiene
+  // cotización propia no hace falta buscar candidatas: no hay dónde
+  // engancharlas.
+  React.useEffect(() => {
+    if (!order?.customer?.id || order.quotationNumber) { setCandidatas([]); return; }
+    fetchUnlinkedQuotations(order.customer.id).then(setCandidatas).catch(() => setCandidatas([]));
+  }, [order?.customer?.id, order?.quotationNumber]);
+
   async function handleStatusChange(statusId: string) {
     if (!order) return;
     setChangingStatus(true);
@@ -271,6 +293,48 @@ export function WorkOrderDetails() {
     }
   }
 
+  /**
+   * Arma la cotización de esta OT y la deja enganchada. El presupuesto se
+   * completa después en el módulo de cotizaciones, que es donde vive la
+   * aceptación y el rechazo.
+   */
+  async function handleCotizar() {
+    if (!order || !order.customer || !order.vehicle) return;
+    setCotizando(true);
+    setError(null);
+    try {
+      const creada = await createQuotation({
+        customerId: order.customer.id,
+        vehicleId: order.vehicle.id,
+        component: order.component ?? '',
+        validUntil: defaultValidUntil(),
+        // Lo observado al recibir arranca como nota del presupuesto: es el
+        // contexto que necesita quien lo arma.
+        notes: order.observations ?? '',
+      });
+      await linkQuotationToWorkOrder(creada.id, order.id);
+      navigate(`/cotizacion/${creada.number}`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setCotizando(false);
+    }
+  }
+
+  /**
+   * El presupuesto ya existía y el vehículo recién llega: se asocia en vez de
+   * crear uno nuevo. El selector solo aparece si hay candidatas, para no
+   * ensuciar el encabezado de las OT que no lo necesitan.
+   */
+  async function handleEnganchar(quotationId: string) {
+    if (!order) return;
+    try {
+      await linkQuotationToWorkOrder(quotationId, order.id);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
   async function handleSave() {
     if (!order) return;
     setSaving(true);
@@ -349,6 +413,29 @@ export function WorkOrderDetails() {
                 <XCircle size={16} /> Volver
               </Button>
             </Link>
+            {isAdmin && !order.quotationNumber && candidatas.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => e.target.value && handleEnganchar(e.target.value)}
+                className={cn(inputClass, 'mt-0 w-56 bg-panel')}
+              >
+                <option value="">Enganchar una cotización ya hecha…</option>
+                {candidatas.map((c) => (
+                  <option key={c.id} value={c.id}>{c.number} — $ {formatMoney(c.total)}</option>
+                ))}
+              </select>
+            )}
+            {isAdmin && !order.quotationNumber && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={cotizando || !order.vehicle}
+                title={!order.vehicle ? 'No se puede cotizar: esta orden no tiene un vehículo asociado (se recibió como pieza suelta).' : undefined}
+                onClick={handleCotizar}
+              >
+                <Receipt size={16} /> {cotizando ? 'Creando…' : 'Cotizar'}
+              </Button>
+            )}
             {isAdmin && <InvoiceAction order={order} invoice={invoice} />}
             {isAdmin && !locked && (
               <Button onClick={handleSave} disabled={saving}>

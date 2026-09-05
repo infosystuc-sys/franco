@@ -108,14 +108,8 @@ const LIST_SELECT = `
   items:quotation_items(quantity, unit_price)
 `;
 
-export async function fetchQuotations(): Promise<QuotationListRow[]> {
-  const { data, error } = await supabase
-    .from('quotations')
-    .select(LIST_SELECT)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-
-  return (data ?? []).map((row: any) => ({
+function mapQuotationRow(row: any): QuotationListRow {
+  return {
     id: row.id,
     number: row.number,
     status: row.status,
@@ -131,9 +125,32 @@ export async function fetchQuotations(): Promise<QuotationListRow[]> {
     workOrderNumber: row.work_order?.number ?? null,
     publicToken: row.public_token,
     createdAt: row.created_at,
-    decidedAt: row.decided_at,
-    rejectionReason: row.rejection_reason,
-  }));
+  };
+}
+
+export async function fetchQuotations(): Promise<QuotationListRow[]> {
+  const { data, error } = await supabase
+    .from('quotations')
+    .select(LIST_SELECT)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapQuotationRow);
+}
+
+/**
+ * Cotizaciones de este cliente que todavía no pertenecen a ninguna orden.
+ * Son las que se pueden enganchar a una OT recién abierta: el presupuesto que
+ * se hizo por teléfono, antes de que el vehículo llegara al taller.
+ */
+export async function fetchUnlinkedQuotations(customerId: string): Promise<QuotationListRow[]> {
+  const { data, error } = await supabase
+    .from('quotations')
+    .select(LIST_SELECT)
+    .eq('customer_id', customerId)
+    .is('work_order_id', null)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapQuotationRow);
 }
 
 const DETAIL_SELECT = `
@@ -263,6 +280,20 @@ export async function convertToWorkOrder(quotationId: string): Promise<{ id: str
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : data;
   return result as { id: string; number: string };
+}
+
+/**
+ * Engancha la cotización a la OT que la origina y mueve la orden a
+ * "Cotizado". Sirve tanto para la cotización que se arma desde la OT como
+ * para una suelta —el presupuesto que se hizo por teléfono— que después se
+ * asocia cuando el cliente trae el vehículo.
+ */
+export async function linkQuotationToWorkOrder(quotationId: string, workOrderId: string): Promise<void> {
+  const { error } = await supabase.rpc('link_quotation_to_work_order', {
+    p_quotation_id: quotationId,
+    p_work_order_id: workOrderId,
+  });
+  if (error) throw error;
 }
 
 export async function duplicateQuotation(quotationId: string): Promise<{ id: string; number: string }> {
