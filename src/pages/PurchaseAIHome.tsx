@@ -1,12 +1,14 @@
 // src/pages/PurchaseAIHome.tsx
 import React from 'react';
-import { Sparkles, Package, FileText, AlertTriangle } from 'lucide-react';
+import { Sparkles, Package, FileText, AlertTriangle, Trash2 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  deleteExtraction,
+  describeExtraction,
   fetchPendingExtractions,
   describeExtractionError,
   type PurchaseExtraction,
@@ -22,6 +24,7 @@ export function PurchaseAIHome() {
   const [pending, setPending] = React.useState<PurchaseExtraction[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
@@ -30,6 +33,23 @@ export function PurchaseAIHome() {
       .catch((err) => setError(describeExtractionError(getErrorMessage(err))))
       .finally(() => setLoading(false));
   }, [role]);
+
+  async function handleDelete(draft: PurchaseExtraction) {
+    const que = describeExtraction(draft) || 'este borrador';
+    if (!window.confirm(
+      `¿Borrar ${que}? Se elimina el borrador y el archivo que subiste. No se puede deshacer: para volver a cargarlo hay que subir la factura de nuevo.`
+    )) return;
+    setDeleting(draft.id);
+    setError(null);
+    try {
+      await deleteExtraction(draft);
+      setPending((actuales) => actuales.filter((d) => d.id !== draft.id));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -79,24 +99,41 @@ export function PurchaseAIHome() {
               // Los que fallaron se listan igual: es la única forma de llegar
               // al botón de reintentar sobre el archivo que ya está subido.
               const failed = draft.status === 'ERROR';
+              // De qué comprobante es. Sin esto, dos borradores de la misma
+              // factura se ven idénticos en la lista y no hay forma de saber
+              // cuál se está por borrar.
+              const cual = describeExtraction(draft);
               return (
-                <li key={draft.id}>
+                <li key={draft.id} className="flex items-center gap-2">
                   <Link
                     to={`/compras-ia/revisar/${draft.id}`}
-                    className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-accent-deep"
+                    className="flex flex-1 items-center justify-between gap-3 py-2.5 text-sm hover:text-accent-deep"
                   >
                     <span className={failed ? 'text-danger' : undefined}>
                       {failed && <AlertTriangle size={14} className="mr-1.5 inline-block align-[-2px]" />}
-                      {draft.kind === 'ARTICULOS' ? 'Artículos' : 'Conceptos'} ·{' '}
-                      {failed ? 'no se pudo leer' : 'leída'} el {formatDate(draft.createdAt)}
-                      {failed && draft.errorMessage && (
-                        <span className="mt-0.5 block text-[11px] text-text-soft">{draft.errorMessage}</span>
-                      )}
+                      {draft.kind === 'ARTICULOS' ? 'Artículos' : 'Conceptos'}
+                      {cual && ` · ${cual}`}
+                      <span className="mt-0.5 block text-[11px] text-text-soft">
+                        {failed ? 'no se pudo leer' : 'leída'} el {formatDate(draft.createdAt)}
+                        {failed && draft.errorMessage && ` — ${draft.errorMessage}`}
+                      </span>
                     </span>
                     <Button variant="ghost" type="button" className="pointer-events-none shrink-0 px-3">
                       {failed ? 'Reintentar' : 'Revisar'}
                     </Button>
                   </Link>
+                  {/* Fuera del Link: un botón dentro de un enlace navega al
+                      hacer clic, además de disparar su propia acción. */}
+                  <button
+                    type="button"
+                    title="Borrar este borrador"
+                    aria-label={`Borrar ${cual || 'borrador'}`}
+                    disabled={deleting === draft.id}
+                    onClick={() => handleDelete(draft)}
+                    className="shrink-0 p-1 text-text-soft transition-colors hover:text-danger disabled:opacity-40"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </li>
               );
             })}

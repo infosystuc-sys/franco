@@ -159,6 +159,35 @@ export async function confirmExtraction(id: string, purchaseInvoiceId: string): 
   if (error) throw error;
 }
 
+/**
+ * Borra el borrador y el archivo que se había subido.
+ *
+ * Primero la fila y después el archivo, no al revés: un archivo huérfano no
+ * lo ve nadie, pero una fila apuntando a un archivo que ya no está rompe la
+ * pantalla de revisión al querer mostrar el adjunto.
+ *
+ * Un borrador ya confirmado no se puede borrar — lo impide la base, porque es
+ * el único rastro que une una compra guardada con el comprobante escaneado.
+ */
+export async function deleteExtraction(extraction: PurchaseExtraction): Promise<void> {
+  const { error } = await supabase.from('purchase_invoice_extractions').delete().eq('id', extraction.id);
+  if (error) throw error;
+
+  // El archivo es secundario: si falla su borrado, el borrador ya no existe y
+  // la pantalla no tiene por qué mostrar un error por un residuo invisible.
+  await supabase.storage.from(BUCKET).remove([extraction.attachmentStoragePath]);
+}
+
+/** Qué comprobante es este borrador, para poder distinguir uno de otro en la lista. */
+export function describeExtraction(extraction: PurchaseExtraction): string {
+  const valores = (extraction.rawExtraction as any)?.valores ?? {};
+  const proveedor = String(valores.proveedor_razon_social ?? '').trim();
+  const punto = String(valores.punto_venta ?? '').trim();
+  const numero = String(valores.numero ?? '').trim();
+  const comprobante = punto && numero ? `${punto}-${numero}` : numero;
+  return [proveedor, comprobante].filter(Boolean).join(' · ');
+}
+
 export async function discardExtraction(id: string): Promise<void> {
   const { error } = await supabase
     .from('purchase_invoice_extractions')
