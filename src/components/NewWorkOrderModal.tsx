@@ -1,9 +1,16 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { vehicleLabel } from '@/src/lib/vehicles';
-import { createWorkOrder, getErrorMessage } from '@/src/lib/workOrders';
+import {
+  addReceivedPart,
+  createWorkOrder,
+  getErrorMessage,
+  RECEPTION_KIND_LABELS,
+  RECEPTION_KINDS,
+  type ReceptionKind,
+} from '@/src/lib/workOrders';
 
 /**
  * Alta de una OT directa, sin cotización previa.
@@ -26,6 +33,15 @@ export function NewWorkOrderModal({
   const [component, setComponent] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Qué se recibe define si el vehículo es obligatorio: una pieza suelta
+  // puede llegar sin que su equipo de origen esté en la playa.
+  const [receptionKind, setReceptionKind] = React.useState<ReceptionKind>('VEHICULO');
+  const [observations, setObservations] = React.useState('');
+  // Las piezas se juntan acá y se guardan recién cuando la OT existe: no hay
+  // work_order_id contra el cual insertarlas hasta ese momento.
+  const [parts, setParts] = React.useState<{ name: string; serialNumber: string }[]>([]);
+  const [partName, setPartName] = React.useState('');
+  const [partSerial, setPartSerial] = React.useState('');
 
   React.useEffect(() => {
     let cancelled = false;
@@ -56,14 +72,29 @@ export function NewWorkOrderModal({
       setError('Elegí un cliente.');
       return;
     }
-    if (!vehicleId) {
-      setError('Elegí un vehículo. Si el cliente no tiene ninguno cargado, agregalo desde Clientes.');
+    // Única validación nueva: el vehículo solo es obligatorio cuando lo que
+    // se recibe es el vehículo mismo. Una pieza suelta puede no tener uno
+    // (puede no estar en el padrón, o simplemente no importar para el caso).
+    if (receptionKind === 'VEHICULO' && !vehicleId) {
+      setError('Elegí el vehículo que estás recibiendo, o cambiá "Qué se recibe" a pieza suelta.');
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const workOrder = await createWorkOrder({ customerId, vehicleId, component });
+      const workOrder = await createWorkOrder({
+        customerId,
+        vehicleId: vehicleId || null,
+        component,
+        receptionKind,
+        observations,
+      });
+      // Las piezas van después: recién ahora existe la OT contra la cual
+      // colgarlas. Si alguna falla, la OT ya está creada y no se pierde la
+      // recepción — se avisa y se cargan desde el detalle.
+      for (const p of parts) {
+        await addReceivedPart(workOrder.id, p.name, p.serialNumber);
+      }
       onCreated(workOrder);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -89,6 +120,22 @@ export function NewWorkOrderModal({
           )}
 
           <div className="grid grid-cols-1 gap-4">
+            <Label>
+              Qué se recibe
+              <select
+                value={receptionKind}
+                onChange={(e) => setReceptionKind(e.target.value as ReceptionKind)}
+                className={fieldClass(false, 'font-normal normal-case bg-panel')}
+              >
+                {RECEPTION_KINDS.map((k) => (
+                  <option key={k} value={k}>{RECEPTION_KIND_LABELS[k]}</option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                Una pieza suelta no ocupa lugar en la playa, aunque se elija de qué equipo salió.
+              </span>
+            </Label>
+
             <Label>
               Cliente
               <select
@@ -120,10 +167,14 @@ export function NewWorkOrderModal({
                 value={vehicleId}
                 onChange={(e) => setVehicleId(e.target.value)}
                 disabled={!selectedCustomer}
-                className={fieldClass(true, 'font-normal normal-case disabled:bg-panel-alt')}
+                className={fieldClass(receptionKind === 'VEHICULO', 'font-normal normal-case disabled:bg-panel-alt')}
               >
                 <option value="">
-                  {!selectedCustomer ? 'Elegí primero un cliente' : 'Elegí un vehículo'}
+                  {!selectedCustomer
+                    ? 'Elegí primero un cliente'
+                    : receptionKind === 'PIEZA'
+                      ? 'Sin vehículo (opcional)'
+                      : 'Elegí un vehículo...'}
                 </option>
                 {vehicles.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
@@ -147,6 +198,66 @@ export function NewWorkOrderModal({
                 placeholder="Bomba de inyección Common Rail"
               />
             </Label>
+
+            <Label>
+              Observaciones de la recepción
+              <textarea
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+                rows={2}
+                placeholder="Estado en que llegó, faltantes, lo que dijo el cliente..."
+                className={fieldClass(false, 'font-normal normal-case resize-y')}
+              />
+            </Label>
+
+            <div className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-text-soft">
+                Piezas recibidas
+              </span>
+              {parts.length > 0 && (
+                <ul className="space-y-1 text-sm">
+                  {parts.map((p, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2">
+                      <span>{p.name} — <span className="font-mono text-xs">{p.serialNumber}</span></span>
+                      <button
+                        type="button"
+                        onClick={() => setParts((c) => c.filter((_, j) => j !== i))}
+                        aria-label={`Quitar ${p.name}`}
+                        className="text-text-soft hover:text-danger"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={partName}
+                  onChange={(e) => setPartName(e.target.value)}
+                  placeholder="Bomba inyectora"
+                  className={fieldClass(false, 'font-normal normal-case mt-0 flex-1')}
+                />
+                <input
+                  value={partSerial}
+                  onChange={(e) => setPartSerial(e.target.value)}
+                  placeholder="N° de serie"
+                  className={fieldClass(false, 'font-normal normal-case mt-0 w-40 font-mono')}
+                />
+                <button
+                  type="button"
+                  disabled={!partName.trim() || !partSerial.trim()}
+                  onClick={() => {
+                    setParts((c) => [...c, { name: partName.trim(), serialNumber: partSerial.trim() }]);
+                    setPartName('');
+                    setPartSerial('');
+                  }}
+                  className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

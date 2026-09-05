@@ -391,16 +391,40 @@ export async function hasLinkedEmployee(): Promise<boolean> {
   return data !== null;
 }
 
+/**
+ * Qué se recibió. No se deduce de si hay vehículo elegido: el caso común es
+ * "traigo la bomba del Scania patente XYZ", donde el vehículo está en el
+ * padrón y se elige, pero el camión no está en la playa. Esta marca es la que
+ * decide si la OT descuenta un lugar.
+ */
+export type ReceptionKind = 'VEHICULO' | 'PIEZA';
+
+export const RECEPTION_KIND_LABELS: Record<ReceptionKind, string> = {
+  VEHICULO: 'Vehículo',
+  PIEZA: 'Pieza suelta',
+};
+
+export const RECEPTION_KINDS = Object.keys(RECEPTION_KIND_LABELS) as ReceptionKind[];
+
+export interface ReceivedPart {
+  id: string;
+  name: string;
+  serialNumber: string;
+}
+
 export interface NewWorkOrderInput {
   customerId: string;
-  vehicleId: string;
+  /** Opcional: una OT de pieza suelta puede no tener vehículo. */
+  vehicleId: string | null;
   component: string;
+  receptionKind: ReceptionKind;
+  observations: string;
 }
 
 /**
- * Crea una OT directa (sin cotización previa), para trabajos que no la
- * requieren. El número lo asigna la secuencia de la base, igual que en la
- * conversión desde cotización, así no hay riesgo de números repetidos.
+ * Recibir es abrir la orden: la OT nace en el estado inicial ("Ingresado")
+ * con lo que se observó en el mostrador. El número lo asigna la secuencia de
+ * la base.
  */
 export async function createWorkOrder(input: NewWorkOrderInput) {
   const { data: initial, error: initialError } = await supabase
@@ -421,6 +445,8 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
       customer_id: input.customerId,
       vehicle_id: input.vehicleId,
       component: input.component || null,
+      reception_kind: input.receptionKind,
+      observations: input.observations.trim() || null,
     })
     .select()
     .single();
@@ -477,6 +503,9 @@ export interface WorkOrderDetail {
   estimatedDeliveryDate: string | null;
   items: WorkOrderItem[];
   photos: WorkOrderPhoto[];
+  receptionKind: ReceptionKind;
+  observations: string | null;
+  receivedParts: ReceivedPart[];
 }
 
 export interface WorkOrderPhoto {
@@ -491,6 +520,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     .select(
       `id, number, component, public_token, estimated_delivery_date,
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
+       reception_kind, observations,
        status:work_order_statuses(id, label, color, is_terminal),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
@@ -498,7 +528,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        employee:employees(id, name),
        quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
-       photos:work_order_photos(id, storage_path, created_at)`
+       photos:work_order_photos(id, storage_path, created_at),
+       received_parts:work_order_received_parts(id, name, serial_number)`
     )
     .eq('number', number)
     .maybeSingle();
@@ -542,6 +573,13 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     photos: ((data as any).photos ?? [])
       .map((p: any) => ({ id: p.id, storagePath: p.storage_path, createdAt: p.created_at }))
       .sort((a: WorkOrderPhoto, b: WorkOrderPhoto) => a.createdAt.localeCompare(b.createdAt)),
+    receptionKind: (data as any).reception_kind,
+    observations: (data as any).observations,
+    receivedParts: ((data as any).received_parts ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      serialNumber: p.serial_number,
+    })),
   };
 }
 
@@ -676,5 +714,33 @@ export async function saveWorkOrderItems(workOrderId: string, items: WorkOrderIt
       unit_price: item.unitPrice,
     })),
   });
+  if (error) throw error;
+}
+
+/** Las piezas que el cliente dejó con el vehículo, con su número de serie. */
+export async function addReceivedPart(
+  workOrderId: string,
+  name: string,
+  serialNumber: string
+): Promise<ReceivedPart> {
+  const { data, error } = await supabase
+    .from('work_order_received_parts')
+    .insert({ work_order_id: workOrderId, name: name.trim(), serial_number: serialNumber.trim() })
+    .select('id, name, serial_number')
+    .single();
+  if (error) throw error;
+  return { id: data.id, name: data.name, serialNumber: data.serial_number };
+}
+
+export async function deleteReceivedPart(id: string): Promise<void> {
+  const { error } = await supabase.from('work_order_received_parts').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateWorkOrderObservations(workOrderId: string, observations: string): Promise<void> {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({ observations: observations.trim() || null })
+    .eq('id', workOrderId);
   if (error) throw error;
 }
