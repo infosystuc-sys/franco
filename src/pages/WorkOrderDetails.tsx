@@ -15,17 +15,21 @@ import {
 } from '@/src/lib/invoices';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
+  addReceivedPart,
   assignEmployee,
+  deleteReceivedPart,
   deleteWorkOrderPhoto,
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   fetchWorkOrderStatuses,
   getErrorMessage,
   getWorkOrderPhotoUrl,
+  RECEPTION_KIND_LABELS,
   requestPriceAuthorization,
   saveWorkOrderItems,
   setEstimatedDeliveryDate,
   setWorkOrderStatus,
+  updateWorkOrderObservations,
   uploadWorkOrderPhoto,
   type StatusChange,
   type WorkOrderDetail,
@@ -52,6 +56,9 @@ export function WorkOrderDetails() {
   const [statuses, setStatuses] = useState<WorkOrderStatusDef[]>([]);
   const [requestingPriceAuth, setRequestingPriceAuth] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [observations, setObservations] = useState('');
+  const [partName, setPartName] = useState('');
+  const [partSerial, setPartSerial] = useState('');
 
   // Qué OT ya sincronizó `items` desde la base — no un booleano, porque el
   // mismo componente sigue vivo al navegar de una OT a otra (useParams solo
@@ -106,6 +113,14 @@ export function WorkOrderDetails() {
   React.useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  // Las observaciones son un campo de texto libre que se guarda al perder el
+  // foco (ver handleSaveObservations): hace falta resincronizar el estado
+  // local cada vez que llega una OT nueva o un valor fresco desde la base,
+  // igual que loadOrder hace con `order` mismo.
+  React.useEffect(() => {
+    setObservations(order?.observations ?? '');
+  }, [order?.id, order?.observations]);
 
   // El avance visual y el desplegable de cambio de estado los ve cualquiera
   // que entra a la ficha, no solo el admin (que además puede cambiarlo).
@@ -194,6 +209,45 @@ export function WorkOrderDetails() {
       setError(getErrorMessage(err));
     } finally {
       setRequestingPriceAuth(false);
+    }
+  }
+
+  /**
+   * Se guarda al salir del campo: es una nota larga, no ameritaba un botón
+   * de guardado propio para un único textarea. Si falla, no basta con
+   * mostrar el error: hay que devolver el campo al valor que quedó
+   * realmente guardado en la base, porque si no el usuario ve su texto en
+   * pantalla y cree que se guardó cuando en realidad se perdió.
+   */
+  async function handleSaveObservations() {
+    if (!order || observations === (order.observations ?? '')) return;
+    try {
+      await updateWorkOrderObservations(order.id, observations);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setObservations(order.observations ?? '');
+    }
+  }
+
+  async function handleAddPart() {
+    if (!order) return;
+    try {
+      await addReceivedPart(order.id, partName, partSerial);
+      setPartName('');
+      setPartSerial('');
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleDeletePart(id: string) {
+    try {
+      await deleteReceivedPart(id);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   }
 
@@ -495,6 +549,77 @@ export function WorkOrderDetails() {
           editable={isAdmin && !locked}
         />
       </Panel>
+
+      {/* Lo que se dejó asentado al recibir: piezas sueltas y cualquier
+          observación del cliente o de quien recibió. */}
+      <div className="mt-6">
+        <Panel className="space-y-4 p-5">
+          <SectionHeader title={`Recepción · ${RECEPTION_KIND_LABELS[order.receptionKind]}`} />
+
+          <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+            Observaciones
+            <textarea
+              value={observations}
+              onChange={(e) => setObservations(e.target.value)}
+              onBlur={handleSaveObservations}
+              disabled={!isAdmin}
+              rows={2}
+              className="mt-1 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
+            />
+          </label>
+
+          <div className="space-y-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-text-soft">
+              Piezas recibidas{order.receivedParts.length > 0 && ` (${order.receivedParts.length})`}
+            </span>
+            {order.receivedParts.length === 0 ? (
+              <p className="text-sm text-text-soft">No se registraron piezas al recibir.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {order.receivedParts.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2">
+                    <span>{p.name} — <span className="font-mono text-xs">{p.serialNumber}</span></span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePart(p.id)}
+                        aria-label={`Quitar ${p.name}`}
+                        className="text-text-soft transition-colors hover:text-danger"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isAdmin && (
+              <div className="flex gap-2">
+                <input
+                  value={partName}
+                  onChange={(e) => setPartName(e.target.value)}
+                  placeholder="Bomba inyectora"
+                  className="mt-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+                />
+                <input
+                  value={partSerial}
+                  onChange={(e) => setPartSerial(e.target.value)}
+                  placeholder="N° de serie"
+                  className="mt-0 w-40 rounded-md border border-line bg-panel px-3 py-2 font-mono text-sm focus:border-accent-deep focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={!partName.trim() || !partSerial.trim()}
+                  onClick={handleAddPart}
+                  className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
+                >
+                  Agregar
+                </button>
+              </div>
+            )}
+          </div>
+        </Panel>
+      </div>
 
       {order && (
         <div className="mt-6">
