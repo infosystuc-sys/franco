@@ -114,11 +114,16 @@ export function WorkOrderDetails() {
     loadOrder();
   }, [loadOrder]);
 
-  // Las observaciones son un campo de texto libre que se guarda al perder el
-  // foco (ver handleSaveObservations): hace falta resincronizar el estado
-  // local cada vez que llega una OT nueva o un valor fresco desde la base,
-  // igual que loadOrder hace con `order` mismo.
+  // Mientras el usuario está escribiendo, el campo es suyo: cualquier
+  // recarga de la orden —agregar una pieza, cambiar el estado, subir una
+  // foto, o el propio guardado de observaciones al perder el foco— trae el
+  // valor de la base y, si se resincroniza a ciegas, le borra lo que sigue
+  // tipeando después de haber vuelto a entrar al campo. Por eso la
+  // resincronización se salta mientras el textarea tiene el foco.
+  const editandoObservaciones = React.useRef(false);
+
   React.useEffect(() => {
+    if (editandoObservaciones.current) return;
     setObservations(order?.observations ?? '');
   }, [order?.id, order?.observations]);
 
@@ -242,7 +247,11 @@ export function WorkOrderDetails() {
     }
   }
 
-  async function handleDeletePart(id: string) {
+  async function handleDeletePart(id: string, nombre: string) {
+    // El número de serie es un dato de trazabilidad, no algo que se
+    // reconstruye de memoria si se borra sin querer: mismo resguardo que
+    // usa PhotoThumb.handleDelete para las fotos.
+    if (!window.confirm(`¿Quitar "${nombre}" de las piezas recibidas?`)) return;
     try {
       await deleteReceivedPart(id);
       await loadOrder();
@@ -561,7 +570,14 @@ export function WorkOrderDetails() {
             <textarea
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
-              onBlur={handleSaveObservations}
+              onFocus={() => { editandoObservaciones.current = true; }}
+              onBlur={() => {
+                // Soltar la marca antes de guardar: así, si el guardado
+                // dispara loadOrder(), la resincronización sí corre después
+                // y el campo termina mostrando lo que quedó en la base.
+                editandoObservaciones.current = false;
+                handleSaveObservations();
+              }}
               disabled={!isAdmin}
               rows={2}
               className="mt-1 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
@@ -582,7 +598,7 @@ export function WorkOrderDetails() {
                     {isAdmin && (
                       <button
                         type="button"
-                        onClick={() => handleDeletePart(p.id)}
+                        onClick={() => handleDeletePart(p.id, p.name)}
                         aria-label={`Quitar ${p.name}`}
                         className="text-text-soft transition-colors hover:text-danger"
                       >
