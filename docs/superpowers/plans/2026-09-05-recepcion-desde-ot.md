@@ -118,29 +118,39 @@ update public.work_order_statuses set is_initial = false where label = 'Autoriza
 
 -- 4) Los ingresos que hoy están abiertos pasan a ser OT ---------------------
 -- Los que ya derivaron en una OT no se convierten: su información ya vive ahí.
-with a_migrar as (
-  select i.*,
-    case when i.status::text = 'COTIZADO' then 'Cotizado' else 'Ingresado' end as estado_destino
-  from public.vehicle_intakes i
-  where not exists (
-    select 1 from public.work_orders w
-    where w.quotation_id = i.quotation_id and i.quotation_id is not null
-  )
-),
-creadas as (
-  insert into public.work_orders
-    (status_id, customer_id, vehicle_id, quotation_id, observations, reception_kind)
-  select s.id, m.customer_id, m.vehicle_id, m.quotation_id, m.observations, 'VEHICULO'
-  from a_migrar m
-  join public.work_order_statuses s on s.label = m.estado_destino
-  returning id, quotation_id, vehicle_id, created_at
-)
-insert into public.work_order_received_parts (work_order_id, name, serial_number, created_at)
-select c.id, p.name, p.serial_number, p.created_at
-from creadas c
-join a_migrar m on m.vehicle_id = c.vehicle_id
-  and (m.quotation_id is not distinct from c.quotation_id)
-join public.vehicle_intake_parts p on p.intake_id = m.id;
+--
+-- Va como bucle y no como un INSERT ... RETURNING encadenado a propósito: el
+-- RETURNING no devuelve de qué ingreso salió cada OT, y varios ingresos
+-- comparten vehículo y no tienen cotización (ING-3, ING-8 e ING-9 son del
+-- mismo John Deere). Reencontrar el vínculo por vehículo+cotización pegaría
+-- las piezas de un ingreso a todas las OT de ese vehículo. Acá cada ingreso
+-- conoce su OT porque se crean de a uno.
+do $$
+declare
+  r record;
+  v_wo uuid;
+  v_estado uuid;
+begin
+  for r in
+    select i.*, case when i.status::text = 'COTIZADO' then 'Cotizado' else 'Ingresado' end as estado_destino
+    from public.vehicle_intakes i
+    where i.quotation_id is null
+       or not exists (select 1 from public.work_orders w where w.quotation_id = i.quotation_id)
+    order by i.number
+  loop
+    select id into v_estado from public.work_order_statuses where label = r.estado_destino;
+
+    insert into public.work_orders
+      (status_id, customer_id, vehicle_id, quotation_id, observations, reception_kind)
+    values (v_estado, r.customer_id, r.vehicle_id, r.quotation_id, r.observations, 'VEHICULO')
+    returning id into v_wo;
+
+    insert into public.work_order_received_parts (work_order_id, name, serial_number, created_at)
+    select v_wo, p.name, p.serial_number, p.created_at
+    from public.vehicle_intake_parts p
+    where p.intake_id = r.id;
+  end loop;
+end $$;
 
 -- 5) Que la migración no le escriba a los clientes -------------------------
 -- work_orders_enqueue_created encola un WhatsApp con el link de seguimiento
@@ -1263,7 +1273,7 @@ Borrar la función `ganaAlOtro` si queda sin uso.
 
 - [ ] **Step 2: "Pendiente" deja de contar las rechazadas**
 
-En `src/lib/workOrders.ts:318`, cambiar:
+En `src/lib/workOrders.ts`, buscar la línea que arma `pendingOrders` (estaba en la 318 antes de la Task 2, que corre el archivo unas líneas) y cambiarla por:
 
 ```ts
   // Una orden cuyo vehículo ya se fue no está pendiente de nada, esté cerrada
