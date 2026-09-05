@@ -1,5 +1,4 @@
 import {
-  LogIn,
   FileText,
   Wrench,
   Receipt,
@@ -93,7 +92,6 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: LogIn, label: 'Ingreso de vehículos', path: '/ingresos', adminOnly: true },
           { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
           { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes' },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },

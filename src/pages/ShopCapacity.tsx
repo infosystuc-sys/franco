@@ -122,7 +122,7 @@ export function ShopCapacity() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {summary.map((size) => {
-          // Cupo 0 es "no configurado", igual que en VehicleIntakes: no hay
+          // Cupo 0 es "no configurado", igual que en el alta de OT: no hay
           // cupo real contra el cual comparar, así que "excedido" no aplica
           // y no se puede afirmar que alguien se pasó de un límite que nadie
           // cargó todavía.
