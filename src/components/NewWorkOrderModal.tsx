@@ -81,26 +81,48 @@ export function NewWorkOrderModal({
     }
     setSaving(true);
     setError(null);
+
+    // El alta de la OT y el guardado de piezas van en pasos separados a
+    // propósito: una vez creada la OT, un trigger de la base ya le mandó el
+    // aviso de "Ingresado" al cliente por WhatsApp y el número quedó
+    // asignado. Si de acá en más algo falla, NO puede parecer que no se
+    // guardó nada — si el usuario reintenta creyendo eso, se crea una
+    // segunda OT del mismo vehículo y el cliente recibe un segundo aviso por
+    // la misma recepción física.
+    let workOrder;
     try {
-      const workOrder = await createWorkOrder({
+      workOrder = await createWorkOrder({
         customerId,
         vehicleId: vehicleId || null,
         component,
         receptionKind,
         observations,
       });
-      // Las piezas van después: recién ahora existe la OT contra la cual
-      // colgarlas. Si alguna falla, la OT ya está creada y no se pierde la
-      // recepción — se avisa y se cargan desde el detalle.
-      for (const p of parts) {
-        await addReceivedPart(workOrder.id, p.name, p.serialNumber);
-      }
-      onCreated(workOrder);
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setSaving(false);
+      return;
     }
+
+    // A partir de acá la orden existe. Las piezas que no se pudieron guardar
+    // se avisan por separado (no bloquean el alta) y quedan para cargarlas
+    // desde el detalle — nunca se vuelve a intentar crear la OT.
+    const noGuardadas: string[] = [];
+    for (const p of parts) {
+      try {
+        await addReceivedPart(workOrder.id, p.name, p.serialNumber);
+      } catch {
+        noGuardadas.push(p.name);
+      }
+    }
+    if (noGuardadas.length > 0) {
+      window.alert(
+        `La orden ${workOrder.number} se creó, pero no se pudieron guardar estas piezas: ` +
+        `${noGuardadas.join(', ')}. Cargalas desde el detalle de la orden.`
+      );
+    }
+    setSaving(false);
+    onCreated(workOrder);
   }
 
   return (
