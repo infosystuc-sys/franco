@@ -122,8 +122,19 @@ export function WorkOrderDetails() {
   // resincronización se salta mientras el textarea tiene el foco.
   const editandoObservaciones = React.useRef(false);
 
+  // Sobre qué orden se sincronizó el campo por última vez. Cambiar de orden
+  // manda siempre, aunque el foco siga puesto: este componente no se remonta
+  // al navegar entre órdenes (useParams solo cambia el id — ver el mismo
+  // patrón en itemsLoadedForRef), así que sin esto el texto de una OT
+  // quedaría mostrado sobre otra, y al salir del campo se guardaría en la
+  // equivocada.
+  const ordenSincronizada = React.useRef<string | undefined>(undefined);
+
   React.useEffect(() => {
-    if (editandoObservaciones.current) return;
+    const cambioDeOrden = ordenSincronizada.current !== order?.id;
+    if (!cambioDeOrden && editandoObservaciones.current) return;
+    ordenSincronizada.current = order?.id;
+    editandoObservaciones.current = false;
     setObservations(order?.observations ?? '');
   }, [order?.id, order?.observations]);
 
