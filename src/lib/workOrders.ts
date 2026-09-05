@@ -68,6 +68,8 @@ export interface WorkOrderStatusRef {
   label: string;
   color: string;
   isTerminal: boolean;
+  /** Si el vehículo ya se fue del taller. Una orden así no está pendiente. */
+  freesYard: boolean;
 }
 
 const STATUS_SELECT =
@@ -89,7 +91,7 @@ function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
 }
 
 function mapWorkOrderStatusRef(row: any): WorkOrderStatusRef {
-  return { id: row.id, label: row.label, color: row.color, isTerminal: row.is_terminal };
+  return { id: row.id, label: row.label, color: row.color, isTerminal: row.is_terminal, freesYard: row.frees_yard };
 }
 
 export async function fetchWorkOrderStatuses(onlyActive = false): Promise<WorkOrderStatusDef[]> {
@@ -297,7 +299,7 @@ export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount
         .from('work_orders')
         .select(
           `id, number, component, public_token,
-           status:work_order_statuses(id, label, color, is_terminal),
+           status:work_order_statuses(id, label, color, is_terminal, frees_yard),
            customer:customers(name),
            vehicle:vehicles(brand, model, license_plate)`
         )
@@ -315,7 +317,10 @@ export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount
     status,
     count: countByStatusId.get(status.id) ?? 0,
   }));
-  const pendingOrders = rows.filter((r) => !r.status.isTerminal);
+  // Una orden cuyo vehículo ya se fue no está pendiente de nada, esté cerrada
+  // o rechazada. Sin la segunda condición, cada presupuesto rechazado quedaría
+  // figurando como trabajo por hacer para siempre.
+  const pendingOrders = rows.filter((r) => !r.status.isTerminal && !r.status.freesYard);
 
   return { kpis, pendingOrders };
 }
@@ -347,7 +352,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
     .select(
       `id, number, component, public_token, created_at,
        price_auth_status, price_auth_requested_total,
-       status:work_order_statuses(id, label, color, is_terminal),
+       status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
        employee:employees(name),
@@ -524,7 +529,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       `id, number, component, public_token, estimated_delivery_date,
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
        reception_kind, observations,
-       status:work_order_statuses(id, label, color, is_terminal),
+       status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
        vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
@@ -619,8 +624,8 @@ export async function fetchStatusHistory(workOrderId: string): Promise<StatusCha
     .from('work_order_status_history')
     .select(
       `id, changed_by_email, changed_at,
-       from_status:work_order_statuses!work_order_status_history_from_status_id_fkey(id, label, color, is_terminal),
-       to_status:work_order_statuses!work_order_status_history_to_status_id_fkey(id, label, color, is_terminal)`
+       from_status:work_order_statuses!work_order_status_history_from_status_id_fkey(id, label, color, is_terminal, frees_yard),
+       to_status:work_order_statuses!work_order_status_history_to_status_id_fkey(id, label, color, is_terminal, frees_yard)`
     )
     .eq('work_order_id', workOrderId)
     .order('changed_at');

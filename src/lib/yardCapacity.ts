@@ -88,44 +88,30 @@ function tamanoDe(vehicle: { size_class: string } | null, numero: string): SizeC
 }
 
 /**
- * Un vehículo ocupa lugar si cumple una de dos, que son excluyentes: tiene un
- * ingreso abierto que todavía no derivó en OT, o tiene una OT cuyo estado no
- * libera la playa.
+ * Ocupan lugar las OT cuyo estado no libera la playa y que recibieron un
+ * vehículo: una pieza sobre el mostrador no ocupa un lugar de estacionamiento,
+ * aunque se haya elegido de qué equipo salió.
  *
- * El vínculo entre las dos es la cotización. Se leen TODAS las OT para armar
- * ese vínculo —incluidas las que ya liberaron— porque un ingreso cuya OT está
- * retirada tampoco ocupa: el vehículo se fue.
+ * Ya no hay que mirar los ingresos ni resolver el vínculo por cotización: la
+ * recepción es la propia orden, así que un vehículo recibido es una OT y nada
+ * más.
  */
 export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
-  const [ordenes, ingresos] = await Promise.all([
-    supabase
-      .from('work_orders')
-      .select(
-        `id, number, created_at, estimated_delivery_date, quotation_id, vehicle_id,
-         status:work_order_statuses(label, color, frees_yard),
-         customer:customers(name),
-         vehicle:vehicles(brand, model, license_plate, size_class)`
-      )
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('vehicle_intakes')
-      .select(
-        `id, number, created_at, quotation_id, vehicle_id,
-         customer:customers(name),
-         vehicle:vehicles(brand, model, license_plate, size_class)`
-      )
-      .neq('status', 'CERRADO')
-      .order('created_at', { ascending: true }),
-  ]);
+  const { data, error } = await supabase
+    .from('work_orders')
+    .select(
+      `id, number, created_at, estimated_delivery_date, vehicle_id,
+       status:work_order_statuses(label, color, frees_yard),
+       customer:customers(name),
+       vehicle:vehicles(brand, model, license_plate, size_class)`
+    )
+    .eq('reception_kind', 'VEHICULO')
+    .not('vehicle_id', 'is', null)
+    .order('created_at', { ascending: true });
 
-  if (ordenes.error) throw ordenes.error;
-  if (ingresos.error) throw ingresos.error;
+  if (error) throw error;
 
-  const cotizacionesConOrden = new Set(
-    (ordenes.data ?? []).map((row: any) => row.quotation_id).filter(Boolean)
-  );
-
-  const deOrdenes: YardOccupant[] = (ordenes.data ?? [])
+  const ocupantes: YardOccupant[] = (data ?? [])
     .filter((row: any) => !row.status?.frees_yard)
     .map((row: any) => ({
       kind: 'OT' as const,
@@ -143,37 +129,16 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       otrosRegistros: 0,
     }));
 
-  const deIngresos: YardOccupant[] = (ingresos.data ?? [])
-    .filter((row: any) => !row.quotation_id || !cotizacionesConOrden.has(row.quotation_id))
-    .map((row: any) => ({
-      kind: 'INGRESO' as const,
-      id: row.id,
-      number: row.number,
-      vehicleId: row.vehicle_id,
-      customerName: row.customer?.name ?? '—',
-      vehicleLabel: labelDeVehiculo(row.vehicle),
-      sizeClass: tamanoDe(row.vehicle, row.number),
-      statusLabel: 'Ingreso sin OT',
-      statusColor: '#e07b1a',
-      estimatedDeliveryDate: null,
-      daysInShop: diasEnTaller(row.created_at),
-      createdAt: row.created_at,
-      otrosRegistros: 0,
-    }));
-
-  // Un vehículo ocupa UN lugar, por más registros abiertos que tenga. El mismo
-  // camión puede tener dos ingresos sin cotizar y una OT a la vez: son tres
-  // papeles, pero un solo lugar en la playa. Se queda el registro de la OT si
-  // existe —trae el estado real y la fecha estimada— y si no, el ingreso más
-  // reciente. El que pierde el desempate no se descarta en silencio: suma a
-  // otrosRegistros del que gana, para que la pantalla pueda avisar que hay
-  // más papeles del mismo vehículo aunque solo se vea una fila.
+  // Un vehículo ocupa UN lugar aunque tenga dos órdenes abiertas a la vez.
+  // Gana la más reciente, que es la que refleja en qué anda el taller ahora;
+  // la que pierde no se descarta en silencio, suma a otrosRegistros para que
+  // la pantalla pueda avisar que hay más órdenes del mismo vehículo.
   const porVehiculo = new Map<string, YardOccupant>();
-  for (const candidato of [...deIngresos, ...deOrdenes]) {
+  for (const candidato of ocupantes) {
     const actual = porVehiculo.get(candidato.vehicleId);
     if (!actual) {
       porVehiculo.set(candidato.vehicleId, candidato);
-    } else if (ganaAlOtro(candidato, actual)) {
+    } else if (candidato.createdAt > actual.createdAt) {
       porVehiculo.set(candidato.vehicleId, { ...candidato, otrosRegistros: actual.otrosRegistros + 1 });
     } else {
       actual.otrosRegistros += 1;
@@ -182,11 +147,6 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
   return [...porVehiculo.values()];
 }
 
-/** Entre dos registros del mismo vehículo, cuál representa mejor su lugar. */
-function ganaAlOtro(candidato: YardOccupant, actual: YardOccupant): boolean {
-  if (candidato.kind !== actual.kind) return candidato.kind === 'OT';
-  return candidato.createdAt > actual.createdAt;
-}
 
 export interface YardSizeSummary {
   sizeClass: SizeClass;
