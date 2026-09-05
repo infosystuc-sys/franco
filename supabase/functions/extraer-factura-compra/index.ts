@@ -119,6 +119,17 @@ Reglas:
 - tipo_comprobante tiene que ser exactamente uno de: FACTURA, NOTA_CREDITO, NOTA_DEBITO.
 - letra tiene que ser exactamente una de: A, B, C, M.
 - alicuota_iva por renglón: el número de la alícuota (ej. "21", "10.5", "0"), sin el símbolo %.
+- IGNORÁ por completo el cuadro de DESCUENTO POR PRONTO PAGO (o "pago
+  contado", "neto a pagar si abona antes del..."). Es una oferta condicional
+  a que el cliente pague antes de una fecha: NO está aplicada al comprobante
+  y no forma parte de sus totales. El "total" que tenés que devolver es
+  siempre el TOTAL del comprobante, nunca el neto a pagar con ese descuento.
+- La bonificación por renglón sí va: es la columna "%BON", "BONIF" o "DTO"
+  de la grilla de artículos, que ya está aplicada en el importe del renglón.
+- Las percepciones e impuestos del pie (IIBB, percepción de IVA, impuestos
+  internos) van SIEMPRE en "percepciones", con el nombre tal como está
+  impreso. Son parte del total: omitir una hace que el comprobante cierre
+  por debajo de lo que dice el papel.
 - confianza (0 a 1): qué tan seguro estás de haber leído bien ese campo/renglón. 1 = perfectamente legible, 0.5 = dudoso, 0 = adivinado.
 `.trim();
 

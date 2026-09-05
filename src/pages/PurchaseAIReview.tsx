@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
 import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConcepts';
 import { fetchArticles, fetchSupplierCodeMap, linkOrCreateSupplierArticle, type Article } from '@/src/lib/articles';
-import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
+import { createTaxRate, fetchTaxRates, EMPTY_TAX_RATE_FORM, type TaxRate } from '@/src/lib/taxRates';
 import {
   computePurchaseTotals,
   describePurchaseError,
@@ -196,6 +196,7 @@ export function PurchaseAIReview() {
   // usan el banner de error del guardado.
   const [catalogBusy, setCatalogBusy] = React.useState(false);
   const [catalogNote, setCatalogNote] = React.useState<string | null>(null);
+  const [rateBusy, setRateBusy] = React.useState(false);
   // Caso raro pero venenoso: la RPC guardó el comprobante y falló el update
   // del borrador. El comprobante existe; hay que decirlo así, no como un
   // error de guardado, o se carga dos veces.
@@ -624,6 +625,43 @@ export function PurchaseAIReview() {
     }
   }
 
+  /**
+   * Da de alta la percepción que la IA leyó y la suma al pie.
+   *
+   * Sin esto el importe se descarta en silencio y el comprobante cierra por
+   * debajo del total impreso — que es exactamente lo que pasaba con las
+   * percepciones de IIBB, porque el sistema no traía ninguna alícuota de ese
+   * tipo cargada de fábrica.
+   *
+   * El porcentaje sale de dividir el importe impreso por el neto gravado: es
+   * el mismo número que usó el proveedor, y así la alícuota queda bien para
+   * las próximas facturas en vez de guardarse en cero.
+   */
+  async function cargarPercepcionLeida(p: { nombre: string; importe: string }) {
+    const importe = parseArgNumber(p.importe);
+    setRateBusy(true);
+    setError(null);
+    try {
+      const base = totals.netTaxed;
+      const porcentaje = base > 0 ? Math.round((importe / base) * 10000) / 100 : 0;
+      const creada = await createTaxRate({
+        ...EMPTY_TAX_RATE_FORM,
+        kind: 'PERCEPCION',
+        name: p.nombre.trim(),
+        rate: String(porcentaje),
+        base: 'NETO',
+      });
+      setRates(await fetchTaxRates(true));
+      // Se agrega con el importe que dice el papel, no con el recalculado: si
+      // el proveedor redondeó distinto, manda el papel.
+      setFootTaxes((current) => [...current, { taxRateId: creada.id, amount: importe }]);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setRateBusy(false);
+    }
+  }
+
   function addFootTax(taxRateId: string) {
     if (!taxRateId || footTaxes.some((tax) => tax.taxRateId === taxRateId)) return;
     const rate = footRates.find((r) => r.id === taxRateId);
@@ -1038,7 +1076,15 @@ export function PurchaseAIReview() {
               <ul className="mt-1 space-y-0.5 pl-5 text-text-soft" style={{ listStyleType: 'disc' }}>
                 {unmatchedPercepciones.map((p, i) => (
                   <li key={i}>
-                    La IA leyó una percepción que no coincide con ninguna alícuota cargada: «{p.nombre}» $ {formatMoney(parseArgNumber(p.importe))}. Agregala a mano o cargala en Alícuotas.
+                    «{p.nombre}» $ {formatMoney(parseArgNumber(p.importe))}.{' '}
+                    <button
+                      type="button"
+                      disabled={rateBusy}
+                      onClick={() => cargarPercepcionLeida(p)}
+                      className="font-semibold text-accent-deep hover:underline disabled:opacity-50"
+                    >
+                      Cargar esta alícuota y sumarla
+                    </button>
                   </li>
                 ))}
               </ul>
