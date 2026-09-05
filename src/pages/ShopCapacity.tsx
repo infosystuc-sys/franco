@@ -21,7 +21,7 @@ import {
 /**
  * Cuánto lugar queda en la playa, hoy y en los próximos días.
  *
- * Todo lo que está en el taller ocupa playa: cada ingreso sin OT y cada OT
+ * Todo lo que está en el taller ocupa playa: cada orden sin fecha estimada y cada OT
  * cuyo estado no la libera. No se reparte por sector ni se deduce de quién
  * atiende el vehículo — dónde está parado un camión no depende de eso.
  *
@@ -105,7 +105,7 @@ export function ShopCapacity() {
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="Disponibilidad del taller"
-        subtitle="Cuánto lugar queda en la playa, según los ingresos y las OT en curso."
+        subtitle="Cuánto lugar queda en la playa, según las órdenes de trabajo en curso."
       />
 
       {error && (
@@ -238,7 +238,7 @@ export function ShopCapacity() {
                       ese parámetro lleva el número aunque se llame id.
                     */}
                     <Link
-                      to={row.kind === 'OT' ? `/orden/${row.number}` : `/ingresos/${row.id}`}
+                      to={`/orden/${row.number}`}
                       className="font-mono font-semibold text-accent-deep hover:underline"
                     >
                       {row.number}
@@ -246,7 +246,7 @@ export function ShopCapacity() {
                     {row.otrosRegistros > 0 && (
                       <span
                         className="mt-0.5 block text-[10px] font-normal text-text-soft"
-                        title="Este vehículo tiene más ingresos u OT abiertos; se deduplica a un solo lugar en la playa"
+                        title="Este vehículo tiene más órdenes abiertas; se deduplica a un solo lugar en la playa"
                       >
                         +{row.otrosRegistros} registro{row.otrosRegistros === 1 ? '' : 's'} del mismo vehículo
                       </span>

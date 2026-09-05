@@ -43,7 +43,7 @@ export async function updateYardCapacity(sizeClass: SizeClass, capacity: number)
 }
 
 export interface YardOccupant {
-  kind: 'INGRESO' | 'OT';
+  kind: 'OT';
   id: string;
   number: string;
   /** Con qué vehículo físico se corresponde: es la clave para no contarlo dos veces. */

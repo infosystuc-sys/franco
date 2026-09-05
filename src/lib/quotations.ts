@@ -201,10 +201,11 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
 
 export interface NewQuotationInput {
   customerId: string;
-  vehicleId: string;
+  /** Opcional, igual que en la orden: una pieza suelta puede no tener vehículo. */
+  vehicleId: string | null;
   component: string;
   validUntil: string;
-  /** Se completa al crear desde un ingreso de vehículo: las observaciones pasan directo a las notas. */
+  /** Se completa al cotizar desde la orden: las observaciones de la recepción pasan directo a las notas. */
   notes?: string;
 }
 
@@ -290,31 +291,18 @@ export async function applyQuotationToWorkOrder(
 
 /**
  * Rechazar mueve la OT enganchada a "Rechazada", que libera el lugar en la
- * playa. La cotización ya quedó rechazada por updateQuotationStatus; esto es
- * el efecto sobre la orden.
+ * playa. La regla de qué órdenes se pueden rechazar vive en la base, no acá:
+ * una que ya está en reparación no se cae porque alguien rechace un
+ * presupuesto viejo — tiene renglones cargados y stock descontado.
+ *
+ * Es la misma función que usa el link del cliente, así que las dos vías no
+ * se pueden separar.
  */
 export async function rejectQuotationWorkOrder(quotationId: string): Promise<void> {
-  const { data: quotation, error } = await supabase
-    .from('quotations')
-    .select('work_order_id')
-    .eq('id', quotationId)
-    .single();
+  const { error } = await supabase.rpc('rechazar_cotizacion_en_ot', {
+    p_quotation_id: quotationId,
+  });
   if (error) throw error;
-  if (!quotation?.work_order_id) return;
-
-  const { data: estado, error: errorEstado } = await supabase
-    .from('work_order_statuses')
-    .select('id')
-    .eq('label', 'Rechazada')
-    .maybeSingle();
-  if (errorEstado) throw errorEstado;
-  if (!estado) throw new Error('Falta el estado "Rechazada" en el ABM de estados de OT.');
-
-  const { error: errorUpdate } = await supabase
-    .from('work_orders')
-    .update({ status_id: estado.id })
-    .eq('id', quotation.work_order_id);
-  if (errorUpdate) throw errorUpdate;
 }
 
 /**
@@ -356,7 +344,7 @@ export function describeQuotationError(message: string): string {
     message.includes('foreign key') ||
     message.includes('viola la llave')
   ) {
-    return 'No se puede eliminar: la cotización ya generó una orden de trabajo. ' +
+    return 'No se puede eliminar: la cotización está enganchada a una orden de trabajo. ' +
       'Es el registro de lo que el cliente aceptó y el origen de esa orden.';
   }
   return message;

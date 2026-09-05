@@ -299,13 +299,13 @@ export function WorkOrderDetails() {
    * aceptación y el rechazo.
    */
   async function handleCotizar() {
-    if (!order || !order.customer || !order.vehicle) return;
+    if (!order || !order.customer) return;
     setCotizando(true);
     setError(null);
     try {
       const creada = await createQuotation({
         customerId: order.customer.id,
-        vehicleId: order.vehicle.id,
+        vehicleId: order.vehicle?.id ?? null,
         component: order.component ?? '',
         validUntil: defaultValidUntil(),
         // Lo observado al recibir arranca como nota del presupuesto: es el
@@ -400,7 +400,7 @@ export function WorkOrderDetails() {
               to={`/cotizacion/${order.quotationNumber}`}
               className="inline-flex items-center gap-1.5 text-accent-deep hover:underline"
             >
-              <FileText size={14} /> Nace de la cotización {order.quotationNumber}
+              <FileText size={14} /> Presupuestada en {order.quotationNumber}
             </Link>
           ) : (
             'Orden cargada directamente, sin cotización previa.'
@@ -429,8 +429,7 @@ export function WorkOrderDetails() {
               <Button
                 type="button"
                 variant="secondary"
-                disabled={cotizando || !order.vehicle}
-                title={!order.vehicle ? 'No se puede cotizar: esta orden no tiene un vehículo asociado (se recibió como pieza suelta).' : undefined}
+                disabled={cotizando}
                 onClick={handleCotizar}
               >
                 <Receipt size={16} /> {cotizando ? 'Creando…' : 'Cotizar'}

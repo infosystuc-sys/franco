@@ -94,7 +94,7 @@ export function Quotations() {
     <div className="max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Cotizaciones"
-        subtitle="El presupuesto que el cliente aprueba antes de abrir la orden."
+        subtitle="El presupuesto que el cliente aprueba para que el trabajo arranque."
         actions={
           isAdmin && (
             <Button onClick={() => setShowNew(true)}>
@@ -225,7 +225,7 @@ export function Quotations() {
                             disabled={!!quotation.workOrderNumber}
                             title={
                               quotation.workOrderNumber
-                                ? `No se puede eliminar: generó la orden ${quotation.workOrderNumber}`
+                                ? `No se puede eliminar: está enganchada a la orden ${quotation.workOrderNumber}`
                                 : 'Eliminar'
                             }
                             className={cn(
