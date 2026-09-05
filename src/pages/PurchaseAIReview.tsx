@@ -15,7 +15,7 @@ import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
 import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConcepts';
-import { fetchArticles, type Article } from '@/src/lib/articles';
+import { fetchArticles, fetchSupplierCodeMap, linkOrCreateSupplierArticle, type Article } from '@/src/lib/articles';
 import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
 import {
   computePurchaseTotals,
@@ -191,6 +191,11 @@ export function PurchaseAIReview() {
   const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
   const [showNewSupplier, setShowNewSupplier] = React.useState(false);
   const [retrying, setRetrying] = React.useState(false);
+  // Altas y vinculaciones contra el catálogo: son un efecto lateral de la
+  // revisión, no parte del comprobante, así que tienen su propio aviso y no
+  // usan el banner de error del guardado.
+  const [catalogBusy, setCatalogBusy] = React.useState(false);
+  const [catalogNote, setCatalogNote] = React.useState<string | null>(null);
   // Caso raro pero venenoso: la RPC guardó el comprobante y falló el update
   // del borrador. El comprobante existe; hay que decirlo así, no como un
   // error de guardado, o se carga dos veces.
@@ -242,9 +247,13 @@ export function PurchaseAIReview() {
         setSuppliers(s);
         setRates(r);
         let catalog: Article[] = [];
+        // Los códigos vigentes de este proveedor, para reconocer renglones que
+        // la IA no pudo matchear pero cuyo artículo se dio de alta después.
+        let codigosDelProveedor = new Map<string, string>();
         if (d.kind === 'ARTICULOS') {
           catalog = await fetchArticles(false);
           setArticles(catalog);
+          if (d.supplierId) codigosDelProveedor = await fetchSupplierCodeMap(d.supplierId);
         } else {
           setConcepts(await fetchExpenseConcepts(true));
         }
@@ -328,7 +337,12 @@ export function PurchaseAIReview() {
           // artículo: es su stock y su precio de compra lo que se va a tocar.
           // El código y la descripción del papel se guardan aparte y se
           // muestran debajo, para poder cotejar que el match sea el correcto.
-          const article = row.article_id ? articleById.get(String(row.article_id)) : undefined;
+          // El matcheo guardado manda; si no hay, se reintenta contra el
+          // catálogo de hoy, que puede haber crecido desde que se leyó.
+          const matchId = row.article_id
+            ? String(row.article_id)
+            : codigosDelProveedor.get(printedCode.trim().toUpperCase());
+          const article = matchId ? articleById.get(matchId) : undefined;
           return {
             articleId: article?.id ?? null,
             conceptId: null,
@@ -507,7 +521,12 @@ export function PurchaseAIReview() {
       // bonificación, alícuota): solo falta el artículo del catálogo. El
       // código y la descripción pasan a ser los del catálogo; lo impreso
       // queda a la vista debajo del renglón.
-      patchLine(pickerTargetIndex, { articleId: article.id, code: article.code, description: article.description });
+      const objetivo = pickerTargetIndex;
+      patchLine(objetivo, { articleId: article.id, code: article.code, description: article.description });
+      // Y se guarda con qué código lo llama el proveedor, que es lo que hace
+      // que la próxima factura reconozca ese renglón sola en vez de volver a
+      // pedir que lo elijan a mano.
+      void recordarCodigo(objetivo, article.id);
     } else {
       setLines((current) => [
         ...current,
@@ -525,6 +544,86 @@ export function PurchaseAIReview() {
     setPickerTargetIndex(null);
   }
 
+  /**
+   * Deja registrado con qué código llama el proveedor a este artículo. Es
+   * informativo para el renglón que ya quedó resuelto en pantalla, así que si
+   * falla no se corta la carga: se avisa y el usuario sigue. Lo único que se
+   * pierde es que la próxima factura vuelva a no reconocerlo.
+   */
+  async function recordarCodigo(index: number, articleId: string) {
+    const line = lines[index];
+    const codigo = (line?.printedCode ?? '').trim();
+    if (!supplierId || !codigo) return;
+    try {
+      await linkOrCreateSupplierArticle({
+        supplierId,
+        supplierCode: codigo,
+        description: line.printedDescription || line.description,
+        purchasePrice: line.unitPrice,
+        articleId,
+      });
+      setCatalogNote(`Código ${codigo} guardado: la próxima factura de este proveedor va a reconocer ese renglón sola.`);
+    } catch (err) {
+      setCatalogNote(`El renglón quedó vinculado, pero no se pudo guardar el código ${codigo}: ${getErrorMessage(err)}`);
+    }
+  }
+
+  /** Da de alta el artículo del renglón y lo engancha, con el código del proveedor. */
+  async function altaDesdeRenglon(index: number) {
+    const line = lines[index];
+    const codigo = (line?.printedCode ?? '').trim();
+    if (!supplierId || !codigo) return;
+    setCatalogBusy(true);
+    setCatalogNote(null);
+    try {
+      const creado = await linkOrCreateSupplierArticle({
+        supplierId,
+        supplierCode: codigo,
+        description: line.printedDescription || line.description,
+        purchasePrice: line.unitPrice,
+      });
+      patchLine(index, { articleId: creado.articleId, code: creado.code, description: creado.description });
+      setArticles(await fetchArticles(false));
+      setCatalogNote(`${creado.code} dado de alta en el catálogo.`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCatalogBusy(false);
+    }
+  }
+
+  /** Lo mismo para todos los renglones sin artículo, que es el caso de una factura entera nueva. */
+  async function altaDeTodosLosFaltantes() {
+    if (!supplierId) return;
+    setCatalogBusy(true);
+    setCatalogNote(null);
+    let altas = 0;
+    try {
+      // Secuencial a propósito: el código interno sale de una secuencia y los
+      // errores tienen que poder atribuirse a un renglón concreto.
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        const codigo = (line.printedCode ?? '').trim();
+        if (line.articleId || !codigo) continue;
+        const creado = await linkOrCreateSupplierArticle({
+          supplierId,
+          supplierCode: codigo,
+          description: line.printedDescription || line.description,
+          purchasePrice: line.unitPrice,
+        });
+        patchLine(i, { articleId: creado.articleId, code: creado.code, description: creado.description });
+        altas += 1;
+      }
+      setArticles(await fetchArticles(false));
+      setCatalogNote(`${altas} artículo(s) dados de alta en el catálogo.`);
+    } catch (err) {
+      setArticles(await fetchArticles(false));
+      setError(`Se dieron de alta ${altas} artículo(s) y después falló: ${getErrorMessage(err)}`);
+    } finally {
+      setCatalogBusy(false);
+    }
+  }
+
   function addFootTax(taxRateId: string) {
     if (!taxRateId || footTaxes.some((tax) => tax.taxRateId === taxRateId)) return;
     const rate = footRates.find((r) => r.id === taxRateId);
@@ -535,6 +634,11 @@ export function PurchaseAIReview() {
   const missingVat = lines.some((line) => !line.vatRateId);
   const missingDescription = lines.some((line) => line.description.trim() === '');
   const unmatchedArticleLines = isArticles ? lines.filter((line) => !line.articleId).length : 0;
+  // Solo los que tienen código impreso se pueden dar de alta solos: sin código
+  // no hay con qué reconocerlos la próxima vez, y la RPC los rechaza.
+  const unmatchedWithCode = isArticles
+    ? lines.filter((line) => !line.articleId && (line.printedCode ?? '').trim() !== '').length
+    : 0;
 
   // Alerta de precio, igual que en la carga manual. Acá importa más todavía:
   // el precio unitario lo tipeó un modelo leyendo un papel, no una persona.
@@ -785,9 +889,32 @@ export function PurchaseAIReview() {
           )}
         />
         {unmatchedArticleLines > 0 && (
-          <p className="mb-3 flex items-center gap-1.5 text-xs text-danger">
-            <AlertTriangle size={14} /> {unmatchedArticleLines} renglón(es) sin artículo asignado — elegilo antes de confirmar.
-          </p>
+          <div className="mb-3 space-y-2 rounded-md border border-danger/40 bg-danger-soft px-3 py-2">
+            <p className="flex items-center gap-1.5 text-xs text-danger">
+              <AlertTriangle size={14} />
+              {unmatchedArticleLines} renglón(es) no están en el catálogo de este proveedor.
+            </p>
+            <p className="text-[11px] text-text-soft">
+              Vinculalos a un artículo que ya exista, o dalos de alta. En los dos casos queda
+              guardado el código con que los llama el proveedor, así la próxima factura los
+              reconoce sola.
+            </p>
+            {unmatchedWithCode > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-3"
+                disabled={catalogBusy || !supplierId}
+                onClick={altaDeTodosLosFaltantes}
+              >
+                <Plus size={16} />
+                {catalogBusy ? 'Dando de alta…' : `Dar de alta los ${unmatchedWithCode} que faltan`}
+              </Button>
+            )}
+          </div>
+        )}
+        {catalogNote && (
+          <p className="mb-3 text-xs text-state-done">{catalogNote}</p>
         )}
         <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
           <table className="table-stack w-full text-left text-[13px]">
@@ -820,15 +947,25 @@ export function PurchaseAIReview() {
                     {isArticles && !line.articleId ? (
                       <tr className="h-9 border-b border-line bg-danger-soft">
                         <td colSpan={7} className="px-2 py-1">
-                          <button
-                            type="button"
-                            onClick={() => { setPickerTargetIndex(idx); setShowPicker(true); }}
-                            className="flex w-full items-center text-left text-danger hover:underline"
-                          >
-                            <span>
-                              {printed || line.description || 'Renglón sin artículo del catálogo asignado'} — elegir artículo
-                            </span>
-                          </button>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <button
+                              type="button"
+                              onClick={() => { setPickerTargetIndex(idx); setShowPicker(true); }}
+                              className="text-left text-danger hover:underline"
+                            >
+                              {printed || line.description || 'Renglón sin artículo del catálogo asignado'} — vincular a uno existente
+                            </button>
+                            {(line.printedCode ?? '').trim() !== '' && (
+                              <button
+                                type="button"
+                                disabled={catalogBusy || !supplierId}
+                                onClick={() => altaDesdeRenglon(idx)}
+                                className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
+                              >
+                                Dar de alta
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-1 py-1 text-center">
                           {/* Fuera del botón de "elegir artículo": un <button>

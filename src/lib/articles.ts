@@ -117,3 +117,68 @@ export async function deleteArticle(id: string): Promise<void> {
 export function computeSalePrice(purchasePrice: number, markupPercent: number): number {
   return Math.ceil((purchasePrice * (1 + markupPercent / 100)) / 10) * 10;
 }
+
+export interface LinkedSupplierArticle {
+  articleId: string;
+  code: string;
+  description: string;
+  /** true si el artículo se dio de alta ahora; false si se vinculó a uno que ya existía. */
+  created: boolean;
+}
+
+/**
+ * Deja un renglón de factura enganchado al catálogo, guardando el código con
+ * que ese proveedor lo llama.
+ *
+ * Con `articleId` vincula un artículo que ya existe; sin él lo da de alta con
+ * el mismo generador de código que la importación de listas de precios. En
+ * los dos casos lo que importa es que el código del proveedor quede
+ * registrado: es lo que hace que la próxima factura reconozca ese renglón
+ * sola, en vez de volver a pedir que lo elijan a mano.
+ *
+ * El precio de venta lo calcula la base al guardar el precio de compra.
+ */
+export async function linkOrCreateSupplierArticle(params: {
+  supplierId: string;
+  supplierCode: string;
+  description: string;
+  purchasePrice: number;
+  articleId?: string | null;
+}): Promise<LinkedSupplierArticle> {
+  const { data, error } = await supabase.rpc('link_or_create_supplier_article', {
+    p_supplier_id: params.supplierId,
+    p_supplier_code: params.supplierCode,
+    p_description: params.description,
+    p_purchase_price: params.purchasePrice,
+    p_article_id: params.articleId ?? null,
+  });
+  if (error) throw error;
+  const row: any = Array.isArray(data) ? data[0] : data;
+  return {
+    articleId: row.result_article_id,
+    code: row.result_code,
+    description: row.result_description,
+    created: row.result_created,
+  };
+}
+
+/**
+ * Con qué código llama un proveedor a cada uno de sus artículos.
+ *
+ * Sirve para reconocer un renglón por el código impreso en el papel cuando la
+ * lectura con IA ya quedó guardada: el borrador conserva el matcheo del
+ * momento en que se leyó, así que un artículo dado de alta después seguiría
+ * figurando como desconocido hasta que alguien lo vuelva a tocar.
+ *
+ * La clave va en mayúsculas, igual que el índice único de la base.
+ */
+export async function fetchSupplierCodeMap(supplierId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from('article_suppliers')
+    .select('article_id, supplier_code')
+    .eq('supplier_id', supplierId);
+  if (error) throw error;
+  return new Map(
+    (data ?? []).map((row: any) => [String(row.supplier_code).trim().toUpperCase(), row.article_id as string])
+  );
+}
