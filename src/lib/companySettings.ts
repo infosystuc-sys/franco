@@ -24,8 +24,6 @@ export interface CompanySettings {
   addressZip: string | null;
   phone: string | null;
   email: string | null;
-  /** Días después de la entrega estimada en que se asume que el vehículo se retira. */
-  yardPickupGraceDays: number;
 }
 
 export interface CompanySettingsInput {
@@ -42,13 +40,11 @@ export interface CompanySettingsInput {
   addressZip: string;
   phone: string;
   email: string;
-  yardPickupGraceDays: string;
 }
 
 const SELECT =
   'legal_name, trade_name, tax_id, tax_condition, sales_point, gross_income, ' +
-  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email, ' +
-  'yard_pickup_grace_days';
+  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email';
 
 function mapCompanySettings(row: any): CompanySettings {
   return {
@@ -65,7 +61,6 @@ function mapCompanySettings(row: any): CompanySettings {
     addressZip: row.address_zip,
     phone: row.phone,
     email: row.email,
-    yardPickupGraceDays: Number(row.yard_pickup_grace_days ?? 2),
   };
 }
 
@@ -99,14 +94,6 @@ export async function updateCompanySettings(
       address_zip: nullIfBlank(input.addressZip),
       phone: nullIfBlank(input.phone),
       email: nullIfBlank(input.email),
-      // 0 es un margen legítimo (se retira el mismo día), y el input lo
-      // permite con min={0}. "|| 2" lo pisaba porque Number("0") || 2 da 2:
-      // el fallback a 2 tiene que aplicar solo cuando no hay un número válido,
-      // no cuando ese número es cero.
-      yard_pickup_grace_days: (() => {
-        const dias = Number(input.yardPickupGraceDays);
-        return input.yardPickupGraceDays.trim() === '' || Number.isNaN(dias) ? 2 : Math.max(0, dias);
-      })(),
     })
     .eq('id', true)
     .select(SELECT)
@@ -131,7 +118,6 @@ export function companySettingsToForm(settings: CompanySettings): CompanySetting
     addressZip: settings.addressZip ?? '',
     phone: settings.phone ?? '',
     email: settings.email ?? '',
-    yardPickupGraceDays: String(settings.yardPickupGraceDays),
   };
 }
 

@@ -15,8 +15,7 @@ import {
   updateCompanySettings,
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
-import { fetchYardCapacities, updateYardCapacity, type YardCapacityRow } from '@/src/lib/yardCapacity';
-import { SIZE_CLASS_LABELS } from '@/src/lib/vehicles';
+import { fetchYardCells, updateYardCells } from '@/src/lib/yardCapacity';
 
 const EMPTY_FORM: CompanySettingsInput = {
   legalName: '',
@@ -32,7 +31,6 @@ const EMPTY_FORM: CompanySettingsInput = {
   addressZip: '',
   phone: '',
   email: '',
-  yardPickupGraceDays: '2',
 };
 
 /**
@@ -54,13 +52,13 @@ export function Settings() {
   const [gmailSaved, setGmailSaved] = React.useState(false);
   const [gmailError, setGmailError] = React.useState<string | null>(null);
 
-  const [cupos, setCupos] = React.useState<YardCapacityRow[]>([]);
+  const [celdas, setCeldas] = React.useState(0);
   const [cupoError, setCupoError] = React.useState<string | null>(null);
-  const guardadoPendiente = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // El último valor tipeado por tamaño que todavía no se guardó. No alcanza
-  // con el timer: si hay que hacer flush (al desmontar o al perder el foco)
-  // hace falta saber CUÁL era el valor pendiente, no solo que había uno.
-  const valorPendiente = React.useRef<Record<string, number>>({});
+  const guardadoPendiente = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // El último valor tipeado que todavía no se guardó. No alcanza con el timer:
+  // si hay que volcarlo (al desmontar o al perder el foco) hace falta saber
+  // CUÁL era el valor pendiente, no solo que había uno.
+  const valorPendiente = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -80,74 +78,70 @@ export function Settings() {
   }, []);
 
   React.useEffect(() => {
-    fetchYardCapacities()
-      .then(setCupos)
-      .catch((err) => setCupoError(`No se pudo leer el cupo de la playa: ${getErrorMessage(err)}`));
+    fetchYardCells()
+      .then(setCeldas)
+      .catch((err) => setCupoError(`No se pudo leer la cantidad de celdas: ${getErrorMessage(err)}`));
   }, []);
 
-  // Los timers de guardado quedan referenciados fuera del render (un ref, no
-  // estado) porque no tienen que disparar un re-render propio: solo importan
-  // cuando se cancelan, al tipear de nuevo o al desmontar la pantalla.
+  // El timer vive fuera del render (un ref, no estado) porque no tiene que
+  // disparar un re-render propio: solo importa para cancelarlo, al tipear de
+  // nuevo o al desmontar la pantalla.
   //
   // Al desmontar, el guardado pendiente se DISPARA en vez de cancelarse: esta
-  // pantalla define el cupo del que depende toda la disponibilidad de la
-  // playa, y cancelar en silencio dejaba a la base con el valor viejo aunque
-  // el usuario ya hubiera visto el nuevo en el input. No hay estado de error
-  // que mostrar en un componente que ya se está yendo, así que este guardado
-  // final no pasa por setCupoError: si falla, se pierde igual que antes, pero
-  // el caso común (clic a otro lado antes de los 600ms) ya no falla.
+  // pantalla define el número del que depende toda la disponibilidad de la
+  // playa, y cancelar en silencio dejaba a la base con el valor viejo aunque el
+  // usuario ya hubiera visto el nuevo en el input. No hay estado de error que
+  // mostrar en un componente que ya se está yendo, así que este guardado final
+  // no pasa por setCupoError: si falla se pierde, pero el caso comun (clic a
+  // otro lado antes de los 600ms) ya no falla.
   React.useEffect(() => {
-    const timers = guardadoPendiente.current;
-    const pendientes = valorPendiente.current;
     return () => {
-      for (const sizeClass of Object.keys(timers)) {
-        clearTimeout(timers[sizeClass]);
-        if (sizeClass in pendientes) {
-          updateYardCapacity(sizeClass as YardCapacityRow['sizeClass'], pendientes[sizeClass]).catch(() => {});
-        }
+      if (guardadoPendiente.current !== undefined) clearTimeout(guardadoPendiente.current);
+      if (valorPendiente.current !== undefined) {
+        updateYardCells(valorPendiente.current).catch(() => {});
       }
     };
   }, []);
 
-  async function guardarCupo(sizeClass: YardCapacityRow['sizeClass'], capacity: number) {
-    delete valorPendiente.current[sizeClass];
+  async function guardarCeldas(cantidad: number) {
+    valorPendiente.current = undefined;
     try {
-      await updateYardCapacity(sizeClass, capacity);
+      await updateYardCells(cantidad);
       setCupoError(null);
     } catch (err) {
-      setCupoError(`No se pudo guardar el cupo de ${SIZE_CLASS_LABELS[sizeClass].toLowerCase()}: ${getErrorMessage(err)}`);
+      setCupoError(`No se pudo guardar la cantidad de celdas: ${getErrorMessage(err)}`);
     }
   }
 
   /**
    * El input no se bloquea mientras guarda: deshabilitarlo hacía que se
-   * perdiera la segunda tecla de un número de dos cifras, y el cupo quedaba
-   * en "2" cuando el usuario había escrito "25". Se escribe con un respiro
-   * después de la última tecla, y un campo vacío no persiste nada — vaciarlo
-   * para reescribirlo no tiene por qué dejar el cupo en cero.
+   * perdiera la segunda tecla de un número de dos cifras, y quedaba "2" cuando
+   * el usuario había escrito "25". Se escribe con un respiro después de la
+   * última tecla, y un campo vacío no persiste nada — vaciarlo para
+   * reescribirlo no tiene por qué dejar la playa en cero.
    */
-  function handleCupoChange(sizeClass: YardCapacityRow['sizeClass'], value: string) {
-    const capacity = Math.max(0, Math.trunc(Number(value)) || 0);
-    setCupos((previos) => previos.map((c) => (c.sizeClass === sizeClass ? { ...c, capacity } : c)));
+  function handleCeldasChange(value: string) {
+    const cantidad = Math.max(0, Math.trunc(Number(value)) || 0);
+    setCeldas(cantidad);
 
-    clearTimeout(guardadoPendiente.current[sizeClass]);
+    clearTimeout(guardadoPendiente.current);
     if (value.trim() === '') {
-      delete valorPendiente.current[sizeClass];
+      valorPendiente.current = undefined;
       return;
     }
 
-    valorPendiente.current[sizeClass] = capacity;
-    guardadoPendiente.current[sizeClass] = setTimeout(() => guardarCupo(sizeClass, capacity), 600);
+    valorPendiente.current = cantidad;
+    guardadoPendiente.current = setTimeout(() => guardarCeldas(cantidad), 600);
   }
 
   /**
-   * El caso común de "escribo y hago clic en otro lado" antes de que venza
-   * el debounce: sin esto, ese clic caía igual de mal que un desmontaje.
+   * El caso común de "escribo y hago clic en otro lado" antes de que venza el
+   * respiro: sin esto, ese clic caía igual de mal que un desmontaje.
    */
-  function handleCupoBlur(sizeClass: YardCapacityRow['sizeClass']) {
-    if (!(sizeClass in valorPendiente.current)) return;
-    clearTimeout(guardadoPendiente.current[sizeClass]);
-    guardarCupo(sizeClass, valorPendiente.current[sizeClass]);
+  function handleCeldasBlur() {
+    if (valorPendiente.current === undefined) return;
+    clearTimeout(guardadoPendiente.current);
+    guardarCeldas(valorPendiente.current);
   }
 
   if (role !== 'admin') return <Navigate to="/" replace />;
@@ -443,40 +437,23 @@ export function Settings() {
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Warehouse size={14} /> Capacidad de la playa</h3>
         <p className="text-xs text-text-soft">
-          Cuántos vehículos de cada tamaño entran en la playa. En cero, la pantalla de
-          disponibilidad avisa que el cupo todavía no está configurado.
+          Cuántas celdas tiene el taller. En cada celda entra un vehículo grande o
+          hasta tres medianos. En cero, la pantalla de disponibilidad avisa que
+          todavía no está configurada.
         </p>
         {cupoError && (
           <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{cupoError}</div>
         )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {cupos.map((cupo) => (
-            <label key={cupo.sizeClass} className={labelClass}>
-              {SIZE_CLASS_LABELS[cupo.sizeClass]}
-              <input
-                type="number"
-                min={0}
-                value={cupo.capacity}
-                onChange={(e) => handleCupoChange(cupo.sizeClass, e.target.value)}
-                onBlur={() => handleCupoBlur(cupo.sizeClass)}
-                className={inputClass}
-              />
-            </label>
-          ))}
-        </div>
-        <label className={labelClass}>
-          Días de margen para el retiro
+        <label className={cn(labelClass, 'sm:max-w-xs')}>
+          Celdas del taller
           <input
             type="number"
             min={0}
-            value={form.yardPickupGraceDays}
-            onChange={(e) => patch({ yardPickupGraceDays: e.target.value })}
+            value={celdas}
+            onChange={(e) => handleCeldasChange(e.target.value)}
+            onBlur={handleCeldasBlur}
             className={inputClass}
           />
-          <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
-            Cuántos días después de la fecha estimada de finalización se asume que el
-            cliente pasa a buscar el vehículo. Se usa solo para proyectar.
-          </span>
         </label>
       </Panel>
     </div>
