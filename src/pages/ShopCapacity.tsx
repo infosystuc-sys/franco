@@ -21,9 +21,11 @@ import {
 /**
  * Cuánto lugar queda en la playa, hoy y en los próximos días.
  *
- * Todo lo que está en el taller ocupa playa: cada orden sin fecha estimada y cada OT
- * cuyo estado no la libera. No se reparte por sector ni se deduce de quién
- * atiende el vehículo — dónde está parado un camión no depende de eso.
+ * Ocupa playa toda OT que recibió un vehículo y cuyo estado todavía no lo
+ * libera. Una pieza sobre el mostrador no ocupa lugar de estacionamiento,
+ * aunque se haya elegido de qué equipo salió. No se reparte por sector ni se
+ * deduce de quién atiende el vehículo — dónde está parado un camión no
+ * depende de eso.
  *
  * La proyección depende de que la OT tenga cargada la entrega estimada: sin
  * ese dato no hay forma confiable de saber cuándo se libera el lugar, así que
@@ -233,9 +235,9 @@ export function ShopCapacity() {
                 <tr key={`${row.kind}-${row.id}`} className="border-b border-line hover:bg-panel-alt">
                   <td data-primary className="p-3">
                     {/*
-                      La OT se enlaza por número y el ingreso por id: la ruta
-                      /orden/:id resuelve con fetchWorkOrderByNumber, así que
-                      ese parámetro lleva el número aunque se llame id.
+                      Va el número, no el id: la ruta /orden/:id resuelve con
+                      fetchWorkOrderByNumber, así que ese parámetro lleva el
+                      número aunque se llame id.
                     */}
                     <Link
                       to={`/orden/${row.number}`}

@@ -53,14 +53,14 @@ export interface YardOccupant {
   sizeClass: SizeClass;
   statusLabel: string;
   statusColor: string;
-  /** Solo las OT la tienen; un ingreso sin OT no tiene fecha de salida. */
+  /** Sin esta fecha la orden ocupa lugar, pero queda afuera de la proyección. */
   estimatedDeliveryDate: string | null;
   daysInShop: number;
   createdAt: string;
   /**
    * Cuántos otros registros del mismo vehículo perdieron el desempate (ver
-   * ganaAlOtro). La tabla deduplica por vehículo, así que un ingreso que no
-   * se ve acá no desapareció: quedó representado por este registro.
+   * ganaAlOtro). La tabla deduplica por vehículo, así que una orden que no se
+   * ve acá no desapareció: quedó representada por este registro.
    */
   otrosRegistros: number;
 }

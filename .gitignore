@@ -25,3 +25,6 @@ android/build/
 android/.gradle/
 android/local.properties
 android/app/src/main/assets/public/
+
+# Scratch de la CLI de Supabase: se regenera solo
+supabase/.temp/
