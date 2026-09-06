@@ -3,6 +3,7 @@ import { Trash2, X } from 'lucide-react';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { fetchOperarios, type Employee } from '@/src/lib/employees';
+import { celdasOcupadas, fetchYardCells, fetchYardOccupancy } from '@/src/lib/yardCapacity';
 import { vehicleLabel } from '@/src/lib/vehicles';
 import {
   addReceivedPart,
@@ -33,6 +34,11 @@ export function NewWorkOrderModal({
   // Quién la toma. Opcional: en la recepción puede no estar decidido todavía.
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = React.useState('');
+  const [estimatedDelivery, setEstimatedDelivery] = React.useState('');
+  // Cuánto lugar queda, para avisar —nunca para bloquear—. El vehículo ya está
+  // en la puerta del taller: un sistema que impide registrarlo solo consigue
+  // que el dato deje de cargarse.
+  const [celdasLibres, setCeldasLibres] = React.useState<number | null>(null);
   const [vehicleId, setVehicleId] = React.useState('');
   const [component, setComponent] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -58,6 +64,11 @@ export function NewWorkOrderModal({
     fetchOperarios()
       .then((data) => !cancelled && setEmployees(data))
       .catch(() => {});
+    Promise.all([fetchYardCells(), fetchYardOccupancy()])
+      .then(([celdas, ocupantes]) => {
+        if (!cancelled) setCeldasLibres(celdas - celdasOcupadas(ocupantes));
+      })
+      .catch(() => {/* informativo: si falla, el alta sigue funcionando igual */});
     return () => {
       cancelled = true;
     };
@@ -88,6 +99,13 @@ export function NewWorkOrderModal({
       setError('Elegí el vehículo que estás recibiendo, o cambiá "Qué se recibe" a pieza suelta.');
       return;
     }
+    // Solo para vehículos: una pieza sobre el mostrador no ocupa celda, así que
+    // pedirle una fecha sería un campo obligatorio sin función — de los que se
+    // terminan llenando con cualquier cosa.
+    if (receptionKind === 'VEHICULO' && !estimatedDelivery) {
+      setError('Poné la entrega estimada: es lo que permite saber cuándo se libera el lugar en la playa.');
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -107,6 +125,7 @@ export function NewWorkOrderModal({
         receptionKind,
         observations,
         employeeId: employeeId || null,
+        estimatedDeliveryDate: receptionKind === 'VEHICULO' ? estimatedDelivery : null,
       });
     } catch (err) {
       setError(getErrorMessage(err));
@@ -167,6 +186,18 @@ export function NewWorkOrderModal({
                 Una pieza suelta no ocupa lugar en la playa, aunque se elija de qué equipo salió.
               </span>
             </Label>
+
+            {receptionKind === 'VEHICULO' && celdasLibres !== null && (
+              <p className={
+                celdasLibres > 0
+                  ? 'border border-line bg-panel-alt px-3 py-2 text-[11px] text-text-soft'
+                  : 'border border-danger/40 bg-danger-soft px-3 py-2 text-[11px] text-danger'
+              }>
+                {celdasLibres > 0
+                  ? `Quedan ${celdasLibres} celda${celdasLibres === 1 ? '' : 's'} libre${celdasLibres === 1 ? '' : 's'} en la playa.`
+                  : 'La playa está completa. Se puede recibir igual, pero no hay celda libre.'}
+              </p>
+            )}
 
             <Label>
               Cliente
@@ -247,6 +278,22 @@ export function NewWorkOrderModal({
                 El operario que elijas pasa a ver esta orden en su pantalla; los demás dejan de verla.
               </span>
             </Label>
+
+            {receptionKind === 'VEHICULO' && (
+              <Label>
+                Entrega estimada
+                <input
+                  type="date"
+                  value={estimatedDelivery}
+                  onChange={(e) => setEstimatedDelivery(e.target.value)}
+                  className={fieldClass(true, 'font-normal normal-case')}
+                />
+                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  Cuándo se estima entregarlo. Es lo que deja proyectar cuándo se
+                  libera su lugar en la playa; se puede corregir después.
+                </span>
+              </Label>
+            )}
 
             <Label>
               Observaciones de la recepción

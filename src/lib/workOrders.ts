@@ -503,6 +503,11 @@ export interface NewWorkOrderInput {
    * operario —y desaparezca de la de cualquier otro.
    */
   employeeId: string | null;
+  /**
+   * Obligatoria cuando se recibe un vehículo: es lo que permite proyectar
+   * cuándo se libera su celda. Null para una pieza suelta, que no ocupa lugar.
+   */
+  estimatedDeliveryDate: string | null;
 }
 
 /**
@@ -532,6 +537,7 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
       reception_kind: input.receptionKind,
       observations: input.observations.trim() || null,
       employee_id: input.employeeId,
+      estimated_delivery_date: input.estimatedDeliveryDate,
     })
     .select()
     .single();
