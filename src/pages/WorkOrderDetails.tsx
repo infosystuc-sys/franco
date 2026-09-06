@@ -14,7 +14,7 @@ import {
   type WorkOrderInvoiceRef,
 } from '@/src/lib/invoices';
 import {
-  createQuotation,
+  quoteFromWorkOrder,
   defaultValidUntil,
   fetchUnlinkedQuotations,
   linkQuotationToWorkOrder,
@@ -294,25 +294,24 @@ export function WorkOrderDetails() {
   }
 
   /**
-   * Arma la cotización de esta OT y la deja enganchada. El presupuesto se
-   * completa después en el módulo de cotizaciones, que es donde vive la
-   * aceptación y el rechazo.
+   * Arma la cotización de esta OT y la deja enganchada. Se lleva la cabecera
+   * —incluidas las observaciones de la recepción, que son el contexto que
+   * necesita quien arma el precio— y los renglones que la orden ya tenga
+   * cargados. La aceptación y el rechazo siguen viviendo en el módulo de
+   * cotizaciones.
+   *
+   * Los renglones se leen de la base, pero en pantalla son un borrador local
+   * (ver handleSave). Sin guardarlo primero, cotizar con una edición sin
+   * guardar se llevaría los renglones viejos y perdería lo tipeado sin avisar
+   * —que es exactamente el problema que esto vino a arreglar—.
    */
   async function handleCotizar() {
     if (!order || !order.customer) return;
     setCotizando(true);
     setError(null);
     try {
-      const creada = await createQuotation({
-        customerId: order.customer.id,
-        vehicleId: order.vehicle?.id ?? null,
-        component: order.component ?? '',
-        validUntil: defaultValidUntil(),
-        // Lo observado al recibir arranca como nota del presupuesto: es el
-        // contexto que necesita quien lo arma.
-        notes: order.observations ?? '',
-      });
-      await linkQuotationToWorkOrder(creada.id, order.id);
+      await saveWorkOrderItems(order.id, items);
+      const creada = await quoteFromWorkOrder(order.id, defaultValidUntil());
       navigate(`/cotizacion/${creada.number}`);
     } catch (err) {
       setError(getErrorMessage(err));

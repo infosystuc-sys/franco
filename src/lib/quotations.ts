@@ -315,6 +315,32 @@ export async function rejectQuotationWorkOrder(quotationId: string): Promise<voi
  * para una suelta —el presupuesto que se hizo por teléfono— que después se
  * asocia cuando el cliente trae el vehículo.
  */
+/**
+ * Cotizar desde la orden: crea el presupuesto con la cabecera de la OT, se
+ * lleva los renglones que ya tiene cargados, engancha las dos y la mueve a
+ * "Cotizado". Todo en una transacción.
+ *
+ * Los renglones son el motivo de que esto exista. El taller abre el vehículo,
+ * carga lo que lleva en la orden y recién ahí cotiza; antes el presupuesto
+ * nacía vacío y había que tipear todo de nuevo.
+ *
+ * Que sea una sola llamada también arregla algo previo: crear y enganchar eran
+ * dos viajes, y una caída entre medio dejaba una cotización suelta, ya
+ * numerada, colgada en el listado sin pertenecer a nada.
+ */
+export async function quoteFromWorkOrder(
+  workOrderId: string,
+  validUntil: string
+): Promise<{ id: string; number: string }> {
+  const { data, error } = await supabase.rpc('cotizar_desde_ot', {
+    p_work_order_id: workOrderId,
+    p_valid_until: validUntil || null,
+  });
+  if (error) throw error;
+  const row: any = Array.isArray(data) ? data[0] : data;
+  return { id: row.quotation_id, number: row.quotation_number };
+}
+
 export async function linkQuotationToWorkOrder(quotationId: string, workOrderId: string): Promise<void> {
   const { error } = await supabase.rpc('link_quotation_to_work_order', {
     p_quotation_id: quotationId,
