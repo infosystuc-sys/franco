@@ -6,16 +6,15 @@ import { useAuth } from '@/src/lib/auth';
 import { PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage, setEstimatedDeliveryDate } from '@/src/lib/workOrders';
 import { SIZE_CLASS_LABELS } from '@/src/lib/vehicles';
-import { fetchCompanySettings } from '@/src/lib/companySettings';
 import {
-  fetchYardCapacities,
+  celdasOcupadas,
+  fetchYardCells,
   fetchYardOccupancy,
-  projectReleases,
-  summarizeYard,
-  tieneFechaFutura,
-  type YardCapacityRow,
+  hoyISO,
+  proyectarDisponibilidad,
+  sinFechaEstimada,
+  vencidas,
   type YardOccupant,
-  type YardSizeSummary,
 } from '@/src/lib/yardCapacity';
 
 /**
@@ -27,15 +26,19 @@ import {
  * deduce de quién atiende el vehículo — dónde está parado un camión no
  * depende de eso.
  *
- * La proyección depende de que la OT tenga cargada la entrega estimada: sin
- * ese dato no hay forma confiable de saber cuándo se libera el lugar, así que
- * esos vehículos quedan afuera de la proyección pero siguen ocupando.
+ * La playa se mide en CELDAS: en cada una entra un vehículo grande o hasta
+ * tres medianos. El lugar que sobra en una celda a medio llenar no se publica
+ * como disponible.
+ *
+ * La proyección supone que cada orden se retira en su fecha estimada. Las que
+ * no tienen fecha, y las que la tienen vencida sin haberse retirado, ocupan
+ * toda la ventana: la celda está tomada de hecho y no hay con qué predecir
+ * cuándo se libera.
  */
 export function ShopCapacity() {
   const { role } = useAuth();
-  const [capacities, setCapacities] = React.useState<YardCapacityRow[]>([]);
+  const [cells, setCells] = React.useState(0);
   const [occupancy, setOccupancy] = React.useState<YardOccupant[]>([]);
-  const [graceDays, setGraceDays] = React.useState(2);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -43,14 +46,9 @@ export function ShopCapacity() {
     setLoading(true);
     setError(null);
     try {
-      const [caps, rows, settings] = await Promise.all([
-        fetchYardCapacities(),
-        fetchYardOccupancy(),
-        fetchCompanySettings(),
-      ]);
-      setCapacities(caps);
+      const [celdas, rows] = await Promise.all([fetchYardCells(), fetchYardOccupancy()]);
+      setCells(celdas);
       setOccupancy(rows);
-      setGraceDays(settings?.yardPickupGraceDays ?? 2);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -62,21 +60,17 @@ export function ShopCapacity() {
     load();
   }, [load]);
 
-  const summary: YardSizeSummary[] = React.useMemo(
-    () => summarizeYard(capacities, occupancy),
-    [capacities, occupancy]
+  // hoyISO se calcula una vez y se pasa a todo: la proyección y los contadores
+  // tienen que estar de acuerdo en qué es pasado.
+  const hoy = hoyISO();
+  const ocupadas = React.useMemo(() => celdasOcupadas(occupancy), [occupancy]);
+  const libres = cells - ocupadas;
+  const linea = React.useMemo(
+    () => proyectarDisponibilidad(cells, occupancy, 14, hoy),
+    [cells, occupancy, hoy]
   );
-
-  const upcoming = React.useMemo(
-    () => projectReleases(occupancy, graceDays),
-    [occupancy, graceDays]
-  );
-
-  // Incluye tanto los que nunca tuvieron fecha estimada como los que la
-  // tienen pero ya vencida: projectReleases tampoco puede proyectar esos
-  // últimos, así que para esta pantalla son el mismo caso ("no hay una
-  // fecha de salida a futuro"), aunque ocupen lugar igual que cualquier otro.
-  const sinFechaFutura = occupancy.filter((row) => !tieneFechaFutura(row, graceDays));
+  const sinFecha = React.useMemo(() => sinFechaEstimada(occupancy), [occupancy]);
+  const atrasadas = React.useMemo(() => vencidas(occupancy, hoy), [occupancy, hoy]);
 
   const sortedOccupancy = React.useMemo(() => {
     return [...occupancy].sort((a, b) => {
@@ -89,7 +83,7 @@ export function ShopCapacity() {
     });
   }, [occupancy]);
 
-  const sinConfigurar = capacities.every((c) => c.capacity === 0);
+  const sinConfigurar = cells === 0;
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -116,93 +110,81 @@ export function ShopCapacity() {
 
       {!loading && sinConfigurar && (
         <div className="rounded-md border border-line bg-panel-alt px-4 py-3 text-sm text-text-soft">
-          El cupo de la playa todavía no está configurado. Cargalo en{' '}
+          Todavía no cargaste cuántas celdas tiene el taller. Configurala en{' '}
           <Link to="/configuracion" className="font-semibold text-accent-deep hover:underline">Configuración</Link>{' '}
           para que esta pantalla pueda decir cuánto lugar queda.
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {summary.map((size) => {
-          // Cupo 0 es "no configurado", igual que en el alta de OT: no hay
-          // cupo real contra el cual comparar, así que "excedido" no aplica
-          // y no se puede afirmar que alguien se pasó de un límite que nadie
-          // cargó todavía.
-          const sinConfigurarEsteTamano = size.capacity === 0;
-          const over = !sinConfigurarEsteTamano && size.occupied > size.capacity;
-          const full = !sinConfigurarEsteTamano && size.occupied === size.capacity;
-          return (
-            <Panel key={size.sizeClass} className="p-4">
-              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-                {SIZE_CLASS_LABELS[size.sizeClass]}
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={cn(
-                    'font-display text-3xl font-medium',
-                    sinConfigurarEsteTamano
-                      ? 'text-text'
-                      : over
-                        ? 'text-danger'
-                        : full
-                          ? 'text-state-wait'
-                          : 'text-state-done'
-                  )}
-                >
-                  {loading ? '—' : size.occupied}
-                </span>
-                {!sinConfigurarEsteTamano && (
-                  <span className="text-sm text-text-soft">/ {size.capacity} cupo</span>
-                )}
-              </div>
-              {!loading && sinConfigurarEsteTamano && (
-                <span className="mt-1 block text-[11px] text-text-soft">Sin cupo configurado</span>
-              )}
-              {!loading && !sinConfigurarEsteTamano && !over && (
-                <span className="mt-1 block text-[11px] text-text-soft">
-                  Quedan {size.free} lugar{size.free === 1 ? '' : 'es'}
-                </span>
-              )}
-              {over && (
-                <span className="mt-1 block text-[11px] font-semibold text-danger">
-                  {size.occupied - size.capacity} por encima del cupo
-                </span>
-              )}
-            </Panel>
-          );
-        })}
-      </div>
-
-      {upcoming.length > 0 && (
-        <Panel className="p-4">
-          <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            <CalendarClock size={14} /> Próximas salidas
-          </span>
-          <p className="mb-3 text-[11px] text-text-soft">
-            Proyección, no promesa: sale de la entrega estimada de cada OT más {graceDays} día
-            {graceDays === 1 ? '' : 's'} de margen para el retiro.
+      <Panel className="p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              Celdas libres
+            </span>
+            <span className={cn(
+              'font-display text-5xl font-medium',
+              libres < 0 ? 'text-danger' : 'text-text'
+            )}>
+              {loading ? '—' : libres}
+            </span>
+            <span className="ml-2 text-sm text-text-soft">de {cells}</span>
+          </div>
+          <p className="max-w-md text-xs text-text-soft">
+            En cada celda entra un vehículo grande o hasta tres medianos. El lugar
+            que sobra en una celda a medio llenar no se cuenta como disponible.
           </p>
-          <div className="space-y-1.5">
-            {upcoming.map(({ date, bySize }) => (
-              <div key={date} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="font-mono font-semibold text-text">{formatDate(date)}</span>
-                <span className="text-text-soft">
-                  {Object.entries(bySize)
-                    .map(([size, n]) => `${SIZE_CLASS_LABELS[size as keyof typeof SIZE_CLASS_LABELS]}: libera ${n}`)
-                    .join(' · ')}
+        </div>
+
+        {libres < 0 && (
+          <p className="mt-3 border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">
+            Hay más vehículos que celdas: la playa está desbordada.
+          </p>
+        )}
+
+        {!loading && (sinFecha.length > 0 || atrasadas.length > 0) && (
+          <p className="mt-3 text-xs text-text-soft">
+            {sinFecha.length > 0 && <>{sinFecha.length} sin fecha estimada. </>}
+            {atrasadas.length > 0 && <>{atrasadas.length} con la fecha vencida. </>}
+            Ocupan celda todos los días proyectados, porque no hay con qué saber
+            cuándo se liberan.
+          </p>
+        )}
+      </Panel>
+
+      <Panel className="p-5">
+        <h2 className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <CalendarClock size={14} /> Celdas libres día por día
+        </h2>
+        <p className="mb-3 text-xs text-text-soft">
+          Suponiendo que cada orden se retire en su fecha estimada. Es una
+          proyección, no una promesa: una fecha que se corre arrastra todo lo que
+          viene atrás.
+        </p>
+        <div className="overflow-x-auto">
+          <div className="flex gap-2">
+            {linea.map((dia) => (
+              <div
+                key={dia.date}
+                className={cn(
+                  'min-w-[64px] border p-2 text-center',
+                  dia.freeCells < 0 ? 'border-danger/40 bg-danger-soft' : 'border-line bg-panel-alt'
+                )}
+              >
+                <span className="block text-[10px] uppercase tracking-[0.06em] text-text-soft">
+                  {formatDate(dia.date)}
+                </span>
+                <span className={cn(
+                  'block font-display text-xl font-medium',
+                  dia.freeCells < 0 ? 'text-danger' : 'text-text'
+                )}>
+                  {dia.freeCells}
                 </span>
               </div>
             ))}
           </div>
-        </Panel>
-      )}
-
-      {!loading && sinFechaFutura.length > 0 && (
-        <div className="rounded-md border border-line bg-panel-alt px-4 py-3 text-sm text-text-soft">
-          {sinFechaFutura.length} vehículo{sinFechaFutura.length === 1 ? '' : 's'} sin fecha de
-          salida a futuro: no entran en la proyección, pero ocupan lugar igual.
         </div>
-      )}
+      </Panel>
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto overflow-y-hidden">
