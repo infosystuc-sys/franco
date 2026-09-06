@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2, X } from 'lucide-react';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
+import { fetchOperarios, type Employee } from '@/src/lib/employees';
 import { vehicleLabel } from '@/src/lib/vehicles';
 import {
   addReceivedPart,
@@ -29,6 +30,9 @@ export function NewWorkOrderModal({
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
   const [customerId, setCustomerId] = React.useState('');
+  // Quién la toma. Opcional: en la recepción puede no estar decidido todavía.
+  const [employees, setEmployees] = React.useState<Employee[]>([]);
+  const [employeeId, setEmployeeId] = React.useState('');
   const [vehicleId, setVehicleId] = React.useState('');
   const [component, setComponent] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -49,6 +53,11 @@ export function NewWorkOrderModal({
       .then((data) => !cancelled && setCustomers(data))
       .catch((err) => !cancelled && setError(getErrorMessage(err)))
       .finally(() => !cancelled && setLoadingCustomers(false));
+    // Sin operarios se puede crear igual la orden, sin asignar. Que falle
+    // esta lista no es motivo para trabar una recepción.
+    fetchOperarios()
+      .then((data) => !cancelled && setEmployees(data))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -97,6 +106,7 @@ export function NewWorkOrderModal({
         component,
         receptionKind,
         observations,
+        employeeId: employeeId || null,
       });
     } catch (err) {
       setError(getErrorMessage(err));
@@ -219,6 +229,23 @@ export function NewWorkOrderModal({
                 className={fieldClass(false, 'font-normal normal-case')}
                 placeholder="Bomba de inyección Common Rail"
               />
+            </Label>
+
+            <Label>
+              Empleado
+              <select
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className={fieldClass(false, 'font-normal normal-case bg-panel')}
+              >
+                <option value="">Sin asignar</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                El operario que elijas pasa a ver esta orden en su pantalla; los demás dejan de verla.
+              </span>
             </Label>
 
             <Label>

@@ -390,6 +390,72 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   });
 }
 
+/** Qué comprobante cuelga de una orden que se está por eliminar. */
+export interface WorkOrderDeletionImpact {
+  workOrderId: string;
+  /** Se borra junto con la orden. */
+  quotationNumber: string | null;
+  /** Impide el borrado: es un comprobante fiscal. */
+  invoiceNumber: string | null;
+}
+
+/**
+ * Qué se lleva puesto el borrado de cada orden, para poder decirlo ANTES de
+ * pedir la confirmación. El alcance cambia por fila —una arrastra su
+ * cotización, otra ni se puede borrar— y una confirmación que no lo distingue
+ * obliga a aceptar a ciegas.
+ *
+ * Esto es solo para redactar el mensaje. La garantía la da delete_work_orders,
+ * que revalida del lado del servidor: entre esta consulta y la confirmación
+ * alguien puede haber facturado la orden.
+ */
+export async function fetchDeletionImpact(workOrderIds: string[]): Promise<WorkOrderDeletionImpact[]> {
+  if (workOrderIds.length === 0) return [];
+
+  const [cotizaciones, facturas] = await Promise.all([
+    supabase.from('quotations').select('number, work_order_id').in('work_order_id', workOrderIds),
+    supabase.from('invoices').select('full_number, number, work_order_id').in('work_order_id', workOrderIds),
+  ]);
+  if (cotizaciones.error) throw cotizaciones.error;
+  if (facturas.error) throw facturas.error;
+
+  return workOrderIds.map((id) => ({
+    workOrderId: id,
+    quotationNumber: cotizaciones.data?.find((q: any) => q.work_order_id === id)?.number ?? null,
+    invoiceNumber: (() => {
+      const factura = facturas.data?.find((f: any) => f.work_order_id === id);
+      if (!factura) return null;
+      return factura.full_number ?? `N° ${factura.number}`;
+    })(),
+  }));
+}
+
+/** Qué pasó con cada orden del lote. */
+export interface WorkOrderDeletionResult {
+  orderNumber: string;
+  deleted: boolean;
+  /** Por qué no se borró. Null cuando sí se borró. */
+  reason: string | null;
+}
+
+/**
+ * Elimina órdenes de trabajo con su cotización. Las facturadas se rechazan
+ * sin cortar el resto del lote, así que el resultado hay que leerlo fila por
+ * fila: que no tire error no significa que se hayan borrado todas.
+ *
+ * El trabajo pesado está en la base (delete_work_orders): borrar la orden y su
+ * cotización son tres pasos encadenados que tienen que pasar todos o ninguno.
+ */
+export async function deleteWorkOrders(workOrderIds: string[]): Promise<WorkOrderDeletionResult[]> {
+  const { data, error } = await supabase.rpc('delete_work_orders', { p_ids: workOrderIds });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    orderNumber: row.order_number,
+    deleted: row.was_deleted,
+    reason: row.reason,
+  }));
+}
+
 /**
  * Si el usuario logueado es un operario, dice si tiene un empleado activo
  * vinculado. Sin esto, un operario dado de baja (o nunca vinculado) ve la
@@ -430,6 +496,13 @@ export interface NewWorkOrderInput {
   component: string;
   receptionKind: ReceptionKind;
   observations: string;
+  /**
+   * Opcional: en la recepción puede no estar decidido todavía quién la toma.
+   * Ojo con elegir mal: el RLS de lectura filtra por employee_id, así que
+   * asignar acá hace que la orden aparezca de inmediato en la pantalla de ese
+   * operario —y desaparezca de la de cualquier otro.
+   */
+  employeeId: string | null;
 }
 
 /**
@@ -458,6 +531,7 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
       component: input.component || null,
       reception_kind: input.receptionKind,
       observations: input.observations.trim() || null,
+      employee_id: input.employeeId,
     })
     .select()
     .single();
