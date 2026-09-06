@@ -4,7 +4,9 @@ import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { fetchOperarios, type Employee } from '@/src/lib/employees';
 import { celdasOcupadas, fetchYardCells, fetchYardOccupancy } from '@/src/lib/yardCapacity';
-import { vehicleLabel } from '@/src/lib/vehicles';
+import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
+import { CustomerModal } from '@/src/components/CustomerModal';
+import { VehicleModal } from '@/src/components/VehicleModal';
 import {
   addReceivedPart,
   createWorkOrder,
@@ -52,11 +54,24 @@ export function NewWorkOrderModal({
   const [parts, setParts] = React.useState<{ name: string; serialNumber: string }[]>([]);
   const [partName, setPartName] = React.useState('');
   const [partSerial, setPartSerial] = React.useState('');
+  // Alta al vuelo: el vehículo llega con un cliente que todavía no está
+  // cargado, y mandar al usuario a otra pantalla le hace perder la recepción a
+  // medio escribir.
+  const [creatingCustomer, setCreatingCustomer] = React.useState(false);
+  const [creatingVehicle, setCreatingVehicle] = React.useState(false);
+
+  // Se reusa después de dar de alta un cliente o un vehículo: los vehículos
+  // vienen anidados en la consulta de clientes, así que un solo refresco
+  // actualiza las dos listas.
+  const loadCustomers = React.useCallback(async () => {
+    const data = await fetchCustomers(true);
+    setCustomers(data);
+    return data;
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
-    fetchCustomers(true)
-      .then((data) => !cancelled && setCustomers(data))
+    loadCustomers()
       .catch((err) => !cancelled && setError(getErrorMessage(err)))
       .finally(() => !cancelled && setLoadingCustomers(false));
     // Sin operarios se puede crear igual la orden, sin asignar. Que falle
@@ -72,7 +87,7 @@ export function NewWorkOrderModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadCustomers]);
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
   // Solo se ofrecen vehículos activos para nuevas órdenes.
@@ -155,6 +170,7 @@ export function NewWorkOrderModal({
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md border border-line-strong bg-panel">
         <div className="flex items-center justify-between border-b border-line bg-panel-head px-5 py-3">
@@ -201,53 +217,74 @@ export function NewWorkOrderModal({
 
             <Label>
               Cliente
-              <select
-                value={customerId}
-                onChange={(e) => handleCustomerChange(e.target.value)}
-                disabled={loadingCustomers}
-                className={fieldClass(true, 'font-normal normal-case')}
-              >
-                <option value="">
-                  {loadingCustomers ? 'Cargando clientes…' : 'Elegí un cliente'}
-                </option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                    {customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
+              <div className="flex gap-2">
+                <select
+                  value={customerId}
+                  onChange={(e) => handleCustomerChange(e.target.value)}
+                  disabled={loadingCustomers}
+                  className={fieldClass(true, 'font-normal normal-case flex-1')}
+                >
+                  <option value="">
+                    {loadingCustomers ? 'Cargando clientes…' : 'Elegí un cliente'}
                   </option>
-                ))}
-              </select>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                      {customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setCreatingCustomer(true)}
+                  className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                >
+                  + Nuevo
+                </button>
+              </div>
               {!loadingCustomers && customers.length === 0 && (
                 <span className="mt-1 block text-[11px] font-normal normal-case text-danger">
-                  No hay clientes activos. Cargá uno en Clientes.
+                  No hay clientes activos. Cargá uno con el botón "+ Nuevo".
                 </span>
               )}
             </Label>
 
             <Label>
               Vehículo / Equipo
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                disabled={!selectedCustomer}
-                className={fieldClass(receptionKind === 'VEHICULO', 'font-normal normal-case disabled:bg-panel-alt')}
-              >
-                <option value="">
-                  {!selectedCustomer
-                    ? 'Elegí primero un cliente'
-                    : receptionKind === 'PIEZA'
-                      ? 'Sin vehículo (opcional)'
-                      : 'Elegí un vehículo...'}
-                </option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>
-                    {vehicleLabel(vehicle)}
+              <div className="flex gap-2">
+                <select
+                  value={vehicleId}
+                  onChange={(e) => setVehicleId(e.target.value)}
+                  disabled={!selectedCustomer}
+                  className={fieldClass(receptionKind === 'VEHICULO', 'font-normal normal-case flex-1 disabled:bg-panel-alt')}
+                >
+                  <option value="">
+                    {!selectedCustomer
+                      ? 'Elegí primero un cliente'
+                      : receptionKind === 'PIEZA'
+                        ? 'Sin vehículo (opcional)'
+                        : 'Elegí un vehículo...'}
                   </option>
-                ))}
-              </select>
+                  {vehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {vehicleLabel(vehicle)}
+                    </option>
+                  ))}
+                </select>
+                {/* El vehículo se da de alta contra el cliente elegido, así que
+                    sin cliente no hay contra quién crearlo. */}
+                <button
+                  type="button"
+                  disabled={!selectedCustomer}
+                  onClick={() => setCreatingVehicle(true)}
+                  className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  + Nuevo
+                </button>
+              </div>
               {selectedCustomer && vehicles.length === 0 && (
                 <span className="mt-1 block text-[11px] font-normal normal-case text-danger">
-                  Este cliente no tiene vehículos activos. Agregale uno en Vehículos.
+                  Este cliente no tiene vehículos activos. Agregale uno con el botón "+ Nuevo".
                 </span>
               )}
             </Label>
@@ -367,5 +404,40 @@ export function NewWorkOrderModal({
         </form>
       </div>
     </div>
+
+    {/* Van DESPUÉS del modal de la OT a propósito: los tres comparten z-[60],
+        así que con igual z-index manda el orden del DOM y el que va último
+        pinta encima. Alternativa era subirle el z a los componentes
+        compartidos, que los usan otras tres pantallas. */}
+    {creatingCustomer && (
+      <CustomerModal
+        customer={null}
+        onClose={() => setCreatingCustomer(false)}
+        onSaved={async (customer) => {
+          setCreatingCustomer(false);
+          await loadCustomers();
+          // No pasa por handleCustomerChange: esa función lee `customers` del
+          // render viejo, que todavía no tiene al recién creado. Un cliente
+          // nuevo no tiene vehículos, así que la selección arranca vacía.
+          setCustomerId(customer.id);
+          setVehicleId('');
+        }}
+      />
+    )}
+
+    {creatingVehicle && selectedCustomer && (
+      <VehicleModal
+        vehicle={null}
+        customers={customers}
+        fixedCustomerId={selectedCustomer.id}
+        onClose={() => setCreatingVehicle(false)}
+        onSaved={async (vehicle: Vehicle) => {
+          setCreatingVehicle(false);
+          await loadCustomers();
+          setVehicleId(vehicle.id);
+        }}
+      />
+    )}
+    </>
   );
 }
