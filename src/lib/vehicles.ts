@@ -19,29 +19,17 @@ export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
 
 export const VEHICLE_TYPES = Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[];
 
-export type SizeClass = 'CHICO' | 'MEDIANO' | 'GRANDE';
+export type SizeClass = 'MEDIANO' | 'GRANDE';
 
 export const SIZE_CLASS_LABELS: Record<SizeClass, string> = {
-  CHICO: 'Chico',
   MEDIANO: 'Mediano',
   GRANDE: 'Grande',
 };
 
 export const SIZE_CLASSES = Object.keys(SIZE_CLASS_LABELS) as SizeClass[];
 
-/**
- * Tamaño que se propone al elegir el tipo. Es solo el punto de partida: el
- * tipo no dice cuánto lugar ocupa el vehículo — "Camión / Utilitario" mete en
- * la misma bolsa una Transit y un Scania — así que el campo queda editable.
- */
-export const SIZE_BY_VEHICLE_TYPE: Record<VehicleType, SizeClass> = {
-  CAMION: 'GRANDE',
-  MAQUINARIA: 'GRANDE',
-  AGRICOLA: 'GRANDE',
-  EMBARCACION: 'MEDIANO',
-  GENERADOR: 'CHICO',
-  OTRO: 'MEDIANO',
-};
+/** Cuántos vehículos medianos entran en una celda. Un grande la ocupa entero. */
+export const MEDIANOS_POR_CELDA = 3;
 
 export type OdometerUnit = 'KM' | 'HORAS';
 
@@ -90,7 +78,12 @@ export interface VehicleInput {
   brand: string;
   model: string;
   vehicleType: VehicleType;
-  sizeClass: SizeClass;
+  /**
+   * Vacío hasta que el usuario elige. No hay valor por defecto a propósito: el
+   * tamaño decide cuánto lugar ocupa el vehículo en la playa, y un default que
+   * nadie mira es una cuenta equivocada que no avisa.
+   */
+  sizeClass: SizeClass | '';
   licensePlate: string;
   year: string;
   vin: string;
@@ -109,7 +102,7 @@ export const EMPTY_VEHICLE_FORM: VehicleInput = {
   brand: '',
   model: '',
   vehicleType: 'CAMION',
-  sizeClass: 'GRANDE',
+  sizeClass: '',
   licensePlate: '',
   year: '',
   vin: '',
@@ -170,7 +163,10 @@ function toRow(input: VehicleInput) {
     brand: nullIfBlank(input.brand),
     model: input.model.trim(),
     vehicle_type: input.vehicleType,
-    size_class: input.sizeClass,
+    // El `|| 'MEDIANO'` no es un default de negocio: la pantalla no deja
+    // guardar sin elegir. Es para que el tipo cierre sin un cast, que taparía
+    // un vacío real si alguien llamara a esta función desde otro lado.
+    size_class: input.sizeClass || 'MEDIANO',
     // Patente y VIN se normalizan en mayúsculas: los índices únicos comparan así.
     license_plate: nullIfBlank(input.licensePlate)?.toUpperCase() ?? null,
     year: numberOrNull(input.year),

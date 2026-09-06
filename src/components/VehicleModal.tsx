@@ -9,7 +9,6 @@ import {
   EMPTY_VEHICLE_FORM,
   INJECTION_SYSTEMS,
   ODOMETER_UNIT_LABELS,
-  SIZE_BY_VEHICLE_TYPE,
   SIZE_CLASS_LABELS,
   SIZE_CLASSES,
   updateVehicle,
@@ -60,6 +59,10 @@ export function VehicleModal({
     }
     if (!form.model.trim()) {
       setError('El modelo es obligatorio.');
+      return;
+    }
+    if (!form.sizeClass) {
+      setError('Elegí el tamaño del vehículo: define cuánto lugar ocupa en la playa.');
       return;
     }
     setSaving(true);
@@ -126,13 +129,11 @@ export function VehicleModal({
                 Tipo
                 <select
                   value={form.vehicleType}
-                  onChange={(e) => {
-                    const vehicleType = e.target.value as VehicleType;
-                    // Cambiar el tipo repropone el tamaño típico. Pisa lo que
-                    // hubiera: es más predecible que adivinar si el usuario ya
-                    // lo tocó, y el campo queda al lado para corregirlo.
-                    patch({ vehicleType, sizeClass: SIZE_BY_VEHICLE_TYPE[vehicleType] });
-                  }}
+                  // El tipo ya no toca el tamaño: no dice cuánto lugar ocupa el
+                  // vehículo — "Camión / Utilitario" mete en la misma bolsa una
+                  // Transit y un Scania — y una sugerencia que nadie corrige
+                  // corrompe la cuenta de la playa en silencio.
+                  onChange={(e) => patch({ vehicleType: e.target.value as VehicleType })}
                   className={cn(inputClass, 'bg-panel')}
                 >
                   {VEHICLE_TYPES.map((type) => (
@@ -147,6 +148,7 @@ export function VehicleModal({
                   onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
                   className={cn(inputClass, 'bg-panel')}
                 >
+                  <option value="">Elegí el tamaño…</option>
                   {SIZE_CLASSES.map((size) => (
                     <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
                   ))}
