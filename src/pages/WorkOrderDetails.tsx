@@ -340,16 +340,16 @@ export function WorkOrderDetails() {
     setError(null);
     try {
       await saveWorkOrderItems(order.id, items);
-      // Recargar: el stock pudo cambiar y los renglones ahora tienen id
-      // nuevo. loadOrder ya no toca `items` en refrescos posteriores al
-      // primero (ver comentario ahí), así que acá sí se resincroniza a
-      // propósito con la respuesta fresca.
-      const fresh = await loadOrder();
-      setItems(mapItems(fresh));
-      if (isAdmin) fetchArticles(false).then(setArticles).catch(() => {});
+      // Guardar cierra la edición y vuelve al listado, como el resto de los
+      // módulos. Ya no se recarga la orden ni el catálogo: esta pantalla se
+      // va, y el listado trae sus propios datos frescos.
+      //
+      // setSaving(false) queda solo en el catch a propósito: mientras navega,
+      // el botón sigue diciendo "Guardando…" y no admite un segundo clic que
+      // volvería a descontar stock.
+      navigate('/ordenes');
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setSaving(false);
     }
   }
