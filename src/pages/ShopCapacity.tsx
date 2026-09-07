@@ -7,7 +7,7 @@ import { PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage, setEstimatedDeliveryDate } from '@/src/lib/workOrders';
 import { SIZE_CLASS_LABELS } from '@/src/lib/vehicles';
 import {
-  celdasOcupadas,
+  disponibilidad,
   fetchYardCells,
   fetchYardOccupancy,
   hoyISO,
@@ -63,8 +63,8 @@ export function ShopCapacity() {
   // hoyISO se calcula una vez y se pasa a todo: la proyección y los contadores
   // tienen que estar de acuerdo en qué es pasado.
   const hoy = hoyISO();
-  const ocupadas = React.useMemo(() => celdasOcupadas(occupancy), [occupancy]);
-  const libres = cells - ocupadas;
+  const disponible = React.useMemo(() => disponibilidad(cells, occupancy), [cells, occupancy]);
+  const libres = disponible.freeCells;
   const linea = React.useMemo(
     () => proyectarDisponibilidad(cells, occupancy, 14, hoy),
     [cells, occupancy, hoy]
@@ -118,21 +118,46 @@ export function ShopCapacity() {
 
       <Panel className="p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-              Celdas libres
-            </span>
-            <span className={cn(
-              'font-display text-5xl font-medium',
-              libres < 0 ? 'text-danger' : 'text-text'
-            )}>
-              {loading ? '—' : libres}
-            </span>
-            <span className="ml-2 text-sm text-text-soft">de {cells}</span>
+          <div className="flex flex-wrap items-end gap-8">
+            <div>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                Entran todavía
+              </span>
+              <span className="font-display text-5xl font-medium text-text">
+                {loading ? '—' : disponible.grandes}
+              </span>
+              <span className="ml-2 text-sm text-text-soft">
+                grande{disponible.grandes === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                o bien
+              </span>
+              <span className="font-display text-5xl font-medium text-text">
+                {loading ? '—' : disponible.medianos}
+              </span>
+              <span className="ml-2 text-sm text-text-soft">
+                mediano{disponible.medianos === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="pb-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                Celdas libres
+              </span>
+              <span className={cn(
+                'font-display text-2xl font-medium',
+                libres < 0 ? 'text-danger' : 'text-text-soft'
+              )}>
+                {loading ? '—' : libres}
+              </span>
+              <span className="ml-1 text-sm text-text-soft">de {cells}</span>
+            </div>
           </div>
-          <p className="max-w-md text-xs text-text-soft">
-            En cada celda entra un vehículo grande o hasta tres medianos. El lugar
-            que sobra en una celda a medio llenar no se cuenta como disponible.
+          <p className="max-w-xs text-xs text-text-soft">
+            En cada celda entra un vehículo grande o hasta tres medianos. Un grande
+            necesita la celda entera; un mediano puede sumarse a una que esté a
+            medio llenar.
           </p>
         </div>
 
@@ -154,12 +179,12 @@ export function ShopCapacity() {
 
       <Panel className="p-5">
         <h2 className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-          <CalendarClock size={14} /> Celdas libres día por día
+          <CalendarClock size={14} /> Cuántos entran, día por día
         </h2>
         <p className="mb-3 text-xs text-text-soft">
-          Suponiendo que cada orden se retire en su fecha estimada. Es una
-          proyección, no una promesa: una fecha que se corre arrastra todo lo que
-          viene atrás.
+          G = vehículos grandes, M = medianos. Suponiendo que cada orden se retire
+          en su fecha estimada: es una proyección, no una promesa — una fecha que
+          se corre arrastra todo lo que viene atrás.
         </p>
         <div className="overflow-x-auto">
           <div className="flex gap-2">
@@ -167,18 +192,26 @@ export function ShopCapacity() {
               <div
                 key={dia.date}
                 className={cn(
-                  'min-w-[64px] border p-2 text-center',
+                  'min-w-[78px] border p-2 text-center',
                   dia.freeCells < 0 ? 'border-danger/40 bg-danger-soft' : 'border-line bg-panel-alt'
                 )}
               >
                 <span className="block text-[10px] uppercase tracking-[0.06em] text-text-soft">
                   {formatDate(dia.date)}
                 </span>
+                {/* Los dos números, porque uno solo miente: puede no quedar
+                    ninguna celda entera y entrar un mediano igual. */}
                 <span className={cn(
-                  'block font-display text-xl font-medium',
+                  'block font-display text-lg font-medium leading-tight',
                   dia.freeCells < 0 ? 'text-danger' : 'text-text'
                 )}>
-                  {dia.freeCells}
+                  {dia.grandes} <span className="text-[10px] font-normal text-text-soft">G</span>
+                </span>
+                <span className={cn(
+                  'block font-display text-lg font-medium leading-tight',
+                  dia.freeCells < 0 ? 'text-danger' : 'text-text'
+                )}>
+                  {dia.medianos} <span className="text-[10px] font-normal text-text-soft">M</span>
                 </span>
               </div>
             ))}

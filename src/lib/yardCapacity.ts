@@ -144,10 +144,8 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
 /**
  * Celdas que ocupa un conjunto de vehículos.
  *
- * Un grande toma la celda entera; los medianos se amontonan de a tres. El hueco
- * que queda en una celda a medio llenar NO se publica como disponibilidad: si
- * se contara, el número subiría y bajaría sin que entre ni salga nada del
- * taller, y nadie podría explicarlo.
+ * Un grande toma la celda entera; los medianos se amontonan de a tres, así que
+ * cuatro medianos ya ocupan dos celdas aunque la segunda tenga lugar de sobra.
  */
 export function celdasOcupadas(occupants: Pick<YardOccupant, 'sizeClass'>[]): number {
   let grandes = 0;
@@ -190,10 +188,51 @@ export function ocupaEnFecha(
   return dia <= fecha;
 }
 
-export interface YardDayAvailability {
-  date: string;
-  /** Puede ser negativo: hay más vehículos que celdas. La pantalla lo marca. */
+export interface YardAvailability {
+  /**
+   * Celdas enteras sin tocar. Puede ser negativo: hay más vehículos que
+   * celdas. La pantalla lo marca.
+   */
   freeCells: number;
+  /** Cuántos vehículos grandes más entran: cada uno necesita una celda entera. */
+  grandes: number;
+  /**
+   * Cuántos medianos más entran: los de las celdas libres, MÁS el lugar que
+   * sobra en la celda a medio llenar. Una celda con dos medianos todavía
+   * admite un tercero, y esconderlo hacía rechazar vehículos que entraban.
+   */
+  medianos: number;
+}
+
+/**
+ * Cuánto lugar queda, expresado en vehículos y no solo en celdas.
+ *
+ * "Celdas libres" por sí solo miente cuando hay una celda a medio llenar: con
+ * cero celdas libres y una celda con dos medianos, todavía entra un mediano.
+ * Por eso se publican las dos cosas.
+ */
+export function disponibilidad(
+  cells: number,
+  occupants: Pick<YardOccupant, 'sizeClass'>[]
+): YardAvailability {
+  const medianos = occupants.filter((o) => o.sizeClass === 'MEDIANO').length;
+  const libres = cells - celdasOcupadas(occupants);
+
+  // Lo que sobra en la última celda de medianos. Cero cuando el reparto da
+  // justo, o cuando no hay ningún mediano.
+  const huecoParcial = (MEDIANOS_POR_CELDA - (medianos % MEDIANOS_POR_CELDA)) % MEDIANOS_POR_CELDA;
+
+  // Con la playa desbordada no entra nada más: el faltante se comunica por
+  // freeCells en negativo, no diciendo que entran "menos tres" vehículos.
+  return {
+    freeCells: libres,
+    grandes: Math.max(0, libres),
+    medianos: Math.max(0, libres * MEDIANOS_POR_CELDA + huecoParcial),
+  };
+}
+
+export interface YardDayAvailability extends YardAvailability {
+  date: string;
 }
 
 /**
@@ -218,7 +257,7 @@ export function proyectarDisponibilidad(
     d.setDate(d.getDate() + i);
     const date = d.toISOString().slice(0, 10);
     const eseDia = occupants.filter((o) => ocupaEnFecha(o, date, hoy));
-    resultado.push({ date, freeCells: cells - celdasOcupadas(eseDia) });
+    resultado.push({ date, ...disponibilidad(cells, eseDia) });
   }
   return resultado;
 }

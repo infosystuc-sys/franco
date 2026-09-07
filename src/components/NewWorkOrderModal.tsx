@@ -3,7 +3,7 @@ import { Trash2, X } from 'lucide-react';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { fetchOperarios, type Employee } from '@/src/lib/employees';
-import { celdasOcupadas, fetchYardCells, fetchYardOccupancy } from '@/src/lib/yardCapacity';
+import { disponibilidad, fetchYardCells, fetchYardOccupancy, type YardAvailability } from '@/src/lib/yardCapacity';
 import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { VehicleModal } from '@/src/components/VehicleModal';
@@ -40,7 +40,7 @@ export function NewWorkOrderModal({
   // Cuánto lugar queda, para avisar —nunca para bloquear—. El vehículo ya está
   // en la puerta del taller: un sistema que impide registrarlo solo consigue
   // que el dato deje de cargarse.
-  const [celdasLibres, setCeldasLibres] = React.useState<number | null>(null);
+  const [lugar, setLugar] = React.useState<YardAvailability | null>(null);
   const [vehicleId, setVehicleId] = React.useState('');
   const [component, setComponent] = React.useState('');
   const [saving, setSaving] = React.useState(false);
@@ -81,7 +81,7 @@ export function NewWorkOrderModal({
       .catch(() => {});
     Promise.all([fetchYardCells(), fetchYardOccupancy()])
       .then(([celdas, ocupantes]) => {
-        if (!cancelled) setCeldasLibres(celdas - celdasOcupadas(ocupantes));
+        if (!cancelled) setLugar(disponibilidad(celdas, ocupantes));
       })
       .catch(() => {/* informativo: si falla, el alta sigue funcionando igual */});
     return () => {
@@ -203,15 +203,15 @@ export function NewWorkOrderModal({
               </span>
             </Label>
 
-            {receptionKind === 'VEHICULO' && celdasLibres !== null && (
+            {receptionKind === 'VEHICULO' && lugar !== null && (
               <p className={
-                celdasLibres > 0
+                lugar.medianos > 0
                   ? 'border border-line bg-panel-alt px-3 py-2 text-[11px] text-text-soft'
                   : 'border border-danger/40 bg-danger-soft px-3 py-2 text-[11px] text-danger'
               }>
-                {celdasLibres > 0
-                  ? `Quedan ${celdasLibres} celda${celdasLibres === 1 ? '' : 's'} libre${celdasLibres === 1 ? '' : 's'} en la playa.`
-                  : 'La playa está completa. Se puede recibir igual, pero no hay celda libre.'}
+                {lugar.medianos > 0
+                  ? `En la playa entran ${lugar.grandes} grande${lugar.grandes === 1 ? '' : 's'} o ${lugar.medianos} mediano${lugar.medianos === 1 ? '' : 's'}.`
+                  : 'La playa está completa. Se puede recibir igual, pero no queda lugar.'}
               </p>
             )}
 

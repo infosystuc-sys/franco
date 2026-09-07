@@ -29,14 +29,35 @@ celdas libres   = celdas del taller − celdas ocupadas
 
 Ejemplo con 10 celdas, 2 vehículos grandes y 4 medianos: los grandes toman 2
 celdas; los 4 medianos entran en 2 celdas (una con 3, otra con 1). Ocupadas 4,
-**quedan 6**.
+**quedan 6 celdas**.
 
-Un quinto mediano entra en la celda a medio llenar: siguen quedando 6.
+Traducido a vehículos: entran **6 grandes**, o bien **20 medianos** — los 18 de
+las 6 celdas libres más los 2 que todavía caben en la celda a medio llenar.
 
-**El hueco no se publica.** La celda con un solo mediano tiene lugar para dos
-más, pero eso no se muestra como disponibilidad. Lo disponible son celdas
-enteras. Publicar el hueco haría que el número subiera y bajara sin que entre
-ni salga nada del taller, y nadie podría explicarlo.
+Un quinto mediano entra en esa celda: siguen quedando 6 celdas, pero los
+medianos que entran bajan a 19.
+
+**El hueco SÍ se publica, pero solo para medianos.** La celda con un solo
+mediano tiene lugar para dos más, y ese lugar existe: esconderlo hacía rechazar
+vehículos que en realidad entraban.
+
+Por eso la disponibilidad no se expresa en celdas sino en vehículos, con dos
+números:
+
+```
+grandes que entran  = celdas libres enteras
+medianos que entran = celdas libres × 3 + lo que sobre en la celda a medio llenar
+```
+
+Un grande necesita la celda entera, así que para él solo cuentan las libres. Un
+mediano puede sumarse a una que esté a medio llenar.
+
+Las celdas libres se siguen mostrando, pero como dato secundario: por sí solas
+mienten. Con cero celdas libres y una celda con dos medianos, todavía entra un
+mediano.
+
+> Corregido el 2026-09-07. La versión original de este spec decía que el hueco
+> no se publicaba, por una mala lectura de la definición original.
 
 **Puede dar negativo.** Si hay más vehículos que celdas, el número se muestra
 igual, marcado. Una playa desbordada es un hecho a la vista, no un error a
@@ -63,9 +84,9 @@ deduplicación por vehículo que ya existe se conserva.
 
 ## La línea de tiempo
 
-Una fila por cada uno de los próximos 14 días: cuántas celdas quedarían libres
-ese día, suponiendo que cada orden se retire en su fecha estimada de
-finalización.
+Una columna por cada uno de los próximos 14 días: cuántos vehículos de cada
+tamaño entrarían ese día, suponiendo que cada orden se retire en su fecha
+estimada de finalización.
 
 Es una proyección, no una promesa, y la pantalla lo dice: una fecha estimada
 que se corre arrastra todo lo que viene atrás.
@@ -130,8 +151,8 @@ que se recibe es un vehículo. Una pieza suelta no ocupa celda, así que ahí la
 fecha no cumple ninguna función y pedirla sería un campo obligatorio sin motivo
 —de los que se terminan llenando con cualquier cosa—.
 
-Vuelve además el **aviso de lugar disponible** al elegir el vehículo, ahora
-expresado en celdas. Este aviso existía y se perdió cuando la recepción pasó a
+Vuelve además el **aviso de lugar disponible** al elegir el vehículo, con los
+mismos dos números que la pantalla de disponibilidad. Este aviso existía y se perdió cuando la recepción pasó a
 la orden de trabajo: vivía en `VehicleIntakes.tsx`, que se borró en esa
 migración. Es informativo y **nunca bloquea el alta**: el vehículo ya está en la
 puerta del taller, y un sistema que impide registrarlo solo consigue que el
@@ -139,8 +160,9 @@ dato deje de cargarse.
 
 ### Disponibilidad del taller
 
-- Celdas libres, como número principal.
-- La línea de tiempo de 14 días.
+- Cuántos grandes y cuántos medianos entran, como número principal. Las celdas
+  libres quedan como dato secundario.
+- La línea de tiempo de 14 días, con los dos números por día.
 - Los contadores de «sin fecha estimada» y «vencidas».
 - La tabla de ocupantes, que se conserva: qué vehículos hay, de quién, en qué
   estado, desde cuándo y con qué entrega estimada.
