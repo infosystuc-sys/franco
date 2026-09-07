@@ -1,17 +1,12 @@
 import React from 'react';
-import { Plus, X, Search, Eye, Copy, Trash2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Search, Eye, Copy, Trash2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
-import { Button, PageHeader } from '@/src/components/ui';
+import { PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
-import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
-import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
-import { CustomerModal } from '@/src/components/CustomerModal';
-import { VehicleModal } from '@/src/components/VehicleModal';
+import { vehicleLabel } from '@/src/lib/vehicles';
 import {
-  createQuotation,
-  defaultValidUntil,
   deleteQuotation,
   describeQuotationError,
   duplicateQuotation,
@@ -34,7 +29,6 @@ export function Quotations() {
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<QuotationStatus | ''>('');
-  const [showNew, setShowNew] = React.useState(false);
 
   const loadQuotations = React.useCallback(async () => {
     setLoading(true);
@@ -94,14 +88,7 @@ export function Quotations() {
     <div className="max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Cotizaciones"
-        subtitle="El presupuesto que el cliente aprueba para que el trabajo arranque."
-        actions={
-          isAdmin && (
-            <Button onClick={() => setShowNew(true)}>
-              <Plus size={16} /> Nueva cotización
-            </Button>
-          )
-        }
+        subtitle="Las cotizaciones nacen en la orden de trabajo. Acá se controla en qué quedó cada autorización."
       />
 
       {error && (
@@ -247,205 +234,6 @@ export function Quotations() {
           </table>
         </div>
       </div>
-
-      {showNew && (
-        <NewQuotationModal
-          onClose={() => setShowNew(false)}
-          // A diferencia de la OT, acá SÍ se entra al detalle: la cotización
-          // nace sin renglones —el propio botón dice "Crear y cargar
-          // renglones"— y volver al listado obligaría a buscarla de nuevo
-          // para hacer lo que el alta ya prometía como paso siguiente.
-          onCreated={(number) => navigate(`/cotizacion/${number}`)}
-        />
-      )}
     </div>
-  );
-}
-
-function NewQuotationModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (number: string) => void;
-}) {
-  const [customers, setCustomers] = React.useState<Customer[]>([]);
-  const [loadingCustomers, setLoadingCustomers] = React.useState(true);
-  const [customerId, setCustomerId] = React.useState('');
-  const [vehicleId, setVehicleId] = React.useState('');
-  const [component, setComponent] = React.useState('');
-  const [validUntil, setValidUntil] = React.useState(defaultValidUntil());
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [creatingCustomer, setCreatingCustomer] = React.useState(false);
-  const [creatingVehicle, setCreatingVehicle] = React.useState(false);
-
-  const loadCustomers = React.useCallback(() => {
-    setLoadingCustomers(true);
-    return fetchCustomers(true)
-      .then((data) => setCustomers(data))
-      .catch((err) => setError(getErrorMessage(err)))
-      .finally(() => setLoadingCustomers(false));
-  }, []);
-
-  React.useEffect(() => {
-    loadCustomers();
-  }, [loadCustomers]);
-
-  const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
-  const vehicles = (selectedCustomer?.vehicles ?? []).filter((v) => v.active);
-
-  function handleCustomerChange(id: string) {
-    setCustomerId(id);
-    const customer = customers.find((c) => c.id === id);
-    const activeVehicles = (customer?.vehicles ?? []).filter((v) => v.active);
-    setVehicleId(activeVehicles.length === 1 ? activeVehicles[0].id : '');
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!customerId) { setError('Elegí un cliente.'); return; }
-    if (!vehicleId) { setError('Elegí un vehículo.'); return; }
-    setSaving(true);
-    setError(null);
-    try {
-      const created = await createQuotation({ customerId, vehicleId, component, validUntil });
-      onCreated(created.number);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
-  const inputClass = 'mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case';
-
-  return (
-    <>
-    <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-      <div className="bg-panel w-full max-w-md">
-        <div className="flex justify-between items-center px-5 py-4 border-b border-line">
-          <h2 className="text-base font-bold text-text">Nueva cotización</h2>
-          <button onClick={onClose} className="text-text-soft hover:text-text">
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
-
-          <label className={cn(labelClass, 'block')}>
-            Cliente
-            <div className="mt-1 flex gap-2">
-              <select
-                value={customerId}
-                onChange={(e) => handleCustomerChange(e.target.value)}
-                disabled={loadingCustomers}
-                className={cn(inputClass, 'bg-panel mt-0 flex-1')}
-              >
-                <option value="">{loadingCustomers ? 'Cargando clientes...' : 'Elegí un cliente...'}</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setCreatingCustomer(true)}
-                className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt whitespace-nowrap"
-              >
-                + Nuevo
-              </button>
-            </div>
-            {!loadingCustomers && customers.length === 0 && (
-              <span className="block mt-1 text-[10px] font-normal normal-case text-state-wait">
-                No hay clientes activos. Cargá uno con el botón "+ Nuevo".
-              </span>
-            )}
-          </label>
-
-          <label className={cn(labelClass, 'block')}>
-            Vehículo / Equipo
-            <div className="mt-1 flex gap-2">
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                disabled={!selectedCustomer}
-                className={cn(inputClass, 'bg-panel disabled:bg-panel-alt mt-0 flex-1')}
-              >
-                <option value="">{!selectedCustomer ? 'Elegí primero un cliente...' : 'Elegí un vehículo...'}</option>
-                {vehicles.map((vehicle) => (
-                  <option key={vehicle.id} value={vehicle.id}>{vehicleLabel(vehicle)}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setCreatingVehicle(true)}
-                disabled={!selectedCustomer}
-                className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50 whitespace-nowrap"
-              >
-                + Nuevo
-              </button>
-            </div>
-            {selectedCustomer && vehicles.length === 0 && (
-              <span className="block mt-1 text-[10px] font-normal normal-case text-state-wait">
-                Este cliente no tiene vehículos activos. Agregale uno con el botón "+ Nuevo".
-              </span>
-            )}
-          </label>
-
-          <label className={cn(labelClass, 'block')}>
-            Componente
-            <input value={component} onChange={(e) => setComponent(e.target.value)} className={inputClass} placeholder="Ej: Bomba de Inyección Common Rail" />
-          </label>
-
-          <label className={cn(labelClass, 'block')}>
-            Válida hasta
-            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputClass} />
-          </label>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Creando...' : 'Crear y cargar renglones'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    {creatingCustomer && (
-      <CustomerModal
-        customer={null}
-        onClose={() => setCreatingCustomer(false)}
-        onSaved={async (customer) => {
-          setCreatingCustomer(false);
-          await loadCustomers();
-          handleCustomerChange(customer.id);
-        }}
-      />
-    )}
-
-    {creatingVehicle && selectedCustomer && (
-      <VehicleModal
-        vehicle={null}
-        customers={customers}
-        fixedCustomerId={selectedCustomer.id}
-        onClose={() => setCreatingVehicle(false)}
-        onSaved={async (vehicle: Vehicle) => {
-          setCreatingVehicle(false);
-          await loadCustomers();
-          setVehicleId(vehicle.id);
-        }}
-      />
-    )}
-    </>
   );
 }

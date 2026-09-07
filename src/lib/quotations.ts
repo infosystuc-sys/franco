@@ -203,31 +203,10 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
   };
 }
 
-export interface NewQuotationInput {
-  customerId: string;
-  /** Opcional, igual que en la orden: una pieza suelta puede no tener vehículo. */
-  vehicleId: string | null;
-  component: string;
-  validUntil: string;
-  /** Se completa al cotizar desde la orden: las observaciones de la recepción pasan directo a las notas. */
-  notes?: string;
-}
-
-export async function createQuotation(input: NewQuotationInput) {
-  const { data, error } = await supabase
-    .from('quotations')
-    .insert({
-      customer_id: input.customerId,
-      vehicle_id: input.vehicleId,
-      component: input.component || null,
-      valid_until: input.validUntil || null,
-      notes: input.notes || null,
-    })
-    .select('id, number')
-    .single();
-  if (error) throw error;
-  return data as { id: string; number: string };
-}
+// El alta suelta de cotizaciones (createQuotation) se retiró: una cotización
+// nace siempre de una orden de trabajo, por cotizar_desde_ot. Dejarla viva
+// permitía crear presupuestos sin orden, que es justo lo que el circuito dejó
+// de admitir.
 
 const DEFAULT_VALIDITY_DAYS = 15;
 

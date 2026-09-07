@@ -567,8 +567,8 @@ export interface WorkOrderDetail {
     | null;
   vehicle:
     | {
-        // Se necesita para cotizar desde la OT (createQuotation exige un
-        // vehicleId): sin este id habría que volver a buscar el vehículo.
+        // Se necesita para cotizar desde la OT: sin este id habría que
+        // volver a buscar el vehículo.
         id: string;
         brand: string | null;
         model: string;

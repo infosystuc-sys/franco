@@ -165,20 +165,6 @@ export function QuotationDetails() {
     await loadQuotation();
   });
 
-  const handleConvert = () => run(async () => {
-    const orden = await applyQuotationToWorkOrder(quotation.id);
-    if (orden) {
-      navigate(`/orden/${orden.number}`);
-      return;
-    }
-    // Cotización suelta: se aceptó un presupuesto hecho antes de que el
-    // vehículo llegara, así que no hay orden que llenar todavía. Se avisa en
-    // vez de dejar al usuario esperando una navegación que no va a pasar.
-    setNotice(
-      'Cotización aceptada. Cuando el cliente traiga el vehículo, abrí la orden y enganchale esta cotización desde ahí.'
-    );
-    await loadQuotation();
-  });
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
@@ -232,7 +218,6 @@ export function QuotationDetails() {
                 onAccept={handleAccept}
                 onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
                 onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
-                onConvert={handleConvert}
               />
             </div>
           )
@@ -267,7 +252,7 @@ export function QuotationDetails() {
       {quotation.workOrderNumber && (
         <div className="bg-panel-alt border border-line text-text-soft text-sm px-4 py-3 flex items-center gap-2">
           <FileCheck2 size={16} />
-          Esta cotización generó la orden de trabajo{' '}
+          Presupuesto de la orden de trabajo{' '}
           <Link to={`/orden/${quotation.workOrderNumber}`} className="font-bold text-accent-deep hover:underline inline-flex items-center gap-1">
             {quotation.workOrderNumber} <ArrowRight size={13} />
           </Link>
@@ -471,7 +456,6 @@ function ActionBar({
   onAccept,
   onReject,
   onReopen,
-  onConvert,
 }: {
   quotation: QuotationDetail;
   busy: boolean;
@@ -482,7 +466,6 @@ function ActionBar({
   onAccept: () => void;
   onReject: () => void;
   onReopen: () => void;
-  onConvert: () => void;
 }) {
   const btn = 'px-4 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50';
 
@@ -514,15 +497,6 @@ function ActionBar({
             <XCircle size={16} /> Rechazar
           </button>
         </>
-      )}
-
-      {/* Para la cotización que se aceptó suelta y recién después se enganchó
-          a una orden: aceptar ya la aplicó cuando había orden, pero en ese
-          camino no la había. Aplicarla de nuevo no duplica nada. */}
-      {quotation.status === 'ACEPTADA' && quotation.workOrderNumber && (
-        <button onClick={onConvert} disabled={busy} className={cn(btn, 'bg-accent text-accent-ink hover:bg-accent-deep hover:text-white')}>
-          <FileCheck2 size={16} /> {busy ? 'Aplicando...' : 'Aplicar a la orden'}
-        </button>
       )}
 
       {quotation.status === 'RECHAZADA' && (
