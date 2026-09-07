@@ -251,6 +251,10 @@ export function Quotations() {
       {showNew && (
         <NewQuotationModal
           onClose={() => setShowNew(false)}
+          // A diferencia de la OT, acá SÍ se entra al detalle: la cotización
+          // nace sin renglones —el propio botón dice "Crear y cargar
+          // renglones"— y volver al listado obligaría a buscarla de nuevo
+          // para hacer lo que el alta ya prometía como paso siguiente.
           onCreated={(number) => navigate(`/cotizacion/${number}`)}
         />
       )}

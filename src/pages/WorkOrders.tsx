@@ -331,9 +331,12 @@ export function WorkOrders() {
       {showNewOrder && (
         <NewWorkOrderModal
           onClose={() => setShowNewOrder(false)}
-          onCreated={(workOrder) => {
+          // Vuelve al listado en vez de entrar al detalle: es el mismo patrón
+          // que ya tienen Facturas, Compras, Cobranzas, Pagos y Remitos al
+          // guardar un comprobante nuevo.
+          onCreated={() => {
             setShowNewOrder(false);
-            navigate(`/orden/${workOrder.number}`);
+            loadOrders();
           }}
         />
       )}
