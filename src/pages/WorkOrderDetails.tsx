@@ -680,7 +680,7 @@ export function WorkOrderDetails() {
                 editandoObservaciones.current = false;
                 handleSaveObservations();
               }}
-              disabled={!isAdmin}
+              disabled={!isAdmin || locked}
               rows={2}
               className="mt-1 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:bg-panel-alt"
             />
@@ -697,7 +697,7 @@ export function WorkOrderDetails() {
                 {order.receivedParts.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-2">
                     <span>{p.name} — <span className="font-mono text-xs">{p.serialNumber}</span></span>
-                    {isAdmin && (
+                    {isAdmin && !locked && (
                       <button
                         type="button"
                         onClick={() => handleDeletePart(p.id, p.name)}
@@ -711,7 +711,7 @@ export function WorkOrderDetails() {
                 ))}
               </ul>
             )}
-            {isAdmin && (
+            {isAdmin && !locked && (
               <div className="flex gap-2">
                 <input
                   value={partName}
@@ -741,7 +741,9 @@ export function WorkOrderDetails() {
 
       {order && (
         <div className="mt-6">
-          <PhotosSection order={order} isAdmin={isAdmin} onChanged={loadOrder} onError={setError} />
+          {/* Facturada, las fotos también quedan congeladas: la orden es el
+              respaldo de un comprobante emitido. */}
+          <PhotosSection order={order} isAdmin={isAdmin && !locked} onChanged={loadOrder} onError={setError} />
         </div>
       )}
     </div>
@@ -954,9 +956,26 @@ function StatusControls({
   // asignarse, igual tiene que aparecer en la lista — si no, el
   // desplegable arranca mostrando otra cosa distinta de lo que la OT
   // realmente tiene.
-  const options = statuses.some((s) => s.id === order.status.id)
+  const todos = statuses.some((s) => s.id === order.status.id)
     ? statuses
     : [order.status, ...statuses];
+
+  // Una OT facturada queda bloqueada, pero con una única salida: Retirado. El
+  // vehículo se entrega DESPUÉS de facturar, y sin ese paso la orden seguiría
+  // ocupando lugar en la playa para siempre.
+  //
+  // Se reconoce por clave y no por su nombre: el ABM deja renombrar los
+  // estados, y comparar contra el texto dejaría a la orden facturada sin
+  // salida en cuanto alguien lo tocara, sin que nada avise.
+  const retirado = statuses.find((s) => s.systemKey === 'RETIRADO') ?? null;
+  const options = invoice
+    ? todos.filter((s) => s.id === order.status.id || s.id === retirado?.id)
+    : todos;
+
+  // Con factura, el desplegable sirve solo si hay algún destino además del
+  // estado actual: ya retirada —o sin ese estado en el ABM— no hay nada que
+  // ofrecer y vuelve a quedar bloqueado como antes.
+  const puedeRetirar = !!invoice && options.length > 1;
 
   return (
     <div className="mt-7 border-t border-line pt-4">
@@ -967,7 +986,7 @@ function StatusControls({
         <select
           value={order.status.id}
           onChange={(e) => onChange(e.target.value)}
-          disabled={busy || !!invoice}
+          disabled={busy || (!!invoice && !puedeRetirar)}
           className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none disabled:opacity-60"
         >
           {options.map((status) => (
@@ -983,8 +1002,15 @@ function StatusControls({
 
       {invoice && (
         <p className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
-          Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida:
-          queda bloqueada, no se puede modificar. Para corregir algo, anulá esa factura primero.
+          Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida
+          {puedeRetirar && retirado ? (
+            <>
+              : lo único que admite es pasarla a {retirado.label}, cuando el cliente
+              se lleve el vehículo. Para cualquier otra corrección, anulá esa factura primero.
+            </>
+          ) : (
+            <>: queda bloqueada, no se puede modificar. Para corregir algo, anulá esa factura primero.</>
+          )}
         </p>
       )}
     </div>

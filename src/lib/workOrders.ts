@@ -48,6 +48,12 @@ export interface WorkOrderStatusDef {
   isTerminal: boolean;
   notifiesClient: boolean;
   freesYard: boolean;
+  /**
+   * Identificador estable de los estados que el circuito reconoce. El label es
+   * del usuario y puede cambiar; esto no. Null en los estados que el taller
+   * agregó por su cuenta.
+   */
+  systemKey: string | null;
 }
 
 export interface WorkOrderStatusInput {
@@ -73,7 +79,7 @@ export interface WorkOrderStatusRef {
 }
 
 const STATUS_SELECT =
-  'id, label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client, frees_yard';
+  'id, label, client_description, color, sort_order, active, is_initial, is_terminal, notifies_client, frees_yard, system_key';
 
 function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
   return {
@@ -87,6 +93,7 @@ function mapWorkOrderStatus(row: any): WorkOrderStatusDef {
     isTerminal: row.is_terminal,
     notifiesClient: row.notifies_client,
     freesYard: row.frees_yard,
+    systemKey: row.system_key ?? null,
   };
 }
 
