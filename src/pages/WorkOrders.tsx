@@ -71,7 +71,7 @@ export function WorkOrders() {
     return orders.filter((order) => {
       if (statusFilter && order.status.id !== statusFilter) return false;
       if (!term) return true;
-      return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName]
+      return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName, order.invoiceNumber]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term));
     });
@@ -229,6 +229,7 @@ export function WorkOrders() {
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
                 <th className="w-40 p-3 font-semibold">Estado</th>
+                <th className="w-36 p-3 font-semibold">Factura</th>
                 <th className="w-36 p-3 font-semibold">Empleado</th>
                 <th className="w-28 p-3 font-semibold">Fecha</th>
                 <th className="w-28 p-3 text-right font-semibold">Acciones</th>
@@ -237,12 +238,12 @@ export function WorkOrders() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="p-8 text-center text-text-soft">Cargando…</td>
+                  <td colSpan={isAdmin ? 9 : 8} className="p-8 text-center text-text-soft">Cargando…</td>
                 </tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 8 : 7} className="p-8 text-center text-text-soft">
+                  <td colSpan={isAdmin ? 9 : 8} className="p-8 text-center text-text-soft">
                     {orders.length === 0
                       ? 'No hay órdenes cargadas todavía.'
                       : 'Ninguna orden coincide con la búsqueda.'}
@@ -298,6 +299,13 @@ export function WorkOrders() {
                       />
                       {order.status.label}
                     </span>
+                  </td>
+                  <td data-label="Factura" className="p-3">
+                    {order.invoiceNumber ? (
+                      <span className="font-mono text-text">{order.invoiceNumber}</span>
+                    ) : (
+                      <span className="text-text-soft">—</span>
+                    )}
                   </td>
                   <td data-label="Empleado" className="p-3 text-text-soft">
                     {order.employeeName ?? '—'}

@@ -348,6 +348,16 @@ export interface WorkOrderRow extends WorkOrderListRow {
    * listado sin entrar a cada orden.
    */
   priceDiffers: boolean;
+  /**
+   * Número de la factura emitida sobre esta orden, si la tiene. Solo cuenta la
+   * EMITIDA: una anulada dejó de respaldar nada, y mostrarla haría creer que la
+   * orden está facturada cuando en realidad volvió a estar abierta.
+   *
+   * Un operario ve la columna vacía aunque la factura exista: el RLS de
+   * invoices es de admin y contador. No rompe la consulta —el permiso de SELECT
+   * está, lo que filtra son las filas— así que la orden se lista igual.
+   */
+  invoiceNumber: string | null;
 }
 
 /**
@@ -370,7 +380,8 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        vehicle:vehicles(brand, model, license_plate),
        employee:employees(name),
        quotation:quotations!work_orders_quotation_id_fkey(items:quotation_items(subtotal)),
-       items:work_order_items(subtotal)`
+       items:work_order_items(subtotal),
+       invoice:invoices!invoices_work_order_id_fkey(full_number, status)`
     )
     .order('created_at', { ascending: false });
 
@@ -388,11 +399,17 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
       row.price_auth_requested_total !== null &&
       Math.abs(Number(row.price_auth_requested_total) - currentTotal) < 0.005;
 
+    // Según la forma de la relación, PostgREST devuelve arreglo u objeto. Se
+    // normaliza acá para no depender de cuál eligió.
+    const facturas = Array.isArray(row.invoice) ? row.invoice : row.invoice ? [row.invoice] : [];
+    const emitida = facturas.find((f: any) => f.status === 'EMITIDA');
+
     return {
       ...mapWorkOrderListRow(row),
       employeeName: row.employee?.name ?? null,
       createdAt: row.created_at,
       priceDiffers: priceDiffers && !priceAuthCoversCurrent,
+      invoiceNumber: emitida?.full_number ?? null,
     };
   });
 }
