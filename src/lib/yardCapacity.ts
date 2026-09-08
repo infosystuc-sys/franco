@@ -44,6 +44,8 @@ export interface YardOccupant {
   vehicleId: string;
   customerName: string;
   vehicleLabel: string;
+  /** Cruda, para cruzarla con la patente escrita a mano en una reserva. */
+  licensePlate: string | null;
   sizeClass: SizeClass;
   statusLabel: string;
   statusColor: string;
@@ -114,6 +116,7 @@ export async function fetchYardOccupancy(): Promise<YardOccupant[]> {
       vehicleId: row.vehicle_id,
       customerName: row.customer?.name ?? '—',
       vehicleLabel: labelDeVehiculo(row.vehicle),
+      licensePlate: row.vehicle?.license_plate ?? null,
       sizeClass: tamanoDe(row.vehicle, row.number),
       statusLabel: row.status?.label ?? '—',
       statusColor: row.status?.color ?? '#6b7280',
@@ -233,6 +236,20 @@ export function disponibilidad(
 
 export interface YardDayAvailability extends YardAvailability {
   date: string;
+  /** Cuántas de las celdas tomadas ese día lo están por una reserva. */
+  reservedCells: number;
+}
+
+/**
+ * Lo mínimo que la proyección necesita saber de una reserva. Se pide así, y no
+ * el tipo entero, para que el cálculo no dependa del módulo de reservas: es al
+ * revés, las reservas se apoyan en este.
+ */
+export interface YardReservationSlot {
+  sizeClass: SizeClass;
+  startsOn: string;
+  endsOn: string;
+  licensePlate: string;
 }
 
 /**
@@ -248,16 +265,42 @@ export function proyectarDisponibilidad(
   cells: number,
   occupants: YardOccupant[],
   dias = 14,
-  hoy: string = hoyISO()
+  hoy: string = hoyISO(),
+  reservations: YardReservationSlot[] = []
 ): YardDayAvailability[] {
   const resultado: YardDayAvailability[] = [];
   const base = new Date(`${hoy}T00:00:00`);
+
+  // Una patente que ya está en el taller no se cuenta dos veces: la celda la
+  // ocupa la orden, no la reserva que la anticipaba.
+  const patentesPresentes = new Set(
+    occupants.map((o) => (o.licensePlate ?? '').replace(/[\s-]/g, '').toUpperCase()).filter(Boolean)
+  );
+
   for (let i = 0; i < dias; i += 1) {
     const d = new Date(base);
     d.setDate(d.getDate() + i);
     const date = d.toISOString().slice(0, 10);
+
     const eseDia = occupants.filter((o) => ocupaEnFecha(o, date, hoy));
-    resultado.push({ date, ...disponibilidad(cells, eseDia) });
+    const reservasDelDia = reservations.filter(
+      (r) =>
+        date >= r.startsOn &&
+        date <= r.endsOn &&
+        !patentesPresentes.has(r.licensePlate.replace(/[\s-]/g, '').toUpperCase())
+    );
+
+    // Se cuentan juntos a propósito: una celda admite tres medianos sin
+    // importar si están presentes o reservados. Separarlos daría más celdas
+    // ocupadas de las que el taller usa en realidad.
+    const total = disponibilidad(cells, [...eseDia, ...reservasDelDia]);
+    const soloOcupadas = celdasOcupadas(eseDia);
+
+    resultado.push({
+      date,
+      ...total,
+      reservedCells: cells - total.freeCells - soloOcupadas,
+    });
   }
   return resultado;
 }

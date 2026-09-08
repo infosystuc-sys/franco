@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, CalendarPlus, Trash2 } from 'lucide-react';
 import { cn, formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { PageHeader, Panel } from '@/src/components/ui';
+import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { getErrorMessage, setEstimatedDeliveryDate } from '@/src/lib/workOrders';
 import { SIZE_CLASS_LABELS } from '@/src/lib/vehicles';
 import {
@@ -16,6 +16,14 @@ import {
   vencidas,
   type YardOccupant,
 } from '@/src/lib/yardCapacity';
+import {
+  deleteYardReservation,
+  fetchYardReservations,
+  reservasVigentes,
+  reservaSigueVigente,
+  type YardReservation,
+} from '@/src/lib/yardReservations';
+import { NewReservationModal } from '@/src/components/NewReservationModal';
 
 /**
  * Cuánto lugar queda en la playa, hoy y en los próximos días.
@@ -39,6 +47,8 @@ export function ShopCapacity() {
   const { role } = useAuth();
   const [cells, setCells] = React.useState(0);
   const [occupancy, setOccupancy] = React.useState<YardOccupant[]>([]);
+  const [reservations, setReservations] = React.useState<YardReservation[]>([]);
+  const [reservando, setReservando] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -46,9 +56,14 @@ export function ShopCapacity() {
     setLoading(true);
     setError(null);
     try {
-      const [celdas, rows] = await Promise.all([fetchYardCells(), fetchYardOccupancy()]);
+      const [celdas, rows, reservas] = await Promise.all([
+        fetchYardCells(),
+        fetchYardOccupancy(),
+        fetchYardReservations(),
+      ]);
       setCells(celdas);
       setOccupancy(rows);
+      setReservations(reservas);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -63,11 +78,30 @@ export function ShopCapacity() {
   // hoyISO se calcula una vez y se pasa a todo: la proyección y los contadores
   // tienen que estar de acuerdo en qué es pasado.
   const hoy = hoyISO();
-  const disponible = React.useMemo(() => disponibilidad(cells, occupancy), [cells, occupancy]);
+  /**
+   * Las reservas de hoy que todavía reservan algo: dentro de su rango y sin que
+   * el vehículo haya llegado. Una reserva cuyo camión ya está adentro no
+   * descuenta — la celda la ocupa la orden.
+   */
+  const reservasDeHoy = React.useMemo(
+    () => reservasVigentes(reservations, occupancy, hoy),
+    [reservations, occupancy, hoy]
+  );
+
+  // Ocupación sola, para poder mostrarla separada de lo reservado.
+  const soloOcupado = React.useMemo(() => disponibilidad(cells, occupancy), [cells, occupancy]);
+  // Y el total, que es contra lo que de verdad se decide si entra otro.
+  const disponible = React.useMemo(
+    () => disponibilidad(cells, [...occupancy, ...reservasDeHoy]),
+    [cells, occupancy, reservasDeHoy]
+  );
   const libres = disponible.freeCells;
+  const celdasOcupadasHoy = cells - soloOcupado.freeCells;
+  const celdasReservadasHoy = soloOcupado.freeCells - disponible.freeCells;
+
   const linea = React.useMemo(
-    () => proyectarDisponibilidad(cells, occupancy, 14, hoy),
-    [cells, occupancy, hoy]
+    () => proyectarDisponibilidad(cells, occupancy, 14, hoy, reservations),
+    [cells, occupancy, hoy, reservations]
   );
   const sinFecha = React.useMemo(() => sinFechaEstimada(occupancy), [occupancy]);
   const atrasadas = React.useMemo(() => vencidas(occupancy, hoy), [occupancy, hoy]);
@@ -86,6 +120,17 @@ export function ShopCapacity() {
   const sinConfigurar = cells === 0;
 
   if (role !== 'admin') return <Navigate to="/" replace />;
+
+  async function handleDeleteReservation(r: YardReservation) {
+    if (!window.confirm(`¿Borrar la reserva de ${r.licensePlate}? El lugar vuelve a quedar disponible.`)) return;
+    setError(null);
+    try {
+      await deleteYardReservation(r.id);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
 
   async function handleDeliveryChange(workOrderId: string, date: string) {
     setError(null);
@@ -143,7 +188,7 @@ export function ShopCapacity() {
             </div>
             <div className="pb-1">
               <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-                Celdas libres
+                Celdas
               </span>
               <span className={cn(
                 'font-display text-2xl font-medium',
@@ -151,7 +196,17 @@ export function ShopCapacity() {
               )}>
                 {loading ? '—' : libres}
               </span>
-              <span className="ml-1 text-sm text-text-soft">de {cells}</span>
+              <span className="ml-1 text-sm text-text-soft">libres de {cells}</span>
+              {/* Ocupado y reservado se muestran aparte: no es lo mismo tener
+                  el camión que esperarlo, aunque las dos cosas tomen celda. */}
+              {!loading && (
+                <span className="mt-1 block text-[11px] text-text-soft">
+                  {celdasOcupadasHoy} ocupada{celdasOcupadasHoy === 1 ? '' : 's'}
+                  {celdasReservadasHoy > 0 && (
+                    <> · <span className="font-semibold text-state-open">{celdasReservadasHoy} reservada{celdasReservadasHoy === 1 ? '' : 's'}</span></>
+                  )}
+                </span>
+              )}
             </div>
           </div>
           <p className="max-w-xs text-xs text-text-soft">
@@ -213,11 +268,92 @@ export function ShopCapacity() {
                 )}>
                   {dia.medianos} <span className="text-[10px] font-normal text-text-soft">M</span>
                 </span>
+                {/* Cuánto de lo tomado ese día es reserva y no vehículo
+                    presente. En azul, el color de las reservas en toda la
+                    pantalla. */}
+                {dia.reservedCells > 0 && (
+                  <span className="mt-1 block border-t border-state-open/30 pt-1 text-[10px] font-semibold text-state-open">
+                    {dia.reservedCells} res.
+                  </span>
+                )}
               </div>
             ))}
           </div>
         </div>
       </Panel>
+
+      {/* ── Reservas ────────────────────────────────────────────────────
+          Separadas de la ocupación y con su propio color: una reserva toma
+          celda igual que un vehículo presente, pero no es lo mismo tener el
+          camión que esperarlo, y quien mira la playa necesita distinguirlo. */}
+      <Panel className="p-5">
+        <SectionHeader
+          title={<><CalendarPlus size={15} className="mr-1.5 inline-block align-[-2px] text-state-open" />Reservas</>}
+          actions={
+            <Button type="button" variant="ghost" onClick={() => setReservando(true)}>
+              <CalendarPlus size={16} /> Reservar celda
+            </Button>
+          }
+        />
+
+        {reservations.length === 0 ? (
+          <p className="text-xs text-text-soft">
+            No hay reservas. Sirven para comprometer lugar antes de que el vehículo llegue.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {reservations.map((r) => {
+              // Una reserva cuyo vehículo ya está adentro dejó de reservar: la
+              // celda la ocupa la orden. Se muestra igual, apagada, para que se
+              // entienda por qué dejó de descontar.
+              const vigente = reservaSigueVigente(r, occupancy);
+              const futura = r.startsOn > hoy;
+              const vencida = r.endsOn < hoy;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+                  <span
+                    aria-hidden
+                    className={cn('inline-block h-2 w-2 shrink-0', vigente && !vencida ? 'bg-state-open' : 'bg-state-idle')}
+                  />
+                  <span className="font-mono font-semibold text-text">{r.licensePlate}</span>
+                  <span className="text-text-soft">{r.customerName}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    {SIZE_CLASS_LABELS[r.sizeClass]}
+                  </span>
+                  <span className="text-text-soft">
+                    {formatDate(r.startsOn)} → {formatDate(r.endsOn)}
+                  </span>
+                  {!vigente && (
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-state-done">
+                      Ya ingresó · no descuenta
+                    </span>
+                  )}
+                  {vigente && vencida && (
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      Vencida
+                    </span>
+                  )}
+                  {vigente && futura && (
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-state-open">
+                      Desde {formatDate(r.startsOn)}
+                    </span>
+                  )}
+                  {r.notes && <span className="text-[11px] text-text-soft">{r.notes}</span>}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReservation(r)}
+                    aria-label={`Borrar la reserva de ${r.licensePlate}`}
+                    className="ml-auto shrink-0 p-1 text-text-soft transition-colors hover:text-danger"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
+
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto overflow-y-hidden">
@@ -299,6 +435,13 @@ export function ShopCapacity() {
           </table>
         </div>
       </Panel>
+
+      {reservando && (
+        <NewReservationModal
+          onClose={() => setReservando(false)}
+          onCreated={() => { setReservando(false); load(); }}
+        />
+      )}
     </div>
   );
 }
