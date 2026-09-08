@@ -172,7 +172,15 @@ export function ExpenseConcepts() {
                         onChange={(e) => setDraft(e.target.value)}
                         onBlur={() => handleRename(concept)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRename(concept);
+                          if (e.key === 'Enter') {
+                            // Acá Enter confirma el nombre, no avanza de campo.
+                            // El preventDefault se lo dice al manejador global
+                            // (enterAvanzaCampos): sin esto, el foco saltaba al
+                            // campo siguiente, eso disparaba el onBlur y el
+                            // renombrado salía dos veces.
+                            e.preventDefault();
+                            handleRename(concept);
+                          }
                           if (e.key === 'Escape') setEditingId(null);
                         }}
                         className="w-full border border-accent-deep bg-panel px-2 py-1 text-sm focus:outline-none"

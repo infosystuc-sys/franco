@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter, BrowserRouter, Routes, Route } from 'react-router-dom';
 import { isNativeApp, setupNativeApp } from './lib/native';
+import { activarEnterAvanzaCampos } from './lib/enterAvanzaCampos';
 import { MainLayout } from './components/MainLayout';
 import { RequireAuth } from './components/RequireAuth';
 import { AuthProvider } from './lib/auth';
@@ -68,6 +69,10 @@ export default function App() {
     // historial de navegación haga su trabajo.
     setupNativeApp(() => false);
   }, []);
+
+  // Enter avanza al campo siguiente en toda la aplicación. Va acá y no en cada
+  // formulario: así ninguna pantalla nueva nace sin el comportamiento.
+  React.useEffect(activarEnterAvanzaCampos, []);
 
   return (
     <Router>
