@@ -19,6 +19,19 @@ export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
 
 export const VEHICLE_TYPES = Object.keys(VEHICLE_TYPE_LABELS) as VehicleType[];
 
+/**
+ * Qué entró al taller. Una pieza no ocupa lugar en la playa, no tiene patente
+ * ni tamaño, y se identifica por su número de referencia.
+ */
+export type VehicleKind = 'VEHICULO' | 'PIEZA';
+
+export const VEHICLE_KIND_LABELS: Record<VehicleKind, string> = {
+  VEHICULO: 'Vehículo',
+  PIEZA: 'Pieza suelta',
+};
+
+export const VEHICLE_KINDS = Object.keys(VEHICLE_KIND_LABELS) as VehicleKind[];
+
 export type SizeClass = 'MEDIANO' | 'GRANDE';
 
 export const SIZE_CLASS_LABELS: Record<SizeClass, string> = {
@@ -56,6 +69,12 @@ export interface Vehicle {
   id: string;
   customerId: string;
   customerName: string;
+  kind: VehicleKind;
+  /** Identifica a la pieza, como la patente identifica al vehículo. */
+  referenceNumber: string | null;
+  /** Null en un vehículo: no es "no trae", es que la pregunta no aplica. */
+  hasInjectors: boolean | null;
+  injectorCount: number | null;
   brand: string | null;
   model: string;
   vehicleType: VehicleType;
@@ -75,6 +94,11 @@ export interface Vehicle {
 
 export interface VehicleInput {
   customerId: string;
+  kind: VehicleKind;
+  referenceNumber: string;
+  hasInjectors: boolean;
+  /** Texto porque viene de un input; se convierte al guardar. */
+  injectorCount: string;
   brand: string;
   model: string;
   vehicleType: VehicleType;
@@ -99,6 +123,10 @@ export interface VehicleInput {
 
 export const EMPTY_VEHICLE_FORM: VehicleInput = {
   customerId: '',
+  kind: 'VEHICULO',
+  referenceNumber: '',
+  hasInjectors: false,
+  injectorCount: '',
   brand: '',
   model: '',
   vehicleType: 'CAMION',
@@ -116,10 +144,18 @@ export const EMPTY_VEHICLE_FORM: VehicleInput = {
   active: true,
 };
 
-/** Etiqueta legible del vehículo: "Volvo FH16 — ABC-123". */
-export function vehicleLabel(vehicle: Pick<Vehicle, 'brand' | 'model' | 'licensePlate'>): string {
+/**
+ * Etiqueta legible: "Volvo FH16 — ABC-123" para un vehículo, "Bosch VP44 —
+ * ref. 0470504217" para una pieza. Cada uno se identifica con lo suyo: la
+ * patente o el número de referencia.
+ */
+export function vehicleLabel(
+  vehicle: Pick<Vehicle, 'brand' | 'model' | 'licensePlate'> & Partial<Pick<Vehicle, 'referenceNumber'>>
+): string {
   const name = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
-  return vehicle.licensePlate ? `${name} — ${vehicle.licensePlate}` : name;
+  if (vehicle.licensePlate) return `${name} — ${vehicle.licensePlate}`;
+  if (vehicle.referenceNumber) return `${name} — ref. ${vehicle.referenceNumber}`;
+  return name;
 }
 
 function mapVehicle(row: any): Vehicle {
@@ -127,6 +163,10 @@ function mapVehicle(row: any): Vehicle {
     id: row.id,
     customerId: row.customer_id,
     customerName: row.customer?.name ?? '—',
+    kind: row.kind ?? 'VEHICULO',
+    referenceNumber: row.reference_number ?? null,
+    hasInjectors: row.has_injectors ?? null,
+    injectorCount: row.injector_count === null || row.injector_count === undefined ? null : Number(row.injector_count),
     brand: row.brand,
     model: row.model,
     vehicleType: row.vehicle_type,
@@ -160,6 +200,14 @@ function numberOrNull(value: string): number | null {
 function toRow(input: VehicleInput) {
   return {
     customer_id: input.customerId,
+    kind: input.kind,
+    // Los campos de pieza se limpian al guardar un vehículo, y al revés. Sin
+    // esto, cambiar el tipo de ingreso a mitad de carga dejaría pegado el dato
+    // del tipo anterior: un vehículo "con 6 inyectores", o una pieza con
+    // patente.
+    reference_number: input.kind === 'PIEZA' ? nullIfBlank(input.referenceNumber) : null,
+    has_injectors: input.kind === 'PIEZA' ? input.hasInjectors : null,
+    injector_count: input.kind === 'PIEZA' && input.hasInjectors ? numberOrNull(input.injectorCount) : null,
     brand: nullIfBlank(input.brand),
     model: input.model.trim(),
     vehicle_type: input.vehicleType,
@@ -168,14 +216,14 @@ function toRow(input: VehicleInput) {
     // un vacío real si alguien llamara a esta función desde otro lado.
     size_class: input.sizeClass || 'MEDIANO',
     // Patente y VIN se normalizan en mayúsculas: los índices únicos comparan así.
-    license_plate: nullIfBlank(input.licensePlate)?.toUpperCase() ?? null,
+    license_plate: input.kind === 'PIEZA' ? null : nullIfBlank(input.licensePlate)?.toUpperCase() ?? null,
     year: numberOrNull(input.year),
     vin: nullIfBlank(input.vin)?.toUpperCase() ?? null,
     engine_brand: nullIfBlank(input.engineBrand),
     engine_model: nullIfBlank(input.engineModel),
     engine_number: nullIfBlank(input.engineNumber),
     injection_system: nullIfBlank(input.injectionSystem),
-    odometer: numberOrNull(input.odometer),
+    odometer: input.kind === 'PIEZA' ? null : numberOrNull(input.odometer),
     odometer_unit: input.odometerUnit,
     notes: nullIfBlank(input.notes),
     active: input.active,
@@ -185,6 +233,10 @@ function toRow(input: VehicleInput) {
 export function vehicleToForm(vehicle: Vehicle): VehicleInput {
   return {
     customerId: vehicle.customerId,
+    kind: vehicle.kind,
+    referenceNumber: vehicle.referenceNumber ?? '',
+    hasInjectors: vehicle.hasInjectors ?? false,
+    injectorCount: vehicle.injectorCount === null ? '' : String(vehicle.injectorCount),
     brand: vehicle.brand ?? '',
     model: vehicle.model,
     vehicleType: vehicle.vehicleType,

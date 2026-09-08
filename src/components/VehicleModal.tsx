@@ -27,6 +27,7 @@ import {
   type SizeClass,
   type Vehicle,
   type VehicleInput,
+  type VehicleKind,
   type VehicleType,
 } from '@/src/lib/vehicles';
 
@@ -39,6 +40,7 @@ export function VehicleModal({
   vehicle,
   customers,
   fixedCustomerId,
+  fixedKind,
   onClose,
   onSaved,
 }: {
@@ -46,11 +48,19 @@ export function VehicleModal({
   customers: Customer[];
   /** Si se pasa, el cliente ya viene elegido (el ingreso ya sabe para quién es) y no se puede cambiar. */
   fixedCustomerId?: string;
+  /**
+   * Qué se está dando de alta. Lo pasa el alta de OT: si ahí se está recibiendo
+   * una pieza, el "+ Nuevo" tiene que crear una pieza — si no, el equipo recién
+   * creado no aparecería en la lista que lo pidió.
+   */
+  fixedKind?: VehicleKind;
   onClose: () => void;
   onSaved: (vehicle: Vehicle) => void;
 }) {
   const [form, setForm] = React.useState<VehicleInput>(
-    vehicle ? vehicleToForm(vehicle) : { ...EMPTY_VEHICLE_FORM, customerId: fixedCustomerId ?? '' }
+    vehicle
+      ? vehicleToForm(vehicle)
+      : { ...EMPTY_VEHICLE_FORM, customerId: fixedCustomerId ?? '', kind: fixedKind ?? 'VEHICULO' }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -79,7 +89,7 @@ export function VehicleModal({
       setError('El modelo es obligatorio.');
       return;
     }
-    if (!form.sizeClass) {
+    if (form.kind === 'VEHICULO' && !form.sizeClass) {
       setError('Elegí el tamaño del vehículo: define cuánto lugar ocupa en la playa.');
       return;
     }

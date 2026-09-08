@@ -48,6 +48,16 @@ export function NewWorkOrderModal({
   // Qué se recibe define si el vehículo es obligatorio: una pieza suelta
   // puede llegar sin que su equipo de origen esté en la playa.
   const [receptionKind, setReceptionKind] = React.useState<ReceptionKind>('VEHICULO');
+
+  /**
+   * Cambiar qué se recibe invalida lo elegido: un vehículo no puede quedar
+   * seleccionado cuando ahora se está recibiendo una pieza. Sin esto el id
+   * viejo viajaba igual al guardar.
+   */
+  function handleReceptionKindChange(kind: ReceptionKind) {
+    setReceptionKind(kind);
+    setVehicleId('');
+  }
   const [observations, setObservations] = React.useState('');
   // Las piezas se juntan acá y se guardan recién cuando la OT existe: no hay
   // work_order_id contra el cual insertarlas hasta ese momento.
@@ -90,15 +100,21 @@ export function NewWorkOrderModal({
   }, [loadCustomers]);
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
-  // Solo se ofrecen vehículos activos para nuevas órdenes.
-  const vehicles = (selectedCustomer?.vehicles ?? []).filter((v) => v.active);
+  // Se ofrece lo que coincide con lo que se está recibiendo. Sin este filtro
+  // una pieza podía elegirse como vehículo y quedaba ocupando una celda de la
+  // playa sin estar ocupando nada.
+  const vehicles = (selectedCustomer?.vehicles ?? []).filter(
+    (v) => v.active && v.kind === receptionKind
+  );
 
   // Al cambiar de cliente, se preselecciona su vehículo si tiene uno solo.
   function handleCustomerChange(id: string) {
     setCustomerId(id);
     const customer = customers.find((c) => c.id === id);
-    const activeVehicles = (customer?.vehicles ?? []).filter((v) => v.active);
-    setVehicleId(activeVehicles.length === 1 ? activeVehicles[0].id : '');
+    const disponibles = (customer?.vehicles ?? []).filter(
+      (v) => v.active && v.kind === receptionKind
+    );
+    setVehicleId(disponibles.length === 1 ? disponibles[0].id : '');
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -191,7 +207,7 @@ export function NewWorkOrderModal({
               Qué se recibe
               <select
                 value={receptionKind}
-                onChange={(e) => setReceptionKind(e.target.value as ReceptionKind)}
+                onChange={(e) => handleReceptionKindChange(e.target.value as ReceptionKind)}
                 className={fieldClass(false, 'font-normal normal-case bg-panel')}
               >
                 {RECEPTION_KINDS.map((k) => (
@@ -430,6 +446,7 @@ export function NewWorkOrderModal({
         vehicle={null}
         customers={customers}
         fixedCustomerId={selectedCustomer.id}
+        fixedKind={receptionKind}
         onClose={() => setCreatingVehicle(false)}
         onSaved={async (vehicle: Vehicle) => {
           setCreatingVehicle(false);

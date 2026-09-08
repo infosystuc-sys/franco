@@ -5,7 +5,7 @@ import {
   type FiscalEntity,
   type FiscalEntityInput,
 } from '@/src/lib/fiscal';
-import type { SizeClass } from '@/src/lib/vehicles';
+import type { SizeClass, VehicleKind } from '@/src/lib/vehicles';
 
 // Los datos fiscales (CUIT, condición de IVA, domicilio) viven en fiscal.ts
 // porque los comparte con el padrón de proveedores. Se reexportan acá para
@@ -20,9 +20,15 @@ export {
 
 export interface CustomerVehicle {
   id: string;
+  /**
+   * Vehículo o pieza. El alta de OT filtra por esto: una pieza elegida como
+   * vehículo ocuparía celda en la playa sin estar ocupando nada.
+   */
+  kind: VehicleKind;
   brand: string | null;
   model: string;
   licensePlate: string | null;
+  referenceNumber: string | null;
   year: number | null;
   sizeClass: SizeClass;
   active: boolean;
@@ -39,9 +45,11 @@ function mapCustomer(row: any): Customer {
     ...mapFiscalEntity(row),
     vehicles: (row.vehicles ?? []).map((v: any) => ({
       id: v.id,
+      kind: v.kind ?? 'VEHICULO',
       brand: v.brand,
       model: v.model,
       licensePlate: v.license_plate,
+      referenceNumber: v.reference_number ?? null,
       year: v.year,
       sizeClass: v.size_class,
       active: v.active,
@@ -51,7 +59,8 @@ function mapCustomer(row: any): Customer {
 
 // El alta/baja de vehículos vive en src/lib/vehicles.ts, que maneja la ficha
 // técnica completa. Acá solo se leen los vehículos asociados a cada cliente.
-const SELECT_WITH_VEHICLES = '*, vehicles(id, brand, model, license_plate, year, active, size_class)';
+const SELECT_WITH_VEHICLES =
+  '*, vehicles(id, kind, brand, model, license_plate, reference_number, year, active, size_class)';
 
 export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
   let query = supabase.from('customers').select(SELECT_WITH_VEHICLES).order('name');
