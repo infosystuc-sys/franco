@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Search, Eye, Edit2, AlertTriangle, Trash2 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatDate } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, StateStrip } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -37,6 +37,21 @@ export function WorkOrders() {
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
   const [showNewOrder, setShowNewOrder] = React.useState(false);
+
+  // El "+" de la etiqueta del menú entra con ?nuevo=1 y abre el alta directo,
+  // para que llegar desde el menú y apretar "Nueva orden" acá terminen en la
+  // misma pantalla. Se limpia el parámetro para que recargar no vuelva a
+  // abrirla, y solo se atiende si es admin: el alta es suya.
+  const [searchParams, setSearchParams] = useSearchParams();
+  React.useEffect(() => {
+    if (searchParams.get('nuevo') !== '1') return;
+    if (isAdmin) setShowNewOrder(true);
+    setSearchParams((actuales) => {
+      const proximos = new URLSearchParams(actuales);
+      proximos.delete('nuevo');
+      return proximos;
+    }, { replace: true });
+  }, [searchParams, setSearchParams, isAdmin]);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [showDelete, setShowDelete] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);

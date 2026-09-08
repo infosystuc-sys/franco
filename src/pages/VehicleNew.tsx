@@ -6,6 +6,7 @@ import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
+import { CustomerModal } from '@/src/components/CustomerModal';
 import {
   createVehicle,
   EMPTY_VEHICLE_FORM,
@@ -80,7 +81,13 @@ export function VehicleNew() {
   const [fotosPendientes, setFotosPendientes] = React.useState<File[]>([]);
   const [fotosGuardadas, setFotosGuardadas] = React.useState<VehiclePhoto[]>([]);
 
+  const [creandoCliente, setCreandoCliente] = React.useState(false);
+
   const esPieza = form.kind === 'PIEZA';
+
+  const cargarClientes = React.useCallback(async () => {
+    setCustomers(await fetchCustomers(true));
+  }, []);
 
   React.useEffect(() => {
     let cancelado = false;
@@ -252,18 +259,30 @@ export function VehicleNew() {
 
             <label className={cn(labelClass, esPieza ? 'sm:col-span-4' : 'sm:col-span-2')}>
               Cliente propietario *
-              <select
-                value={form.customerId}
-                onChange={(e) => patch({ customerId: e.target.value })}
-                className={cn(inputClass, 'bg-panel')}
-              >
-                <option value="">Elegí un cliente…</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={form.customerId}
+                  onChange={(e) => patch({ customerId: e.target.value })}
+                  className={cn(inputClass, 'flex-1 bg-panel')}
+                >
+                  <option value="">Elegí un cliente…</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* El vehículo llega con un dueño que muchas veces es cliente
+                    nuevo: mandarlo a Clientes y volver le haría perder todo lo
+                    que ya cargó acá. */}
+                <button
+                  type="button"
+                  onClick={() => setCreandoCliente(true)}
+                  className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                >
+                  + Nuevo
+                </button>
+              </div>
             </label>
 
             {/* La patente identifica al vehículo. Una pieza se identifica por
@@ -508,6 +527,18 @@ export function VehicleNew() {
           </Button>
         </div>
       </form>
+
+      {creandoCliente && (
+        <CustomerModal
+          customer={null}
+          onClose={() => setCreandoCliente(false)}
+          onSaved={async (customer) => {
+            setCreandoCliente(false);
+            await cargarClientes();
+            patch({ customerId: customer.id });
+          }}
+        />
+      )}
     </div>
   );
 }
