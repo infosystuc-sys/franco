@@ -55,7 +55,7 @@ export function SendDocumentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Panel className="w-full max-w-sm p-5">
+      <Panel className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
         <h3 className="text-sm font-bold uppercase tracking-wider text-text">
           {isEmail ? 'Enviar por mail' : 'Enviar por WhatsApp'}
         </h3>

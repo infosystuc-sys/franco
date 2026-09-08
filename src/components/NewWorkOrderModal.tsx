@@ -172,7 +172,7 @@ export function NewWorkOrderModal({
   return (
     <>
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md border border-line-strong bg-panel">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col border border-line-strong bg-panel">
         <div className="flex items-center justify-between border-b border-line bg-panel-head px-5 py-3">
           <h2 className="font-display text-xl uppercase tracking-[0.04em] text-text-faint">
             Nueva orden de trabajo
@@ -181,7 +181,7 @@ export function NewWorkOrderModal({
             <X size={18} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-5">
           {error && (
             <div className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>
           )}

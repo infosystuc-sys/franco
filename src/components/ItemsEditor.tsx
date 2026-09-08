@@ -406,14 +406,14 @@ function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void
         <X size={16} /> Cancelar
       </Button>
       <div className="fixed inset-0 bg-black/40 z-70 flex items-center justify-center p-4">
-        <div className="bg-white w-full max-w-sm">
+        <div className="bg-white w-full max-w-sm flex max-h-[90vh] flex-col">
           <div className="flex justify-between items-center px-5 py-4 border-b border-line">
             <h3 className="text-sm font-bold text-text">Artículo nuevo</h3>
             <button type="button" onClick={() => setOpen(false)} className="text-text-soft hover:text-text">
               <X size={18} />
             </button>
           </div>
-          <div className="p-5 space-y-3">
+          <div className="p-5 space-y-3 overflow-y-auto">
             {error && <p className="text-xs text-danger">{error}</p>}
             <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
               Código *
