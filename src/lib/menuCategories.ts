@@ -93,7 +93,9 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'comprobantes',
         cards: [
           { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
-          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes' },
+          // El + no abre una orden: lleva a cargar el vehículo. Antes de abrir la OT
+          // hay que tener el equipo dado de alta, y es el paso que más se repite.
+          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo' },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
           { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
@@ -103,7 +105,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'padrones',
         cards: [
           { icon: Users, label: 'Clientes', path: '/clientes', newPath: '/clientes?nuevo=1', adminOnly: true },
-          { icon: Truck, label: 'Vehículos', path: '/vehiculos', newPath: '/vehiculos?nuevo=1', adminOnly: true },
+          { icon: Truck, label: 'Vehículos', path: '/vehiculos', newPath: '/vehiculos/nuevo', adminOnly: true },
           { icon: Wrench, label: 'Estados de OT', path: '/estados-ot', newPath: '/estados-ot?nuevo=1', adminOnly: true },
         ],
       },

@@ -14,9 +14,13 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [railCollapsed, setRailCollapsed] = React.useState(() => {
     try {
-      return localStorage.getItem(RAIL_COLLAPSED_KEY) === 'true';
+      // Arranca contraída: la pantalla de inicio es el menú de módulos, y la
+      // barra desplegada le come el ancho repitiendo lo mismo que ya se ve.
+      // Si el usuario la despliega, su preferencia manda de ahí en más.
+      const guardado = localStorage.getItem(RAIL_COLLAPSED_KEY);
+      return guardado === null ? true : guardado === 'true';
     } catch {
-      return false;
+      return true;
     }
   });
   const location = useLocation();

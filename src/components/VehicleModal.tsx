@@ -1,6 +1,14 @@
 import React from 'react';
 import { X, Truck, Cog, Gauge } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
+import {
+  fetchVehicleBrands,
+  fetchVehicleModels,
+  modelsOfBrand,
+  registerBrandAndModel,
+  type VehicleBrand,
+  type VehicleModel,
+} from '@/src/lib/vehicleCatalog';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import type { Customer } from '@/src/lib/customers';
 import {
@@ -46,6 +54,16 @@ export function VehicleModal({
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // El catálogo es sugerencia: si falla, el alta sigue andando sin autocompletar.
+  const [brands, setBrands] = React.useState<VehicleBrand[]>([]);
+  const [models, setModels] = React.useState<VehicleModel[]>([]);
+
+  React.useEffect(() => {
+    let cancelado = false;
+    fetchVehicleBrands().then((d) => !cancelado && setBrands(d)).catch(() => {});
+    fetchVehicleModels().then((d) => !cancelado && setModels(d)).catch(() => {});
+    return () => { cancelado = true; };
+  }, []);
 
   function patch(changes: Partial<VehicleInput>) {
     setForm((prev) => ({ ...prev, ...changes }));
@@ -69,6 +87,10 @@ export function VehicleModal({
     setError(null);
     try {
       const saved = vehicle ? await updateVehicle(vehicle.id, form) : await createVehicle(form);
+      // Suma al catálogo lo recién escrito, para que la próxima carga lo
+      // ofrezca. Después de guardar y sin cortar el flujo si falla: el
+      // vehículo ya quedó bien, y esto no le importa a quien está cargando.
+      registerBrandAndModel(form.brand, form.model).catch(() => {});
       onSaved(saved);
     } catch (err) {
       setError(describeVehicleError(getErrorMessage(err)));
@@ -118,11 +140,18 @@ export function VehicleModal({
 
               <label className={cn(labelClass, 'col-span-2')}>
                 Marca
-                <input value={form.brand} onChange={(e) => patch({ brand: e.target.value })} className={inputClass} placeholder="Volvo" />
+                <input value={form.brand} onChange={(e) => patch({ brand: e.target.value })} list="modal-marcas" className={inputClass} placeholder="Volvo" />
+                <datalist id="modal-marcas">
+                  {brands.map((b) => <option key={b.id} value={b.name} />)}
+                </datalist>
               </label>
               <label className={cn(labelClass, 'col-span-4')}>
                 Modelo *
-                <input value={form.model} onChange={(e) => patch({ model: e.target.value })} className={inputClass} placeholder="FH16 750" />
+                <input value={form.model} onChange={(e) => patch({ model: e.target.value })} list="modal-modelos" className={inputClass} placeholder="FH16 750" />
+                {/* Solo los de la marca elegida. */}
+                <datalist id="modal-modelos">
+                  {modelsOfBrand(brands, models, form.brand).map((m) => <option key={m.id} value={m.name} />)}
+                </datalist>
               </label>
 
               <label className={cn(labelClass, 'col-span-3')}>

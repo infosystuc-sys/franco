@@ -47,6 +47,7 @@ import { Settings } from './pages/Settings';
 import { Suppliers } from './pages/Suppliers';
 import { TaxRates } from './pages/TaxRates';
 import { Vehicles } from './pages/Vehicles';
+import { VehicleNew } from './pages/VehicleNew';
 import { WorkOrderDetails } from './pages/WorkOrderDetails';
 import { WorkOrderStatuses } from './pages/WorkOrderStatuses';
 import { ShopCapacity } from './pages/ShopCapacity';
@@ -132,6 +133,7 @@ export default function App() {
                     <Route path="/mensajes" element={<Notifications />} />
                     <Route path="/clientes" element={<Customers />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
+                    <Route path="/vehiculos/nuevo" element={<VehicleNew />} />
                     <Route path="/estados-ot" element={<WorkOrderStatuses />} />
                     <Route path="/disponibilidad-taller" element={<ShopCapacity />} />
                     <Route path="/remitos" element={<Remitos />} />

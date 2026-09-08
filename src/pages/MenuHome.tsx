@@ -29,7 +29,10 @@ export function MenuHome() {
 
   const categories = visibleCategories(isAdmin);
   const requested = searchParams.get('cat');
-  const activeKey = requested ?? (favorites.length > 0 ? 'favoritos' : categories[0]?.key ?? 'favoritos');
+  // Siempre arranca en Favoritos. Sin favoritos marcados la pantalla explica
+  // cómo marcarlos, que es mejor punto de partida que soltar al usuario en
+  // una categoría cualquiera.
+  const activeKey = requested ?? 'favoritos';
 
   function handleToggleFavorite(path: string) {
     setFavorites(toggleFavorite(path));
