@@ -26,9 +26,12 @@ import {
 export function NewWorkOrderModal({
   onClose,
   onCreated,
+  initialVehicleId,
 }: {
   onClose: () => void;
   onCreated: (workOrder: { number: string }) => void;
+  /** Vehículo recién recibido en el ingreso: llega elegido, con su dueño. */
+  initialVehicleId?: string | null;
 }) {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
@@ -98,6 +101,24 @@ export function NewWorkOrderModal({
       cancelled = true;
     };
   }, [loadCustomers]);
+
+  /**
+   * El ingreso de vehículo encadena hasta acá con el vehículo ya cargado.
+   * Se resuelve recién cuando llegaron los clientes, porque el dueño y el
+   * tipo de recepción salen de la ficha: solo con el id no alcanza para
+   * saber si es un vehículo o una pieza.
+   */
+  React.useEffect(() => {
+    if (!initialVehicleId || customers.length === 0) return;
+    const dueno = customers.find((c) =>
+      (c.vehicles ?? []).some((v) => v.id === initialVehicleId)
+    );
+    const ficha = (dueno?.vehicles ?? []).find((v) => v.id === initialVehicleId);
+    if (!dueno || !ficha) return;
+    setReceptionKind(ficha.kind);
+    setCustomerId(dueno.id);
+    setVehicleId(ficha.id);
+  }, [initialVehicleId, customers]);
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
   // Se ofrece lo que coincide con lo que se está recibiendo. Sin este filtro

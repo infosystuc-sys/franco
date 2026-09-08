@@ -1,6 +1,6 @@
 import React from 'react';
 import { Truck, Cog, Save, Users, Camera, ChevronDown, ChevronRight } from 'lucide-react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
@@ -82,6 +82,12 @@ export function VehicleNew() {
   const [fotosGuardadas, setFotosGuardadas] = React.useState<VehiclePhoto[]>([]);
 
   const [creandoCliente, setCreandoCliente] = React.useState(false);
+
+  // Se entra acá por dos caminos. Desde Vehículos se viene a cargar una ficha
+  // y se vuelve al listado. Desde Órdenes de trabajo se viene a recibir un
+  // equipo, y ahí guardar la ficha es la mitad del trámite: falta la orden.
+  const [searchParams] = useSearchParams();
+  const vieneDeOT = searchParams.get('destino') === 'ot';
 
   const esPieza = form.kind === 'PIEZA';
 
@@ -200,7 +206,9 @@ export function VehicleNew() {
         );
       }
 
-      navigate('/vehiculos');
+      // Recibir el equipo y abrir su orden son un solo trámite para quien está
+      // en el mostrador: se sigue con la orden, con el vehículo ya elegido.
+      navigate(vieneDeOT ? `/ordenes?nuevo=1&vehiculo=${guardado.id}` : '/vehiculos');
     } catch (err) {
       setError(getErrorMessage(err));
       setSaving(false);
@@ -519,7 +527,11 @@ export function VehicleNew() {
         </Panel>
 
         <div className="flex justify-end gap-2 pb-6">
-          <Button type="button" variant="ghost" onClick={() => navigate('/vehiculos')}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => navigate(vieneDeOT ? '/ordenes' : '/vehiculos')}
+          >
             Cancelar
           </Button>
           <Button type="submit" disabled={saving}>

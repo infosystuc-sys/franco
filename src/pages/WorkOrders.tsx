@@ -38,17 +38,22 @@ export function WorkOrders() {
   const [statusFilter, setStatusFilter] = React.useState('');
   const [showNewOrder, setShowNewOrder] = React.useState(false);
 
-  // El "+" de la etiqueta del menú entra con ?nuevo=1 y abre el alta directo,
-  // para que llegar desde el menú y apretar "Nueva orden" acá terminen en la
-  // misma pantalla. Se limpia el parámetro para que recargar no vuelva a
+  // Una orden arranca por el vehículo: el ingreso manda de vuelta acá con
+  // ?nuevo=1 y el vehículo ya recibido, y recién ahí se abre el alta con ese
+  // vehículo puesto. Se limpian los parámetros para que recargar no vuelva a
   // abrirla, y solo se atiende si es admin: el alta es suya.
   const [searchParams, setSearchParams] = useSearchParams();
+  const [vehiculoRecibido, setVehiculoRecibido] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (searchParams.get('nuevo') !== '1') return;
-    if (isAdmin) setShowNewOrder(true);
+    if (isAdmin) {
+      setVehiculoRecibido(searchParams.get('vehiculo'));
+      setShowNewOrder(true);
+    }
     setSearchParams((actuales) => {
       const proximos = new URLSearchParams(actuales);
       proximos.delete('nuevo');
+      proximos.delete('vehiculo');
       return proximos;
     }, { replace: true });
   }, [searchParams, setSearchParams, isAdmin]);
@@ -150,8 +155,10 @@ export function WorkOrders() {
         title="Órdenes de Trabajo"
         subtitle="Todas las órdenes, en cualquier estado."
         actions={
+          // Igual que el "+" de la etiqueta del menú: una orden empieza
+          // recibiendo el vehículo, no en la ventana de alta.
           isAdmin && (
-            <Button onClick={() => setShowNewOrder(true)}>
+            <Button onClick={() => navigate('/vehiculos/nuevo?destino=ot')}>
               <Plus size={16} /> Nueva orden
             </Button>
           )
@@ -353,12 +360,17 @@ export function WorkOrders() {
 
       {showNewOrder && (
         <NewWorkOrderModal
-          onClose={() => setShowNewOrder(false)}
+          initialVehicleId={vehiculoRecibido}
+          onClose={() => {
+            setShowNewOrder(false);
+            setVehiculoRecibido(null);
+          }}
           // Vuelve al listado en vez de entrar al detalle: es el mismo patrón
           // que ya tienen Facturas, Compras, Cobranzas, Pagos y Remitos al
           // guardar un comprobante nuevo.
           onCreated={() => {
             setShowNewOrder(false);
+            setVehiculoRecibido(null);
             loadOrders();
           }}
         />

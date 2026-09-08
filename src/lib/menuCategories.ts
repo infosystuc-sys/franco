@@ -95,7 +95,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
           // El + no abre una orden: lleva a cargar el vehículo. Antes de abrir la OT
           // hay que tener el equipo dado de alta, y es el paso que más se repite.
-          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/ordenes?nuevo=1' },
+          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo?destino=ot' },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
           { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
