@@ -1,5 +1,5 @@
 import React from 'react';
-import { Truck, Cog, Gauge, Save, Users } from 'lucide-react';
+import { Truck, Cog, Save, Users, ChevronDown, ChevronRight } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -15,14 +15,11 @@ import {
   SIZE_CLASS_LABELS,
   SIZE_CLASSES,
   updateVehicle,
-  VEHICLE_TYPE_LABELS,
-  VEHICLE_TYPES,
   vehicleToForm,
   type OdometerUnit,
   type SizeClass,
   type Vehicle,
   type VehicleInput,
-  type VehicleType,
 } from '@/src/lib/vehicles';
 import {
   fetchVehicleBrands,
@@ -64,6 +61,12 @@ export function VehicleNew() {
    * editar ESE vehículo en vez de crear un duplicado. Guarda su id.
    */
   const [existente, setExistente] = React.useState<Vehicle | null>(null);
+  /**
+   * Los datos del motor y el uso arrancan plegados. En la recepción del día a
+   * día alcanza con cliente, patente, marca, modelo y tamaño; el resto se
+   * carga cuando hace falta y estorba el 90% de las veces.
+   */
+  const [verTecnicos, setVerTecnicos] = React.useState(false);
 
   React.useEffect(() => {
     let cancelado = false;
@@ -108,7 +111,17 @@ export function VehicleNew() {
     if (existente?.id === encontrado.id) return;
 
     setExistente(encontrado);
-    setForm({ ...vehicleToForm(encontrado), licensePlate: patente });
+    const datos = vehicleToForm(encontrado);
+    setForm({ ...datos, licensePlate: patente });
+
+    // Si el vehículo ya trae algo del motor o del uso, la sección se abre
+    // sola. Plegada, esos datos quedarían escondidos y quien edita no tendría
+    // forma de saber que están ahí.
+    const tieneTecnicos = !!(
+      datos.engineBrand || datos.engineModel || datos.engineNumber ||
+      datos.injectionSystem || datos.odometer
+    );
+    if (tieneTecnicos) setVerTecnicos(true);
   }
 
   const modelosDeLaMarca = modelsOfBrand(brands, models, form.brand);
@@ -243,18 +256,6 @@ export function VehicleNew() {
             </label>
 
             <label className={cn(labelClass, 'sm:col-span-3')}>
-              Tipo
-              <select
-                value={form.vehicleType}
-                onChange={(e) => patch({ vehicleType: e.target.value as VehicleType })}
-                className={cn(inputClass, 'bg-panel')}
-              >
-                {VEHICLE_TYPES.map((type) => (
-                  <option key={type} value={type}>{VEHICLE_TYPE_LABELS[type]}</option>
-                ))}
-              </select>
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-3')}>
               Tamaño en playa *
               <select
                 value={form.sizeClass}
@@ -267,99 +268,98 @@ export function VehicleNew() {
                 ))}
               </select>
             </label>
-
-            <label className={cn(labelClass, 'sm:col-span-2')}>
-              Año
-              <input
-                type="number"
-                value={form.year}
-                onChange={(e) => patch({ year: e.target.value })}
-                className={inputClass}
-                placeholder="2019"
-              />
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-4')}>
-              N° de chasis (VIN)
-              <input
-                value={form.vin}
-                onChange={(e) => patch({ vin: e.target.value })}
-                className={cn(inputClass, 'font-mono')}
-                placeholder="9BM958..."
-              />
-            </label>
           </div>
         </Panel>
 
-        {/* ── Motor e inyección ───────────────────────────────────────── */}
+        {/* ── Motor, inyección y uso (plegada) ────────────────────────
+            Va plegada porque en la recepción del día a día no se completa:
+            alcanza con cliente, patente, marca, modelo y tamaño. Aparece
+            desplegada sola cuando el vehículo YA tiene algo cargado, para que
+            editando no queden datos escondidos que el usuario no sabe que
+            están ahí. */}
         <Panel className="p-5">
-          <SectionHeader title={<><Cog size={15} className="mr-1.5 inline-block align-[-2px]" />Motor e inyección</>} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-            <label className={cn(labelClass, 'sm:col-span-2')}>
-              Marca motor
-              <input value={form.engineBrand} onChange={(e) => patch({ engineBrand: e.target.value })} className={inputClass} placeholder="Volvo" />
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-2')}>
-              Modelo motor
-              <input value={form.engineModel} onChange={(e) => patch({ engineModel: e.target.value })} className={inputClass} placeholder="D16G" />
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-2')}>
-              N° de motor
-              <input value={form.engineNumber} onChange={(e) => patch({ engineNumber: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="D16G123456" />
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-6')}>
-              Sistema de inyección
-              <input
-                value={form.injectionSystem}
-                onChange={(e) => patch({ injectionSystem: e.target.value })}
-                list="injection-systems"
-                className={inputClass}
-                placeholder="Bosch Common Rail"
-              />
-              <datalist id="injection-systems">
-                {INJECTION_SYSTEMS.map((system) => <option key={system} value={system} />)}
-              </datalist>
-            </label>
-          </div>
+          <button
+            type="button"
+            onClick={() => setVerTecnicos((v) => !v)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            {verTecnicos ? <ChevronDown size={16} className="text-text-soft" /> : <ChevronRight size={16} className="text-text-soft" />}
+            <span className="font-display text-lg uppercase tracking-[0.08em] leading-none text-text-faint">
+              <Cog size={15} className="mr-1.5 inline-block align-[-2px]" />Motor, inyección y uso
+            </span>
+            <span className="ml-auto text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              {verTecnicos ? 'Ocultar' : 'Completar'}
+            </span>
+          </button>
+          <div className="mt-3 h-px bg-accent" />
+
+          {verTecnicos && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                Marca motor
+                <input value={form.engineBrand} onChange={(e) => patch({ engineBrand: e.target.value })} className={inputClass} placeholder="Volvo" />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                Modelo motor
+                <input value={form.engineModel} onChange={(e) => patch({ engineModel: e.target.value })} className={inputClass} placeholder="D16G" />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                N° de motor
+                <input value={form.engineNumber} onChange={(e) => patch({ engineNumber: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="D16G123456" />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-6')}>
+                Sistema de inyección
+                <input
+                  value={form.injectionSystem}
+                  onChange={(e) => patch({ injectionSystem: e.target.value })}
+                  list="injection-systems"
+                  className={inputClass}
+                  placeholder="Bosch Common Rail"
+                />
+                <datalist id="injection-systems">
+                  {INJECTION_SYSTEMS.map((system) => <option key={system} value={system} />)}
+                </datalist>
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Kilometraje / Horas
+                <input
+                  type="number"
+                  min="0"
+                  value={form.odometer}
+                  onChange={(e) => patch({ odometer: e.target.value })}
+                  className={cn(inputClass, 'text-right')}
+                  placeholder="0"
+                />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Unidad
+                <select
+                  value={form.odometerUnit}
+                  onChange={(e) => patch({ odometerUnit: e.target.value as OdometerUnit })}
+                  className={cn(inputClass, 'bg-panel')}
+                >
+                  {(Object.keys(ODOMETER_UNIT_LABELS) as OdometerUnit[]).map((unit) => (
+                    <option key={unit} value={unit}>{ODOMETER_UNIT_LABELS[unit]}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
         </Panel>
 
-        {/* ── Uso y estado ────────────────────────────────────────────── */}
+        {/* Observaciones y estado quedan siempre a la vista: son lo que se
+            escribe al recibir, no un dato técnico que se busca. */}
         <Panel className="p-5">
-          <SectionHeader title={<><Gauge size={15} className="mr-1.5 inline-block align-[-2px]" />Uso y estado</>} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-            <label className={cn(labelClass, 'sm:col-span-3')}>
-              Kilometraje / Horas
-              <input
-                type="number"
-                min="0"
-                value={form.odometer}
-                onChange={(e) => patch({ odometer: e.target.value })}
-                className={cn(inputClass, 'text-right')}
-                placeholder="0"
-              />
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-3')}>
-              Unidad
-              <select
-                value={form.odometerUnit}
-                onChange={(e) => patch({ odometerUnit: e.target.value as OdometerUnit })}
-                className={cn(inputClass, 'bg-panel')}
-              >
-                {(Object.keys(ODOMETER_UNIT_LABELS) as OdometerUnit[]).map((unit) => (
-                  <option key={unit} value={unit}>{ODOMETER_UNIT_LABELS[unit]}</option>
-                ))}
-              </select>
-            </label>
-            <label className={cn(labelClass, 'sm:col-span-6')}>
-              Observaciones
-              <textarea
-                value={form.notes}
-                onChange={(e) => patch({ notes: e.target.value })}
-                rows={2}
-                className={cn(inputClass, 'resize-y')}
-                placeholder="Historial, particularidades del equipo…"
-              />
-            </label>
-          </div>
+          <label className={labelClass}>
+            Observaciones
+            <textarea
+              value={form.notes}
+              onChange={(e) => patch({ notes: e.target.value })}
+              rows={2}
+              className={cn(inputClass, 'resize-y')}
+              placeholder="Historial, particularidades del equipo…"
+            />
+          </label>
           <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
