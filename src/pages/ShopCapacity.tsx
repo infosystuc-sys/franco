@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { CalendarClock, CalendarPlus, Trash2 } from 'lucide-react';
+import { CalendarClock, CalendarPlus, Pencil, Trash2 } from 'lucide-react';
 import { cn, formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
@@ -49,6 +49,8 @@ export function ShopCapacity() {
   const [occupancy, setOccupancy] = React.useState<YardOccupant[]>([]);
   const [reservations, setReservations] = React.useState<YardReservation[]>([]);
   const [reservando, setReservando] = React.useState(false);
+  // La reserva que se está editando. Null mientras se crea una nueva.
+  const [editandoReserva, setEditandoReserva] = React.useState<YardReservation | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -339,14 +341,24 @@ export function ShopCapacity() {
                     </span>
                   )}
                   {r.notes && <span className="text-[11px] text-text-soft">{r.notes}</span>}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteReservation(r)}
-                    aria-label={`Borrar la reserva de ${r.licensePlate}`}
-                    className="ml-auto shrink-0 p-1 text-text-soft transition-colors hover:text-danger"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <div className="ml-auto flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => { setEditandoReserva(r); setReservando(true); }}
+                      aria-label={`Modificar la reserva de ${r.licensePlate}`}
+                      className="p-1 text-text-soft transition-colors hover:text-accent-deep"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReservation(r)}
+                      aria-label={`Borrar la reserva de ${r.licensePlate}`}
+                      className="p-1 text-text-soft transition-colors hover:text-danger"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -438,8 +450,9 @@ export function ShopCapacity() {
 
       {reservando && (
         <NewReservationModal
-          onClose={() => setReservando(false)}
-          onCreated={() => { setReservando(false); load(); }}
+          reserva={editandoReserva}
+          onClose={() => { setReservando(false); setEditandoReserva(null); }}
+          onCreated={() => { setReservando(false); setEditandoReserva(null); load(); }}
         />
       )}
     </div>

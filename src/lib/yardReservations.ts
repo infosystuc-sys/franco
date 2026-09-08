@@ -81,6 +81,28 @@ export async function createYardReservation(input: YardReservationInput): Promis
   if (error) throw error;
 }
 
+/**
+ * Editar una reserva es corregir lo que el cliente avisó: cambió el día, era
+ * la otra camioneta, se equivocaron de patente. Se cambia todo salvo el id.
+ */
+export async function updateYardReservation(
+  id: string,
+  input: YardReservationInput
+): Promise<void> {
+  const { error } = await supabase
+    .from('yard_reservations')
+    .update({
+      customer_id: input.customerId,
+      license_plate: normalizarPatente(input.licensePlate),
+      size_class: input.sizeClass || 'MEDIANO',
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      notes: input.notes.trim() || null,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteYardReservation(id: string): Promise<void> {
   const { error } = await supabase.from('yard_reservations').delete().eq('id', id);
   if (error) throw error;

@@ -13,6 +13,8 @@ import {
 import {
   createYardReservation,
   normalizarPatente,
+  updateYardReservation,
+  type YardReservation,
   type YardReservationInput,
 } from '@/src/lib/yardReservations';
 
@@ -29,9 +31,12 @@ const HOY = () => new Date().toISOString().slice(0, 10);
 export function NewReservationModal({
   onClose,
   onCreated,
+  reserva,
 }: {
   onClose: () => void;
   onCreated: () => void;
+  /** Reserva existente: la ventana pasa a editarla en vez de crear otra. */
+  reserva?: YardReservation | null;
 }) {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [vehicles, setVehicles] = React.useState<Vehicle[]>([]);
@@ -39,14 +44,25 @@ export function NewReservationModal({
   const [error, setError] = React.useState<string | null>(null);
   const [reconocido, setReconocido] = React.useState<Vehicle | null>(null);
 
-  const [form, setForm] = React.useState<YardReservationInput>({
-    customerId: '',
-    licensePlate: '',
-    sizeClass: '',
-    startsOn: HOY(),
-    endsOn: HOY(),
-    notes: '',
-  });
+  const [form, setForm] = React.useState<YardReservationInput>(() =>
+    reserva
+      ? {
+          customerId: reserva.customerId,
+          licensePlate: reserva.licensePlate,
+          sizeClass: reserva.sizeClass,
+          startsOn: reserva.startsOn,
+          endsOn: reserva.endsOn,
+          notes: reserva.notes ?? '',
+        }
+      : {
+          customerId: '',
+          licensePlate: '',
+          sizeClass: '',
+          startsOn: HOY(),
+          endsOn: HOY(),
+          notes: '',
+        }
+  );
 
   React.useEffect(() => {
     let cancelado = false;
@@ -110,7 +126,11 @@ export function NewReservationModal({
     setSaving(true);
     setError(null);
     try {
-      await createYardReservation(form);
+      if (reserva) {
+        await updateYardReservation(reserva.id, form);
+      } else {
+        await createYardReservation(form);
+      }
       onCreated();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -123,7 +143,7 @@ export function NewReservationModal({
       <div className="flex max-h-[90vh] w-full max-w-md flex-col border border-line-strong bg-panel">
         <div className="flex items-center justify-between border-b border-line bg-panel-head px-5 py-3">
           <h2 className="font-display text-xl uppercase tracking-[0.04em] text-text-faint">
-            Reservar celda
+            {reserva ? 'Editar reserva' : 'Reservar celda'}
           </h2>
           <button onClick={onClose} aria-label="Cerrar" className="text-text-soft hover:text-text">
             <X size={18} />
@@ -223,7 +243,10 @@ export function NewReservationModal({
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={saving}>
-              <CalendarPlus size={16} /> {saving ? 'Reservando…' : 'Reservar'}
+              <CalendarPlus size={16} />{' '}
+              {saving
+                ? (reserva ? 'Guardando…' : 'Reservando…')
+                : (reserva ? 'Guardar cambios' : 'Reservar')}
             </Button>
           </div>
         </form>
