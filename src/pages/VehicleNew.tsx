@@ -1,10 +1,11 @@
 import React from 'react';
-import { Truck, Save, Users, Camera, Plus, Trash2 } from 'lucide-react';
+import { Truck, Save, Users, Camera, Plus, Trash2, Wrench } from 'lucide-react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
-import { getErrorMessage } from '@/src/lib/workOrders';
+import { createWorkOrder, getErrorMessage } from '@/src/lib/workOrders';
+import { fetchOperarios, type Employee } from '@/src/lib/employees';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { CustomerModal } from '@/src/components/CustomerModal';
@@ -119,6 +120,17 @@ export function VehicleNew() {
   const [partes, setPartes] = React.useState<VehiclePart[]>(() => [nuevoRenglon()]);
   const [tiposDePieza, setTiposDePieza] = React.useState<VehiclePartType[]>([]);
 
+  /**
+   * Datos de la orden que se abre junto con el ingreso. Solo se piden cuando
+   * se entró por Órdenes de trabajo: por Vehículos se está cargando una ficha,
+   * no recibiendo un equipo, y ahí no hay ninguna orden que abrir.
+   */
+  const [employees, setEmployees] = React.useState<Employee[]>([]);
+  const [employeeId, setEmployeeId] = React.useState('');
+  const [estimatedDelivery, setEstimatedDelivery] = React.useState('');
+  const [component, setComponent] = React.useState('');
+  const [otObservations, setOtObservations] = React.useState('');
+
   // Se entra acá por dos caminos. Desde Vehículos se viene a cargar una ficha
   // y se vuelve al listado. Desde Órdenes de trabajo se viene a recibir un
   // equipo, y ahí guardar la ficha es la mitad del trámite: falta la orden.
@@ -143,6 +155,9 @@ export function VehicleNew() {
     fetchVehicleModels().then((d) => !cancelado && setModels(d)).catch(() => {});
     fetchVehicles().then((d) => !cancelado && setVehicles(d)).catch(() => {});
     fetchVehiclePartTypes().then((d) => !cancelado && setTiposDePieza(d)).catch(() => {});
+    // Sin operarios se puede recibir igual, sin asignar: que falle esta lista
+    // no es motivo para trabar una recepción.
+    fetchOperarios().then((d) => !cancelado && setEmployees(d)).catch(() => {});
     return () => { cancelado = true; };
   }, []);
 
@@ -237,6 +252,12 @@ export function VehicleNew() {
         setError('Elegí el tamaño del vehículo: define cuánto lugar ocupa en la playa.');
         return;
       }
+      // Solo para vehículos, y solo si se está abriendo la orden: una pieza
+      // sobre el mostrador no ocupa celda, así que la fecha no libera nada.
+      if (vieneDeOT && !estimatedDelivery) {
+        setError('Poné la entrega estimada: es lo que permite saber cuándo se libera el lugar en la playa.');
+        return;
+      }
     }
     setSaving(true);
     setError(null);
@@ -277,6 +298,35 @@ export function VehicleNew() {
           `El equipo se guardó, pero no se pudieron subir estas fotos: ${noSubidas.join(', ')}. ` +
           'Podés volver a cargarlas entrando de nuevo por su identificación.'
         );
+      }
+
+      // Recibir es un solo trámite: la ficha del equipo y la orden que lo pone
+      // a trabajar. Va último a propósito. Crear la orden dispara un trigger
+      // que ya le avisó al cliente por WhatsApp y le asignó número: todo lo
+      // que pueda fallar tiene que haber fallado antes de ese punto.
+      if (vieneDeOT) {
+        try {
+          await createWorkOrder({
+            customerId: form.customerId,
+            vehicleId: guardado.id,
+            component,
+            receptionKind: form.kind,
+            observations: otObservations,
+            employeeId: employeeId || null,
+            estimatedDeliveryDate: form.kind === 'VEHICULO' ? estimatedDelivery : null,
+          });
+        } catch (err) {
+          // El equipo YA quedó guardado. Si esto pareciera "no se guardó
+          // nada", el reintento cargaría el mismo equipo dos veces. Se pasa a
+          // modo edición de esa ficha para que reintentar la reuse.
+          setExistente(guardado);
+          setError(
+            `El equipo se guardó, pero no se pudo abrir la orden: ${getErrorMessage(err)} ` +
+            'Volvé a intentar con el botón Guardar: se usa el mismo equipo, no se duplica.'
+          );
+          setSaving(false);
+          return;
+        }
       }
 
       // Se vuelve a la pantalla principal del módulo por donde se entró: quien
@@ -591,6 +641,73 @@ export function VehicleNew() {
           </datalist>
         </Panel>
 
+        {/* ── La orden ───────────────────────────────────────
+            Se recibe el equipo y se abre su orden en el mismo trámite: son un
+            solo acto en el mostrador. Solo aparece entrando por Órdenes de
+            trabajo; por Vehículos se está cargando una ficha, nada más. */}
+        {vieneDeOT && (
+          <Panel className="p-5">
+            <SectionHeader title={<><Wrench size={15} className="mr-1.5 inline-block align-[-2px]" />Orden de trabajo</>} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Trabajo a realizar
+                <input
+                  value={component}
+                  onChange={(e) => setComponent(e.target.value)}
+                  className={inputClass}
+                  placeholder={esPieza ? 'Probar y calibrar inyectores' : 'Revisar sistema de inyección'}
+                />
+              </label>
+
+              {/* La entrega estimada es la que libera la celda en la playa: sin
+                  ella el lugar figura ocupado para siempre. Una pieza no ocupa
+                  celda, así que ahí no se pide. */}
+              {!esPieza && (
+                <label className={cn(labelClass, 'sm:col-span-3')}>
+                  Entrega estimada *
+                  <input
+                    type="date"
+                    value={estimatedDelivery}
+                    onChange={(e) => setEstimatedDelivery(e.target.value)}
+                    className={inputClass}
+                  />
+                  <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                    Es lo que dice cuándo se libera el lugar en la playa.
+                  </span>
+                </label>
+              )}
+
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Quién la toma
+                <select
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  className={cn(inputClass, 'bg-panel')}
+                >
+                  <option value="">Sin asignar</option>
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>{e.name}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  Se puede dejar sin asignar y decidirlo después.
+                </span>
+              </label>
+
+              <label className={cn(labelClass, 'sm:col-span-6')}>
+                Observaciones de la orden
+                <textarea
+                  value={otObservations}
+                  onChange={(e) => setOtObservations(e.target.value)}
+                  rows={2}
+                  className={cn(inputClass, 'resize-y')}
+                  placeholder="Qué dijo el cliente, con qué síntoma llegó…"
+                />
+              </label>
+            </div>
+          </Panel>
+        )}
+
         {/* ── Fotos ──────────────────────────────────────────────────── */}
         <Panel className="p-5">
           <SectionHeader title={<><Camera size={15} className="mr-1.5 inline-block align-[-2px]" />Fotos</>} />
@@ -642,7 +759,9 @@ export function VehicleNew() {
               ? 'Guardando…'
               : existente
                 ? 'Guardar cambios'
-                : esPieza ? 'Guardar ingreso' : 'Guardar vehículo'}
+                : vieneDeOT
+                  ? 'Guardar y abrir la orden'
+                  : esPieza ? 'Guardar ingreso' : 'Guardar vehículo'}
           </Button>
         </div>
       </form>
