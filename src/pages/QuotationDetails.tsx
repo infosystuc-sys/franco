@@ -11,7 +11,7 @@ import {
   Mail,
   MessageCircle,
 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -52,6 +52,7 @@ export function QuotationDetails() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const navigate = useNavigate();
   const documentRef = React.useRef<HTMLDivElement>(null);
 
   const loadQuotation = React.useCallback(async () => {
@@ -114,19 +115,49 @@ export function QuotationDetails() {
     }
   }
 
-  const handleSave = () => run(async () => {
+  /**
+   * Lo que esté escrito en pantalla queda guardado antes de cualquier otra
+   * cosa: imprimir, mandar o irse. Una cotización congelada —o un operario
+   * sin permiso de edición— no tiene nada que guardar.
+   */
+  async function guardarLoEditado() {
+    if (!editable) return;
     await updateQuotationHeader(quotation.id, { component, notes, validUntil });
     await saveQuotationItems(quotation.id, items);
-    await loadQuotation();
-  }, 'Cambios guardados.');
+  }
 
-  const handleStatus = (status: QuotationDetail['status'], message: string) => run(async () => {
+  /**
+   * Toda acción de la cotización termina en el menú. Cada cosa que se hace acá
+   * —guardarla, mandarla, imprimirla— cierra el trámite de esa cotización, y
+   * quedarse en la pantalla invita a repetir la acción sobre algo ya resuelto.
+   */
+  const volverAlMenu = () => navigate('/');
+
+  const handleSave = () => run(async () => {
+    await guardarLoEditado();
+    volverAlMenu();
+  });
+
+  const handleStatus = (status: QuotationDetail['status']) => run(async () => {
     await updateQuotationStatus(quotation.id, status);
     // El rechazo no se queda en la cotización: la orden que la originó deja de
     // esperar respuesta y libera el lugar que el vehículo ocupaba en la playa.
     if (status === 'RECHAZADA') await rejectQuotationWorkOrder(quotation.id);
-    await loadQuotation();
-  }, message);
+    volverAlMenu();
+  });
+
+  const handlePrint = () => run(async () => {
+    await guardarLoEditado();
+    // Se vuelve recién cuando se cierra el diálogo de impresión: navegar
+    // mientras está abierto cancela la impresión o la saca cortada.
+    window.addEventListener('afterprint', volverAlMenu, { once: true });
+    window.print();
+  });
+
+  const handleOpenSend = (canal: 'email' | 'whatsapp') => run(async () => {
+    await guardarLoEditado();
+    setSendModal(canal);
+  });
 
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
@@ -162,13 +193,13 @@ export function QuotationDetails() {
         actions={
           isAdmin && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="ghost" type="button" onClick={() => window.print()}>
+              <Button variant="ghost" type="button" disabled={busy} onClick={handlePrint}>
                 <Printer size={16} /> Imprimir
               </Button>
-              <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+              <Button variant="ghost" type="button" disabled={busy} onClick={() => handleOpenSend('email')}>
                 <Mail size={16} /> Enviar por mail
               </Button>
-              <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+              <Button variant="ghost" type="button" disabled={busy} onClick={() => handleOpenSend('whatsapp')}>
                 <MessageCircle size={16} /> Enviar por WhatsApp
               </Button>
               <ActionBar
@@ -176,7 +207,7 @@ export function QuotationDetails() {
                 busy={busy}
                 editable={editable}
                 onSave={handleSave}
-                onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador.')}
+                onReopen={() => handleStatus('EMITIDA')}
               />
             </div>
           )
@@ -398,7 +429,7 @@ export function QuotationDetails() {
               ? `Adjuntamos el presupuesto ${quotation.number} por $ ${formatMoney(itemsTotal + itemsIva)}.`
               : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`
           }
-          onClose={() => setSendModal(null)}
+          onClose={() => { setSendModal(null); volverAlMenu(); }}
         />
       )}
     </div>
