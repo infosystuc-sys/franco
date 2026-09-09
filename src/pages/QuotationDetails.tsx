@@ -2,9 +2,6 @@ import React from 'react';
 import {
   ArrowLeft,
   Save,
-  Send,
-  Check,
-  XCircle,
   FileCheck2,
   AlertTriangle,
   Lock,
@@ -14,7 +11,7 @@ import {
   Mail,
   MessageCircle,
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -24,7 +21,6 @@ import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import {
-  applyQuotationToWorkOrder,
   rejectQuotationWorkOrder,
   fetchQuotationByNumber,
   isExpired,
@@ -44,7 +40,6 @@ export function QuotationDetails() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const { number } = useParams();
-  const navigate = useNavigate();
 
   const [quotation, setQuotation] = React.useState<QuotationDetail | null>(null);
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
@@ -104,10 +99,6 @@ export function QuotationDetails() {
   const frozen = !isQuotationEditable(quotation.status);
   const editable = isAdmin && !frozen;
   const expired = isExpired(quotation.validUntil, quotation.status);
-  // Refleja lo que está en pantalla, no necesariamente lo último guardado:
-  // si agregaron renglones y todavía no guardaron, igual habilita enviar. La
-  // base es la que de verdad impide dejarla vacía, esto es solo la UX rápida.
-  const hasItems = items.length > 0;
 
   async function run(action: () => Promise<void>, successMessage?: string) {
     setBusy(true);
@@ -136,34 +127,6 @@ export function QuotationDetails() {
     if (status === 'RECHAZADA') await rejectQuotationWorkOrder(quotation.id);
     await loadQuotation();
   }, message);
-
-  function handleSend() {
-    if (items.length === 0) {
-      setNotice(null);
-      setError('No se puede enviar: cargá al menos un renglón antes de enviarla.');
-      return;
-    }
-    handleStatus('ENVIADA', 'Cotización marcada como enviada.');
-  }
-
-  /**
-   * Aceptar ya no es un paso previo a "convertir": la orden existe desde que
-   * se recibió el vehículo, así que aceptar copia los renglones adentro de
-   * ella y la autoriza. El paso separado quedó del circuito viejo, cuando la
-   * aceptación era lo que hacía nacer la orden.
-   */
-  const handleAccept = () => run(async () => {
-    await updateQuotationStatus(quotation.id, 'ACEPTADA');
-    const orden = await applyQuotationToWorkOrder(quotation.id);
-    if (orden) {
-      navigate(`/orden/${orden.number}`);
-      return;
-    }
-    setNotice(
-      'Cotización aceptada. Cuando el cliente traiga el vehículo, abrí la orden y enganchale esta cotización desde ahí.'
-    );
-    await loadQuotation();
-  });
 
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
@@ -212,12 +175,8 @@ export function QuotationDetails() {
                 quotation={quotation}
                 busy={busy}
                 editable={editable}
-                hasItems={hasItems}
                 onSave={handleSave}
-                onSend={handleSend}
-                onAccept={handleAccept}
-                onReject={() => handleStatus('RECHAZADA', 'Cotización rechazada.')}
-                onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador. Corregila y volvé a enviarla cuando esté lista.')}
+                onReopen={() => handleStatus('EMITIDA', 'Cotización reabierta como borrador.')}
               />
             </div>
           )
@@ -450,21 +409,13 @@ function ActionBar({
   quotation,
   busy,
   editable,
-  hasItems,
   onSave,
-  onSend,
-  onAccept,
-  onReject,
   onReopen,
 }: {
   quotation: QuotationDetail;
   busy: boolean;
   editable: boolean;
-  hasItems: boolean;
   onSave: () => void;
-  onSend: () => void;
-  onAccept: () => void;
-  onReject: () => void;
   onReopen: () => void;
 }) {
   const btn = 'px-4 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50';
@@ -477,28 +428,13 @@ function ActionBar({
         </button>
       )}
 
-      {quotation.status === 'EMITIDA' && (
-        <button
-          onClick={onSend}
-          disabled={busy || !hasItems}
-          title={hasItems ? undefined : 'Cargá al menos un renglón antes de enviarla.'}
-          className={cn(btn, 'bg-blue-600 text-white hover:bg-blue-700')}
-        >
-          <Send size={16} /> Marcar enviada
-        </button>
-      )}
+      {/* Aceptar y rechazar los decide el cliente desde su link, no el taller
+          desde acá: este módulo quedó para controlar autorizaciones, no para
+          firmarlas en nombre de quien tiene que autorizar.
 
-      {(quotation.status === 'EMITIDA' || quotation.status === 'ENVIADA') && (
-        <>
-          <button onClick={onAccept} disabled={busy} className={cn(btn, 'bg-state-done text-white hover:bg-state-done')}>
-            <Check size={16} /> Aceptar
-          </button>
-          <button onClick={onReject} disabled={busy} className={cn(btn, 'bg-danger text-white hover:bg-danger-hover')}>
-            <XCircle size={16} /> Rechazar
-          </button>
-        </>
-      )}
-
+          "Marcar enviada" también se fue: era lo único que disparaba el aviso
+          automático por WhatsApp, y el presupuesto ahora sale cuando alguien
+          lo manda a propósito con el botón de arriba. */}
       {quotation.status === 'RECHAZADA' && (
         <button onClick={onReopen} disabled={busy} className={cn(btn, 'border border-line text-text-soft hover:bg-panel-alt')}>
           Reabrir
