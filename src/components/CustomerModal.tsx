@@ -65,8 +65,11 @@ export function CustomerModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-      <div className="bg-panel w-full max-w-2xl flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center px-5 py-4 border-b border-line">
+      {/* Del mismo ancho que el ingreso de vehículos: son los mismos veinte
+          campos, y en una ventana angosta obligaban a scrollear para llegar a
+          los vehículos del cliente y a los botones. */}
+      <div className="bg-panel w-full max-w-7xl flex flex-col max-h-[92vh]">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
             {customer ? `Editar cliente` : 'Nuevo cliente'}
           </h2>
@@ -75,22 +78,32 @@ export function CustomerModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5 overflow-y-auto">
-          {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+            {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
 
-          <FiscalFields
-            form={form}
-            patch={patch}
-            nameLabel="Nombre / Denominación comercial"
-            namePlaceholder="Transportes G&M"
-            legalNamePlaceholder="Transportes G&M S.R.L."
-            activeLabel="Activo (disponible para nuevas órdenes de trabajo)"
-          />
+            {/* Con el ancho de sobra, los vehículos van al costado en vez de
+                debajo: el ancho es lo que sobra y el alto lo que falta. */}
+            <div className={cn('grid gap-6', customer && 'lg:grid-cols-3')}>
+              <div className={cn(customer ? 'lg:col-span-2' : 'lg:max-w-4xl')}>
+                <FiscalFields
+                  form={form}
+                  patch={patch}
+                  nameLabel="Nombre / Denominación comercial"
+                  namePlaceholder="Transportes G&M"
+                  legalNamePlaceholder="Transportes G&M S.R.L."
+                  activeLabel="Activo (disponible para nuevas órdenes de trabajo)"
+                />
+              </div>
 
-          {/* Vehículos: solo al editar, porque necesitan un cliente ya existente */}
-          {customer && <VehiclesSection customer={customer} />}
+              {/* Vehículos: solo al editar, porque necesitan un cliente ya existente */}
+              {customer && <VehiclesSection customer={customer} />}
+            </div>
+          </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-line">
+          {/* Fuera del área que scrollea: guardar y cerrar tienen que estar a
+              mano sin importar cuánto se haya bajado. */}
+          <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
             <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cerrar
             </button>
@@ -114,7 +127,7 @@ export function CustomerModal({
  */
 function VehiclesSection({ customer }: { customer: Customer }) {
   return (
-    <div className="border-t border-line pt-4 space-y-3">
+    <div className="space-y-3 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
       <div className="flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Truck size={14} /> Vehículos / Equipos
