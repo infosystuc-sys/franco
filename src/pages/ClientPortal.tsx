@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   CheckCircle2,
-  Wrench,
   Settings,
   Truck,
   CheckCircle,
@@ -339,10 +338,11 @@ export function ClientPortal() {
           <div className="md:col-span-8 bg-panel p-6 border border-line">
             <h2 className="text-base font-bold text-text mb-8 pb-2 border-b-2 border-accent inline-block">Progreso del Servicio</h2>
             <div className="flex flex-col relative pl-2">
+              {/* Todas las que se ven son etapas cumplidas: se dibujan
+                  iguales, con su tilde. No hay una "en curso" marcada aparte
+                  —eso volvería a insinuar un paso siguiente— y en qué momento
+                  está la orden lo dice el rótulo de arriba. */}
               {visibleStatuses.map((status, idx) => {
-                // No hay etapas pendientes dibujadas: las que se ven son las
-                // que ocurrieron, y la última es la que se está informando.
-                const state = idx < visibleStatuses.length - 1 ? 'completed' : 'active';
                 return (
                   <div key={status.id} className="flex gap-6 relative mb-10 last:mb-0">
                     {idx < visibleStatuses.length - 1 && (
@@ -350,35 +350,14 @@ export function ClientPortal() {
                     )}
 
                     <div className="relative z-10 flex-shrink-0">
-                      <div className={cn(
-                        "w-10 h-10 bg-panel border-2 flex items-center justify-center",
-                        state === 'completed' ? "border-accent-deep" :
-                        state === 'active' ? "border-accent-deep bg-accent animate-pulse" :
-                        "border-line"
-                      )}>
-                        {/* La llave dice "se está trabajando en esto". En la
-                            etapa terminada eso contradice al texto, que
-                            justamente avisa que el trabajo se terminó. */}
-                        {state === 'completed' || status.systemKey === 'TERMINADO' ? (
-                          <CheckCircle size={24} className={cn(
-                            state === 'active' ? 'text-accent-ink' : 'text-accent-deep',
-                            'fill-current'
-                          )} />
-                        ) : (
-                          <Wrench size={20} className="text-accent-ink fill-current" />
-                        )}
+                      <div className="w-10 h-10 bg-panel border-2 border-accent-deep flex items-center justify-center">
+                        <CheckCircle size={24} className="text-accent-deep fill-current" />
                       </div>
                     </div>
 
-                    <div className={cn(
-                      "pt-1 flex-1",
-                      state === 'active' && "bg-panel-alt p-4 border-l-4 border-accent -mt-1"
-                    )}>
+                    <div className="pt-1 flex-1">
                       <div className="flex justify-between items-start mb-1">
                         <h3 className="text-sm font-bold text-text">{status.label}</h3>
-                        {state === 'active' && (
-                          <span className="bg-accent text-accent-ink text-[9px] font-bold uppercase tracking-wider px-2 py-0.5">ACTUAL</span>
-                        )}
                       </div>
                       <p className="text-xs text-text-soft mt-1 leading-relaxed">{status.clientDescription}</p>
                       {reachedAt[status.id] && (

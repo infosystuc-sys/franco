@@ -1,5 +1,5 @@
 import React from 'react';
-import { Truck, Save, Users, Camera, Plus, Trash2, Wrench } from 'lucide-react';
+import { Truck, Save, Users, Camera, Plus, Trash2, Wrench, Pencil } from 'lucide-react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -111,7 +111,12 @@ export function VehicleNew() {
   const [fotosPendientes, setFotosPendientes] = React.useState<File[]>([]);
   const [fotosGuardadas, setFotosGuardadas] = React.useState<VehiclePhoto[]>([]);
 
-  const [creandoCliente, setCreandoCliente] = React.useState(false);
+  /**
+   * Ficha de cliente abierta: 'nuevo' para dar de alta, o el cliente elegido
+   * para corregirlo. Un teléfono mal cargado se descubre justo acá, cuando se
+   * está por avisar que el equipo entró.
+   */
+  const [fichaCliente, setFichaCliente] = React.useState<Customer | 'nuevo' | null>(null);
 
   /**
    * Lo que entra cuando lo que entra son piezas. Arranca con un renglón vacío
@@ -390,14 +395,23 @@ export function VehicleNew() {
                 ))}
               </select>
               {/* El vehículo llega con un dueño que muchas veces es cliente
-                  nuevo: mandarlo a Clientes y volver le haría perder todo lo
-                  que ya cargó acá. */}
+                  nuevo, o con un dato viejo que recién acá se descubre mal:
+                  mandarlo a Clientes y volver le haría perder todo lo que ya
+                  cargó en esta pantalla. */}
               <button
                 type="button"
-                onClick={() => setCreandoCliente(true)}
+                onClick={() => setFichaCliente('nuevo')}
                 className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
               >
                 + Nuevo
+              </button>
+              <button
+                type="button"
+                onClick={() => clienteElegido && setFichaCliente(clienteElegido)}
+                disabled={!clienteElegido}
+                className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Pencil size={13} className="mr-1 inline-block align-[-2px]" />Modificar
               </button>
             </div>
           </label>
@@ -434,6 +448,10 @@ export function VehicleNew() {
           <SectionHeader
             title={<><Truck size={15} className="mr-1.5 inline-block align-[-2px]" />{esPieza ? 'Piezas' : 'Vehículo'}</>}
           />
+          {/* El tipo de ingreso va solo en el primer renglón: es lo que
+              decide qué campos siguen, así que leerlo primero y sin nada al
+              lado evita completar media ficha y descubrir después que había
+              que elegir lo otro. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
             <label className={cn(labelClass, 'sm:col-span-2')}>
               Tipo de ingreso *
@@ -450,10 +468,37 @@ export function VehicleNew() {
                 Una pieza no ocupa lugar en la playa.
               </span>
             </label>
+          </div>
 
-            {/* La patente identifica al vehículo. Un juego de piezas se
-                identifica por el número de referencia de cada renglón. */}
-            {!esPieza && (
+          {/* Marca, modelo, patente y kilometraje: el orden en que se lee el
+              vehículo cuando está en la puerta. */}
+          {!esPieza && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                Marca
+                <input
+                  value={form.brand}
+                  onChange={(e) => patch({ brand: e.target.value })}
+                  list="catalogo-marcas"
+                  className={inputClass}
+                  placeholder="Volvo"
+                />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                Modelo *
+                <input
+                  value={form.model}
+                  onChange={(e) => patch({ model: e.target.value })}
+                  list="catalogo-modelos"
+                  className={inputClass}
+                  placeholder="FH16 750"
+                />
+                {/* Solo los de la marca elegida: mezclar todos convertiría la
+                    ayuda en una lista larguísima de modelos de otras marcas. */}
+                <datalist id="catalogo-modelos">
+                  {modelosDeLaMarca.map((m) => <option key={m.id} value={m.name} />)}
+                </datalist>
+              </label>
               <label className={cn(labelClass, 'sm:col-span-2')}>
                 Patente
                 <input
@@ -466,74 +511,45 @@ export function VehicleNew() {
                   Si ya está cargada, se traen sus datos y su cliente.
                 </span>
               </label>
-            )}
 
-            {!esPieza && (
-              <>
-                <label className={cn(labelClass, 'sm:col-span-2')}>
-                  Marca
-                  <input
-                    value={form.brand}
-                    onChange={(e) => patch({ brand: e.target.value })}
-                    list="catalogo-marcas"
-                    className={inputClass}
-                    placeholder="Volvo"
-                  />
-                </label>
-                <label className={cn(labelClass, 'sm:col-span-3')}>
-                  Modelo *
-                  <input
-                    value={form.model}
-                    onChange={(e) => patch({ model: e.target.value })}
-                    list="catalogo-modelos"
-                    className={inputClass}
-                    placeholder="FH16 750"
-                  />
-                  {/* Solo los de la marca elegida: mezclar todos convertiría la
-                      ayuda en una lista larguísima de modelos de otras marcas. */}
-                  <datalist id="catalogo-modelos">
-                    {modelosDeLaMarca.map((m) => <option key={m.id} value={m.name} />)}
-                  </datalist>
-                </label>
-                <label className={cn(labelClass, 'sm:col-span-3')}>
-                  Tamaño en playa *
-                  <select
-                    value={form.sizeClass}
-                    onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
-                    className={cn(inputClass, 'bg-panel')}
-                  >
-                    <option value="">Elegí el tamaño…</option>
-                    {SIZE_CLASSES.map((size) => (
-                      <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={cn(labelClass, 'sm:col-span-2')}>
-                  Kilometraje / Horas
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.odometer}
-                    onChange={(e) => patch({ odometer: e.target.value })}
-                    className={cn(inputClass, 'text-right')}
-                    placeholder="0"
-                  />
-                </label>
-                <label className={cn(labelClass, 'sm:col-span-1')}>
-                  Unidad
-                  <select
-                    value={form.odometerUnit}
-                    onChange={(e) => patch({ odometerUnit: e.target.value as OdometerUnit })}
-                    className={cn(inputClass, 'bg-panel')}
-                  >
-                    {(Object.keys(ODOMETER_UNIT_LABELS) as OdometerUnit[]).map((unit) => (
-                      <option key={unit} value={unit}>{ODOMETER_UNIT_LABELS[unit]}</option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            )}
-          </div>
+              <label className={cn(labelClass, 'sm:col-span-2')}>
+                Kilometraje / Horas
+                <input
+                  type="number"
+                  min="0"
+                  value={form.odometer}
+                  onChange={(e) => patch({ odometer: e.target.value })}
+                  className={cn(inputClass, 'text-right')}
+                  placeholder="0"
+                />
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-1')}>
+                Unidad
+                <select
+                  value={form.odometerUnit}
+                  onChange={(e) => patch({ odometerUnit: e.target.value as OdometerUnit })}
+                  className={cn(inputClass, 'bg-panel')}
+                >
+                  {(Object.keys(ODOMETER_UNIT_LABELS) as OdometerUnit[]).map((unit) => (
+                    <option key={unit} value={unit}>{ODOMETER_UNIT_LABELS[unit]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Tamaño en playa *
+                <select
+                  value={form.sizeClass}
+                  onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
+                  className={cn(inputClass, 'bg-panel')}
+                >
+                  <option value="">Elegí el tamaño…</option>
+                  {SIZE_CLASSES.map((size) => (
+                    <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           {/* ── Renglón por tipo de pieza ────────────────────────
               Al mostrador no llega "una pieza": llega un juego. Seis
@@ -766,13 +782,16 @@ export function VehicleNew() {
         </div>
       </form>
 
-      {creandoCliente && (
+      {fichaCliente && (
         <CustomerModal
-          customer={null}
-          onClose={() => setCreandoCliente(false)}
+          customer={fichaCliente === 'nuevo' ? null : fichaCliente}
+          onClose={() => setFichaCliente(null)}
           onSaved={async (customer) => {
-            setCreandoCliente(false);
+            setFichaCliente(null);
             await cargarClientes();
+            // Vale para los dos casos: el recién creado queda elegido, y el
+            // recién corregido se relee para que los datos de abajo se
+            // actualicen sin recargar la pantalla.
             patch({ customerId: customer.id });
           }}
         />

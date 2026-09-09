@@ -329,6 +329,34 @@ export function InvoiceNew() {
         </Panel>
       </div>
 
+      {/* Cómo se cobra va junto a quién y cuándo, no al final entre las
+          observaciones: son decisiones del encabezado del comprobante, y
+          tomarlas después de cargar los renglones llevaba a emitir de cuenta
+          corriente una factura que se estaba cobrando en el mostrador. */}
+      <Panel className="mb-6 p-5">
+        <SectionHeader title="Cómo se emite" />
+        <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+          <input
+            type="checkbox"
+            checked={emitRemito}
+            onChange={(e) => setEmitRemito(e.target.checked)}
+            className="w-4 h-4 accent-accent-deep"
+          />
+          Emitir remito junto con la factura
+        </label>
+
+        <CashCheckoutFields
+          isCash={isCash}
+          onIsCashChange={setIsCash}
+          paymentMethods={paymentMethods}
+          paymentMethodId={paymentMethodId}
+          onPaymentMethodIdChange={setPaymentMethodId}
+          checkDrafts={checkDrafts}
+          onOpenCheckModal={() => setCheckModalOpen(true)}
+          onClearChecks={() => setCheckDrafts(null)}
+        />
+      </Panel>
+
       <Panel className="mb-6 p-5">
         <ItemsEditor
           items={items}
@@ -351,33 +379,12 @@ export function InvoiceNew() {
 
       <Panel className="mb-6 p-5">
         <SectionHeader title="Observaciones" />
-        <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-          <input
-            type="checkbox"
-            checked={emitRemito}
-            onChange={(e) => setEmitRemito(e.target.checked)}
-            className="w-4 h-4 accent-accent-deep"
-          />
-          Emitir remito junto con la factura
-        </label>
-
-        <CashCheckoutFields
-          isCash={isCash}
-          onIsCashChange={setIsCash}
-          paymentMethods={paymentMethods}
-          paymentMethodId={paymentMethodId}
-          onPaymentMethodIdChange={setPaymentMethodId}
-          checkDrafts={checkDrafts}
-          onOpenCheckModal={() => setCheckModalOpen(true)}
-          onClearChecks={() => setCheckDrafts(null)}
-        />
-
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           placeholder="Texto que sale impreso en el comprobante. Opcional."
-          className="mt-4 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
       </Panel>
 

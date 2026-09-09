@@ -59,6 +59,12 @@ export function WorkOrders() {
   }, [searchParams, setSearchParams, isAdmin]);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [showDelete, setShowDelete] = React.useState(false);
+  /**
+   * Las retiradas se esconden por defecto. Son la mayoría con el tiempo —toda
+   * orden termina retirada— y son justamente las que ya no requieren nada:
+   * dejarlas a la vista empuja hacia abajo lo que sí hay que atender.
+   */
+  const [verRetirados, setVerRetirados] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
 
   const loadOrders = React.useCallback(async () => {
@@ -86,16 +92,30 @@ export function WorkOrders() {
     return base;
   }, [orders, statuses]);
 
+  // El estado se busca por system_key: la etiqueta la renombra el taller.
+  const retiradoId = statuses.find((s) => s.systemKey === 'RETIRADO')?.id ?? null;
+
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((order) => {
       if (statusFilter && order.status.id !== statusFilter) return false;
+      // Pedir expresamente el estado Retirado manda sobre el check: si se
+      // filtró por esa tarjeta, esconderlas dejaría la pantalla vacía sin
+      // explicación.
+      if (
+        !verRetirados &&
+        retiradoId &&
+        order.status.id === retiradoId &&
+        statusFilter !== retiradoId
+      ) {
+        return false;
+      }
       if (!term) return true;
       return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName, order.invoiceNumber]
         .filter(Boolean)
         .some((field) => String(field).toLowerCase().includes(term));
     });
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, verRetirados, retiradoId]);
 
   /**
    * Solo se actúa sobre lo que está marcado Y visible. Si se marcan tres
@@ -182,23 +202,29 @@ export function WorkOrders() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      {/* Una sola fila: las columnas se reparten el ancho entre todos los
+          estados que haya, sean cinco o nueve. En pantalla angosta vuelven a
+          envolverse, que es preferible a dejarlas ilegibles. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-flow-col md:auto-cols-fr md:grid-cols-none">
         {statuses.map((status) => (
           <button
             key={status.id}
             onClick={() => setStatusFilter(statusFilter === status.id ? '' : status.id)}
+            title={status.label}
             className={cn(
-              'relative overflow-hidden border p-3 text-left transition-colors',
+              'relative overflow-hidden border px-1.5 py-1.5 text-left transition-colors',
               statusFilter === status.id
                 ? 'border-accent bg-accent/10'
                 : 'border-line-strong bg-panel hover:bg-panel-alt'
             )}
           >
             <StateStrip color={status.color} />
-            <span className="block pl-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            {/* Envuelve en vez de cortarse: "COTIZADO" y "RECHAZADA" leídos
+                como "COTIZA…" y "RECHA…" no distinguen nada. */}
+            <span className="block break-words pl-1.5 text-[9px] font-semibold uppercase leading-[1.15] text-text-soft">
               {status.label}
             </span>
-            <span className="block pl-2 font-display text-2xl font-medium text-text">
+            <span className="block pl-1.5 font-display text-lg font-medium leading-tight text-text">
               {loading ? '—' : counts[status.id] ?? 0}
             </span>
           </button>
@@ -215,6 +241,16 @@ export function WorkOrders() {
             className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={verRetirados}
+            onChange={(e) => setVerRetirados(e.target.checked)}
+            className="h-4 w-4 accent-accent-deep"
+          />
+          Mostrar retirados
+        </label>
 
         {isAdmin && selectedOrders.length > 0 && (
           <div className="flex items-center gap-3">
