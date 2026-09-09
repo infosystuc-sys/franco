@@ -4,7 +4,6 @@ import {
   Wrench,
   Settings,
   Truck,
-  ClipboardCheck,
   CheckCircle,
   Mail,
   Info,
@@ -103,14 +102,47 @@ export function ClientPortal() {
     );
   }
 
-  const statusIndex = statuses.findIndex((s) => s.id === order.statusId);
-  const currentStatus = statuses.find((s) => s.id === order.statusId);
-
   // Fecha en que la orden alcanzó cada estado, según el historial real.
   const reachedAt: Record<string, string> = {};
   history.forEach((change) => {
     reachedAt[change.toStatusId] = change.changedAt;
   });
+
+  /**
+   * Lo que el cliente ve del circuito: recibimos el equipo, te pasamos el
+   * presupuesto, está listo. El taller mueve la orden por muchos más estados
+   * —autorizada, esperando repuestos, en reparación, calibración— pero eso es
+   * cocina interna: al cliente le sirve saber en cuál de los tres momentos
+   * está su vehículo, no seguir cada paso del taller.
+   *
+   * Se identifican por system_key y no por etiqueta porque las etiquetas las
+   * renombra el taller cuando quiere.
+   */
+  const ETAPAS_DEL_CLIENTE = ['INGRESADO', 'COTIZADO', 'TERMINADO'];
+
+  /**
+   * Solo las etapas por las que la orden REALMENTE pasó, en el orden del
+   * circuito. Una etapa que todavía no se abrió no se muestra: mostrarla en
+   * gris es prometerle al cliente un paso que quizás nunca ocurra —una orden
+   * rechazada no llega nunca a "terminado"— y además le adelanta cuánto falta
+   * con una precisión que el taller no puede sostener.
+   *
+   * Se mira el historial y no el orden de los estados: una orden rechazada
+   * está en la última posición de la lista y, contando por posición, aparecía
+   * como si hubiera pasado por todas las anteriores.
+   */
+  const visibleStatuses = statuses.filter(
+    (s) =>
+      s.systemKey !== null &&
+      ETAPAS_DEL_CLIENTE.includes(s.systemKey) &&
+      (reachedAt[s.id] !== undefined || s.id === order.statusId)
+  );
+
+  // La última que se abrió es la que se está informando. Si la orden está en
+  // un estado interno —en reparación, por ejemplo— lo que se informa es la
+  // última etapa visible que sí alcanzó.
+  const informada = visibleStatuses[visibleStatuses.length - 1] ?? null;
+  const currentStatus = informada;
 
   return (
     <div className="min-h-screen bg-panel-alt flex flex-col font-sans">
@@ -307,11 +339,13 @@ export function ClientPortal() {
           <div className="md:col-span-8 bg-panel p-6 border border-line">
             <h2 className="text-base font-bold text-text mb-8 pb-2 border-b-2 border-accent inline-block">Progreso del Servicio</h2>
             <div className="flex flex-col relative pl-2">
-              {statuses.map((status, idx) => {
-                const state = idx < statusIndex ? 'completed' : idx === statusIndex ? 'active' : 'pending';
+              {visibleStatuses.map((status, idx) => {
+                // No hay etapas pendientes dibujadas: las que se ven son las
+                // que ocurrieron, y la última es la que se está informando.
+                const state = idx < visibleStatuses.length - 1 ? 'completed' : 'active';
                 return (
                   <div key={status.id} className="flex gap-6 relative mb-10 last:mb-0">
-                    {idx < statuses.length - 1 && (
+                    {idx < visibleStatuses.length - 1 && (
                       <div className="absolute top-[40px] left-[20px] bottom-[-40px] w-0.5 bg-line z-0"></div>
                     )}
 
@@ -322,12 +356,16 @@ export function ClientPortal() {
                         state === 'active' ? "border-accent-deep bg-accent animate-pulse" :
                         "border-line"
                       )}>
-                        {state === 'completed' ? (
-                          <CheckCircle size={24} className="text-accent-deep fill-current" />
-                        ) : state === 'active' ? (
-                          <Wrench size={20} className="text-accent-ink fill-current" />
+                        {/* La llave dice "se está trabajando en esto". En la
+                            etapa terminada eso contradice al texto, que
+                            justamente avisa que el trabajo se terminó. */}
+                        {state === 'completed' || status.systemKey === 'TERMINADO' ? (
+                          <CheckCircle size={24} className={cn(
+                            state === 'active' ? 'text-accent-ink' : 'text-accent-deep',
+                            'fill-current'
+                          )} />
                         ) : (
-                          <ClipboardCheck size={20} className="text-line-strong" />
+                          <Wrench size={20} className="text-accent-ink fill-current" />
                         )}
                       </div>
                     </div>
