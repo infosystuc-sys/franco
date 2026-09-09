@@ -760,7 +760,7 @@ export function VehicleNew() {
               : existente
                 ? 'Guardar cambios'
                 : vieneDeOT
-                  ? 'Guardar y abrir la orden'
+                  ? 'Guardar'
                   : esPieza ? 'Guardar ingreso' : 'Guardar vehículo'}
           </Button>
         </div>
