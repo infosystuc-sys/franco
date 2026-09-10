@@ -32,6 +32,87 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: CORS_HEADERS });
 }
 
+/**
+ * Fallas del lado de Google que se arreglan solas esperando: el modelo
+ * saturado (503 UNAVAILABLE), la cuota momentánea (429) y el error interno
+ * (500). No entran acá la clave inválida ni el archivo ilegible, que por más
+ * que se reintenten van a fallar igual.
+ */
+function esFallaPasajera(err: unknown): boolean {
+  const texto = err instanceof Error ? err.message : String(err);
+  return /\b(429|500|503)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand/i.test(texto);
+}
+
+/**
+ * El mensaje que ve quien está cargando la factura. El error de Google llega
+ * como un JSON crudo en inglés —"This model is currently experiencing high
+ * demand"— que no le dice a nadie qué hacer con eso.
+ */
+function mensajeParaElUsuario(err: unknown): string {
+  const texto = err instanceof Error ? err.message : String(err);
+  if (texto.startsWith('TIEMPO_AGOTADO')) {
+    return 'El lector de comprobantes de Google tardó demasiado en contestar y se cortó la espera. ' +
+      'Suele pasar cuando está saturado. Probá de nuevo en unos minutos, ' +
+      'o cargá la factura a mano: el archivo subido queda guardado.';
+  }
+  if (esFallaPasajera(texto)) {
+    return 'El lector de comprobantes de Google está saturado en este momento. ' +
+      'Ya se reintentó automáticamente sin suerte. Probá de nuevo en unos minutos, ' +
+      'o cargá la factura a mano: el archivo subido queda guardado.';
+  }
+  if (/API key|API_KEY|PERMISSION_DENIED|401|403/i.test(texto)) {
+    return 'El lector de comprobantes rechazó la credencial. Hay que revisar la clave de Gemini en la configuración del servidor.';
+  }
+  return `No se pudo leer el comprobante: ${texto}`;
+}
+
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Tope duro por intento.
+ *
+ * El SDK de Gemini reintenta solo, por dentro y sin avisar, cuando el modelo
+ * está saturado. Sin este tope una lectura se quedó tres minutos colgada hasta
+ * que la plataforma mató la función: el usuario vio "non-2xx" y el borrador
+ * quedó huérfano, sin lectura y sin error que explicara nada. Vale más cortar
+ * y decirlo que esperar a que nos corten.
+ */
+const LIMITE_POR_INTENTO_MS = 45_000;
+
+function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promesa,
+    new Promise<never>((_, rechazar) =>
+      setTimeout(() => rechazar(new Error(`TIEMPO_AGOTADO: Gemini no respondió en ${ms / 1000} segundos.`)), ms)
+    ),
+  ]);
+}
+
+/**
+ * Reintenta mientras la falla sea pasajera, esperando cada vez más. Los saltos
+ * son cortos a propósito: del otro lado hay alguien esperando que la pantalla
+ * termine de leer su factura, y una espera larga se siente como que se colgó.
+ *
+ * Un intento agotado NO se reintenta: si tardó 45 segundos en no contestar, es
+ * el SDK dando vueltas por su cuenta, y otra ronda solo acerca el límite de la
+ * función sin mejorar nada.
+ */
+async function conReintentos<T>(accion: () => Promise<T>): Promise<T> {
+  // Dos reintentos y nada más: son para el 503 que vuelve rápido. Los saltos
+  // cortos hacen que el peor caso sano quede en unos diez segundos.
+  const esperas = [1500, 4000];
+  for (let intento = 0; ; intento++) {
+    try {
+      return await conLimite(accion(), LIMITE_POR_INTENTO_MS);
+    } catch (err) {
+      const agotado = err instanceof Error && err.message.startsWith('TIEMPO_AGOTADO');
+      if (agotado || intento >= esperas.length || !esFallaPasajera(err)) throw err;
+      console.log(`Gemini falló (intento ${intento + 1}), reintentando: ${err instanceof Error ? err.message : err}`);
+      await esperar(esperas[intento]);
+    }
+  }
+}
+
 type Autorizacion = { estado: 'admin'; userId: string } | { estado: 'sin-sesion' | 'sin-permiso' };
 
 async function verificarAdmin(req: Request): Promise<Autorizacion> {
@@ -223,7 +304,7 @@ Deno.serve(async (req: Request) => {
 
     let respuesta;
     try {
-      respuesta = await ai.models.generateContent({
+      respuesta = await conReintentos(() => ai.models.generateContent({
         model: 'gemini-3.5-flash',
         contents: [
           { text: 'Extraé los datos de este comprobante según el schema.' },
@@ -234,9 +315,9 @@ Deno.serve(async (req: Request) => {
           responseMimeType: 'application/json',
           responseSchema: schemaFor(kind),
         },
-      });
+      }));
     } catch (err) {
-      return await marcarError(`Gemini no pudo leer el comprobante: ${err instanceof Error ? err.message : String(err)}`);
+      return await marcarError(mensajeParaElUsuario(err));
     }
 
     let extraccion: ExtractedHeader;
