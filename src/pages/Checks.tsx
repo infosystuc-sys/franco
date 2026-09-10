@@ -148,7 +148,7 @@ export function Checks() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6">
       <PageHeader
         title="Cheques de terceros"
         subtitle="Los valores recibidos, desde que entran a la cartera hasta que se acreditan o se endosan."

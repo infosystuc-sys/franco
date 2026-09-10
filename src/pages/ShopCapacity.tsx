@@ -145,7 +145,7 @@ export function ShopCapacity() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6">
       <PageHeader
         title="Disponibilidad del taller"
         subtitle="Cuánto lugar queda en la playa, según las órdenes de trabajo en curso."

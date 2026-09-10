@@ -108,7 +108,7 @@ export function Receipts() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6">
       <PageHeader
         title={canViewHistory ? 'Cobranzas' : ''}
         subtitle={canViewHistory ? 'Los recibos con que se cancelan las facturas de venta.' : undefined}

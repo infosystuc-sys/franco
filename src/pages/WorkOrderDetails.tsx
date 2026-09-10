@@ -19,6 +19,8 @@ import {
   fetchUnlinkedQuotations,
   linkQuotationToWorkOrder,
   type QuotationListRow,
+  describirEnvioCotizacion,
+  enviarCotizacionParaAutorizar,
 } from '@/src/lib/quotations';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
 import {
@@ -68,6 +70,8 @@ export function WorkOrderDetails() {
   const [partName, setPartName] = useState('');
   const [partSerial, setPartSerial] = useState('');
   const [cotizando, setCotizando] = useState(false);
+  const [enviandoCotizacion, setEnviandoCotizacion] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   // Cotizaciones del cliente de esta OT que todavía no están enganchadas a
   // ninguna orden: el presupuesto hecho por teléfono, antes de que llegara
   // el vehículo. Solo tiene sentido buscarlas mientras la OT no tenga ya
@@ -334,6 +338,29 @@ export function WorkOrderDetails() {
     }
   }
 
+  /**
+   * Mandar el presupuesto a autorizar sin salir de la orden.
+   *
+   * Es el mismo acto que desde la cotización, y desde acá es donde más se
+   * necesita: quien recibe el vehículo cotiza y manda en la misma pasada, sin
+   * tener que ir a buscar el presupuesto a otra pantalla.
+   */
+  async function handleEnviarAutorizar() {
+    if (!order?.quotationId) return;
+    setEnviandoCotizacion(true);
+    setError(null);
+    setAviso(null);
+    try {
+      const resultado = await enviarCotizacionParaAutorizar(order.quotationId);
+      setAviso(describirEnvioCotizacion(resultado));
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setEnviandoCotizacion(false);
+    }
+  }
+
   async function handleSave() {
     if (!order) return;
     setSaving(true);
@@ -355,12 +382,12 @@ export function WorkOrderDetails() {
   }
 
   if (loading) {
-    return <div className="max-w-7xl mx-auto p-8 text-center text-text-soft">Cargando orden...</div>;
+    return <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">Cargando orden...</div>;
   }
 
   if (!order) {
     return (
-      <div className="mx-auto max-w-7xl p-8 text-center text-text-soft">
+      <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">
         No se encontró la orden {id}.{' '}
         <Link to="/" className="text-accent-deep underline">Volver al panel</Link>
       </div>
@@ -371,6 +398,23 @@ export function WorkOrderDetails() {
   // anular esa factura (fuera de esta pantalla, desde Facturación).
   const locked = !!invoice;
   const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
+
+  /**
+   * Las etapas por las que esta orden realmente pasó, en el orden del
+   * circuito, terminando en la actual.
+   *
+   * Sale del historial y no de la posición del estado en la lista: una orden
+   * rechazada está última en la secuencia, y contando por posición aparecía
+   * como si hubiera pasado por todas las anteriores, terminada incluida.
+   */
+  const recorrido = (() => {
+    // Sin useMemo a propósito: esto se calcula después de los returns tempranos
+    // de "cargando" y "no existe", y un hook ahí adentro corre en unos renders
+    // y en otros no. Filtrar una lista de diez estados no necesita memoria.
+    const alcanzados = new Set(history.map((cambio) => cambio.toStatus.id));
+    if (order?.status?.id) alcanzados.add(order.status.id);
+    return statuses.filter((s) => alcanzados.has(s.id));
+  })();
   const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
   // Una orden sin renglones y con presupuesto es una que todavía espera la
   // respuesta del cliente: los renglones se copian recién al aceptar. Sin esta
@@ -386,7 +430,7 @@ export function WorkOrderDetails() {
     Math.abs(order.priceAuth.requestedTotal - currentTotal) < 0.005;
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1600px]">
       <PageHeader
         title={<span className="font-mono text-3xl font-medium tracking-normal text-text">{order.number}</span>}
         meta={
@@ -440,6 +484,22 @@ export function WorkOrderDetails() {
                 <Receipt size={16} /> {cotizando ? 'Creando…' : 'Cotizar'}
               </Button>
             )}
+            {isAdmin && order.quotationId &&
+              (order.quotationStatus === 'EMITIDA' || order.quotationStatus === 'ENVIADA') && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={enviandoCotizacion}
+                onClick={handleEnviarAutorizar}
+              >
+                <Send size={16} />{' '}
+                {enviandoCotizacion
+                  ? 'Enviando…'
+                  : order.quotationStatus === 'ENVIADA'
+                    ? 'Reenviar a autorizar'
+                    : 'Enviar a autorizar'}
+              </Button>
+            )}
             {isAdmin && <InvoiceAction order={order} invoice={invoice} />}
             {isAdmin && !locked && (
               <Button onClick={handleSave} disabled={saving}>
@@ -452,6 +512,10 @@ export function WorkOrderDetails() {
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+      )}
+
+      {aviso && !error && (
+        <div className="mb-6 rounded-md border border-line-strong bg-panel-alt px-4 py-3 text-sm text-text">{aviso}</div>
       )}
 
       {order.quotedTotal !== null && priceDiffers && !priceAuthCoversCurrent && (
@@ -580,38 +644,44 @@ export function WorkOrderDetails() {
       </div>
 
       {/* Avance del trabajo */}
-      {statuses.length > 0 && (
+      {recorrido.length > 0 && (
         <Panel className="mb-6 px-5 py-6">
+          {/* La línea se dibuja con las etapas por las que la orden PASÓ, no
+              con el circuito completo. Mostrar en gris las que faltan promete
+              pasos que quizás nunca ocurran —una orden rechazada no llega a
+              terminada— y con estados que el taller agrega y saca, la fila se
+              llenaba de casilleros que esa orden nunca iba a tocar. */}
           <div className="relative flex items-start justify-between">
             <div className="absolute left-0 top-3 z-0 h-[3px] w-full bg-line" />
             <div
               className="absolute left-0 top-3 z-0 h-[3px] bg-accent transition-all duration-300"
-              style={{ width: `${statuses.length > 1 ? (Math.max(statusIndex, 0) / (statuses.length - 1)) * 100 : 0}%` }}
+              style={{ width: `${recorrido.length > 1 ? ((recorrido.length - 1) / (recorrido.length - 1)) * 100 : 0}%` }}
             />
 
-            {statuses.map((status, idx) => (
-              <div key={status.id} className="relative z-10 flex w-24 flex-col items-center gap-2">
-                {idx === statusIndex ? (
-                  <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
-                    <span className="h-2 w-2 bg-accent" />
-                  </span>
-                ) : idx < statusIndex ? (
-                  <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center bg-accent text-accent-ink">
-                    <Check size={14} strokeWidth={3} />
-                  </span>
-                ) : (
-                  <span className="mt-[1px] flex h-5 w-5 items-center justify-center border border-line-strong bg-panel-alt" />
-                )}
-                <span
-                  className={cn(
-                    'text-center text-[10px] font-semibold uppercase leading-tight tracking-[0.05em]',
-                    idx === statusIndex ? 'text-text' : 'text-text-faint'
+            {recorrido.map((status, idx) => {
+              const esActual = idx === recorrido.length - 1;
+              return (
+                <div key={status.id} className="relative z-10 flex w-24 flex-col items-center gap-2">
+                  {esActual ? (
+                    <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
+                      <span className="h-2 w-2 bg-accent" />
+                    </span>
+                  ) : (
+                    <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center bg-accent text-accent-ink">
+                      <Check size={14} strokeWidth={3} />
+                    </span>
                   )}
-                >
-                  {status.label}
-                </span>
-              </div>
-            ))}
+                  <span
+                    className={cn(
+                      'text-center text-[11px] font-semibold uppercase leading-tight tracking-[0.05em]',
+                      esActual ? 'text-text' : 'text-text-faint'
+                    )}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {isAdmin && (

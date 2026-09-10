@@ -7,6 +7,7 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
+import { fetchCustomers, type Customer } from '@/src/lib/customers';
 import {
   fetchCompanySettings,
   formatAddress,
@@ -27,6 +28,7 @@ import {
   toDateString,
   type InvoiceType,
   type WorkOrderInvoiceRef,
+  reasignarClienteDeOrden,
 } from '@/src/lib/invoices';
 import {
   fetchWorkOrderByNumber,
@@ -67,7 +69,16 @@ export function InvoiceNew() {
 
   const [loading, setLoading] = React.useState(true);
   const [issuing, setIssuing] = React.useState(false);
+  const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [cambiandoCliente, setCambiandoCliente] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // La recarga vive en un ref porque la arma el efecto, con sus propias
+  // variables de cancelación, y hace falta desde afuera al cambiar el cliente.
+  const recargarRef = React.useRef<null | (() => Promise<void>)>(null);
+  const recargar = React.useCallback(async () => {
+    await recargarRef.current?.();
+  }, []);
 
   React.useEffect(() => {
     if (!otNumber || role !== 'admin') return;
@@ -107,6 +118,11 @@ export function InvoiceNew() {
     }
 
     load();
+    recargarRef.current = load;
+    // Para poder cambiar a quién se factura sin salir de la pantalla.
+    fetchCustomers(true)
+      .then((data) => !cancelled && setCustomers(data))
+      .catch(() => {/* si falla, no se puede cambiar el cliente pero se factura igual */});
     // El catálogo es opcional: sirve para agregar renglones que no estaban en la OT.
     fetchArticles(false)
       .then((data) => !cancelled && setArticles(data))
@@ -199,6 +215,31 @@ export function InvoiceNew() {
   const canIssue =
     items.length > 0 && totals.total > 0 && emptyLines === 0 &&
     (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
+
+  /**
+   * Cambiar el cliente antes de emitir. Se recarga la orden después: el tipo
+   * de factura (A/B) depende de la condición frente al IVA del cliente, así
+   * que con el cliente cambia también qué comprobante corresponde.
+   */
+  async function handleCambiarCliente(customerId: string) {
+    if (!order || !customerId || customerId === order.customer?.id) return;
+    const elegido = customers.find((c) => c.id === customerId);
+    if (!window.confirm(
+      `¿Facturar esta orden a ${elegido?.name ?? 'ese cliente'}?\n\n` +
+      'Se reasignan también la orden y su presupuesto. El vehículo sigue siendo de su dueño.'
+    )) return;
+
+    setCambiandoCliente(true);
+    setError(null);
+    try {
+      await reasignarClienteDeOrden(order.id, customerId);
+      await recargar();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCambiandoCliente(false);
+    }
+  }
 
   async function handleIssue() {
     if (!order || !canIssue || !order.customer) return;
@@ -294,6 +335,26 @@ export function InvoiceNew() {
           </span>
           <span className="block text-sm font-semibold text-text">
             {order.customer?.legal_name || order.customer?.name || '—'}
+          </span>
+
+          {/* A quién se le factura puede no ser quien trajo el vehículo: la
+              empresa del titular, el seguro, la contratista. Se cambia acá,
+              antes de emitir, porque después la factura ya salió con un
+              nombre. */}
+          <select
+            value={order.customer?.id ?? ''}
+            disabled={cambiandoCliente || customers.length === 0}
+            onChange={(e) => handleCambiarCliente(e.target.value)}
+            className="mt-2 w-full rounded-md border border-line bg-panel px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-50"
+          >
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[10px] text-text-soft">
+            {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
           </span>
           <span className="mt-1.5 block text-xs text-text-soft">
             {order.customer?.tax_id && (

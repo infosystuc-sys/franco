@@ -12,6 +12,7 @@ import {
   fetchWorkOrderStatuses,
   getErrorMessage,
   updateWorkOrderStatus,
+  ordenarWorkOrderStatuses,
   type WorkOrderStatusDef,
   type WorkOrderStatusInput,
 } from '@/src/lib/workOrders';
@@ -100,14 +101,23 @@ export function WorkOrderStatuses() {
     }
   }
 
-  async function handleSwap(a: WorkOrderStatusDef, b: WorkOrderStatusDef) {
+  /**
+   * Mover uno de lugar es reescribir la secuencia entera: se arma la lista
+   * como debería quedar y la base la numera de una. Así nunca quedan dos
+   * estados compartiendo posición.
+   */
+  async function handleMover(status: WorkOrderStatusDef, desplazamiento: -1 | 1) {
+    const desde = statuses.findIndex((s) => s.id === status.id);
+    const hasta = desde + desplazamiento;
+    if (desde < 0 || hasta < 0 || hasta >= statuses.length) return;
+
+    const orden = statuses.map((s) => s.id);
+    [orden[desde], orden[hasta]] = [orden[hasta], orden[desde]];
+
     setReordering(true);
     setError(null);
     try {
-      await Promise.all([
-        updateWorkOrderStatus(a.id, { ...statusToForm(a), sortOrder: b.sortOrder }),
-        updateWorkOrderStatus(b.id, { ...statusToForm(b), sortOrder: a.sortOrder }),
-      ]);
+      await ordenarWorkOrderStatuses(orden);
       await load();
     } catch (err) {
       setError(describeWorkOrderStatusError(getErrorMessage(err)));
@@ -168,7 +178,7 @@ export function WorkOrderStatuses() {
                   <td className="px-3 py-1">
                     <div className="flex items-center gap-0.5">
                       <button
-                        onClick={() => handleSwap(status, statuses[idx - 1])}
+                        onClick={() => handleMover(status, -1)}
                         disabled={idx === 0 || reordering}
                         aria-label={`Subir ${status.label}`}
                         className="p-1 text-text-soft transition-colors hover:text-accent-deep disabled:opacity-30"
@@ -176,7 +186,7 @@ export function WorkOrderStatuses() {
                         <ArrowUp size={14} />
                       </button>
                       <button
-                        onClick={() => handleSwap(status, statuses[idx + 1])}
+                        onClick={() => handleMover(status, 1)}
                         disabled={idx === statuses.length - 1 || reordering}
                         aria-label={`Bajar ${status.label}`}
                         className="p-1 text-text-soft transition-colors hover:text-accent-deep disabled:opacity-30"
@@ -230,7 +240,7 @@ export function WorkOrderStatuses() {
       {(creating || editing) && (
         <WorkOrderStatusModal
           status={editing}
-          nextSortOrder={statuses.length > 0 ? Math.max(...statuses.map((s) => s.sortOrder)) + 1 : 1}
+          statuses={statuses}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -248,17 +258,28 @@ export function WorkOrderStatuses() {
 
 function WorkOrderStatusModal({
   status,
-  nextSortOrder,
+  statuses,
   onClose,
   onSaved,
 }: {
   status: WorkOrderStatusDef | null;
-  nextSortOrder: number;
+  /** La secuencia actual, para elegir dónde entra el nuevo. */
+  statuses: WorkOrderStatusDef[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [form, setForm] = React.useState<WorkOrderStatusInput>(
-    status ? statusToForm(status) : { ...EMPTY_FORM, sortOrder: nextSortOrder }
+    status ? statusToForm(status) : { ...EMPTY_FORM, sortOrder: statuses.length + 1 }
+  );
+  /**
+   * Detrás de cuál va el estado nuevo. Cadena vacía = va primero.
+   *
+   * Se pregunta "después de cuál" y no "qué número": el número de posición no
+   * significa nada para quien está definiendo el circuito, y obliga a contar.
+   * En cambio "después de Cotizado" es exactamente como se piensa el paso.
+   */
+  const [despuesDe, setDespuesDe] = React.useState<string>(
+    statuses.length > 0 ? statuses[statuses.length - 1].id : ''
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -276,8 +297,17 @@ function WorkOrderStatusModal({
     setSaving(true);
     setError(null);
     try {
-      if (status) await updateWorkOrderStatus(status.id, form);
-      else await createWorkOrderStatus(form);
+      if (status) {
+        await updateWorkOrderStatus(status.id, form);
+      } else {
+        const creado = await createWorkOrderStatus(form);
+        // Nace último y después se lo ubica: insertarlo en el medio requiere
+        // correr a todos los que siguen, y eso lo hace la base de una sola vez.
+        const orden = statuses.map((s) => s.id).filter((id) => id !== creado.id);
+        const posicion = despuesDe ? orden.indexOf(despuesDe) + 1 : 0;
+        orden.splice(posicion, 0, creado.id);
+        await ordenarWorkOrderStatuses(orden);
+      }
       onSaved();
     } catch (err) {
       setError(describeWorkOrderStatusError(getErrorMessage(err)));
@@ -324,6 +354,27 @@ function WorkOrderStatusModal({
               />
             </label>
           </div>
+
+          {/* Solo al crear: mover uno existente se hace con las flechas de la
+              lista, donde se ve la secuencia completa mientras se mueve. */}
+          {!status && statuses.length > 0 && (
+            <label className={labelClass}>
+              Dónde va en la secuencia
+              <select
+                value={despuesDe}
+                onChange={(e) => setDespuesDe(e.target.value)}
+                className={cn(inputClass, 'bg-panel')}
+              >
+                <option value="">Primero, antes de {statuses[0].label}</option>
+                {statuses.map((s) => (
+                  <option key={s.id} value={s.id}>Después de {s.label}</option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] font-normal normal-case text-text-soft">
+                Los que vengan después se corren solos.
+              </span>
+            </label>
+          )}
 
           <label className={labelClass}>
             Descripción para el cliente

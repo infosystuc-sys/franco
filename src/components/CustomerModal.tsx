@@ -68,7 +68,7 @@ export function CustomerModal({
       {/* Del mismo ancho que el ingreso de vehículos: son los mismos veinte
           campos, y en una ventana angosta obligaban a scrollear para llegar a
           los vehículos del cliente y a los botones. */}
-      <div className="bg-panel w-full max-w-7xl flex flex-col max-h-[92vh]">
+      <div className="bg-panel w-full max-w-[1600px] flex flex-col max-h-[92vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
             {customer ? `Editar cliente` : 'Nuevo cliente'}

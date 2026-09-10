@@ -77,7 +77,7 @@ function WorkOrderPanel() {
       : 'No tenés órdenes asignadas. El encargado del taller te las asigna desde la orden de trabajo.';
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1600px]">
       <PageHeader
         title="Panel de control"
         subtitle="Órdenes abiertas en el taller, por etapa."

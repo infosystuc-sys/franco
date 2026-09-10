@@ -123,6 +123,19 @@ function statusRow(input: WorkOrderStatusInput) {
   };
 }
 
+/**
+ * Reescribe la secuencia entera de estados, 1..N, en una sola transacción.
+ *
+ * Se manda la lista completa en el orden deseado en vez de mover uno por vez:
+ * intercambiar de a pares dejaba dos estados con el mismo número si el segundo
+ * update fallaba, y ahí el orden pasaba a depender de cuál leyera primero la
+ * base.
+ */
+export async function ordenarWorkOrderStatuses(ids: string[]): Promise<void> {
+  const { error } = await supabase.rpc('ordenar_estados_ot', { p_ids: ids });
+  if (error) throw error;
+}
+
 export async function createWorkOrderStatus(input: WorkOrderStatusInput): Promise<WorkOrderStatusDef> {
   const { data, error } = await supabase
     .from('work_order_statuses')
@@ -606,6 +619,9 @@ export interface WorkOrderDetail {
     | null;
   employee: { id: string; name: string } | null;
   quotationNumber: string | null;
+  /** Id de esa cotización, para poder mandarla a autorizar desde acá. */
+  quotationId: string | null;
+  quotationStatus: string | null;
   /** Total de la cotización que le dio origen. Null si la OT no nació de una. */
   quotedTotal: number | null;
   priceAuth: {
@@ -644,7 +660,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
                           address_street, address_city, address_state, address_zip),
        vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees(id, name),
-       quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
+       quotation:quotations!work_orders_quotation_id_fkey(id, number, status, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
        photos:work_order_photos(id, storage_path, created_at),
        received_parts:work_order_received_parts(id, name, serial_number)`
@@ -666,6 +682,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     vehicle: (data as any).vehicle,
     employee: (data as any).employee,
     quotationNumber: quotation?.number ?? null,
+    quotationId: quotation?.id ?? null,
+    quotationStatus: quotation?.status ?? null,
     quotedTotal: quotation
       ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
       : null,

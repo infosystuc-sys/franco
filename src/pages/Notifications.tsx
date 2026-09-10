@@ -62,7 +62,7 @@ export function Notifications() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1600px]">
       <PageHeader
         title="Mensajes"
         subtitle="Cola de avisos por WhatsApp: qué salió, qué espera y qué falló."

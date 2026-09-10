@@ -41,7 +41,7 @@ export function MenuHome() {
   if (activeKey === 'favoritos') {
     const favoriteCards = allCards(isAdmin).filter((card) => favorites.includes(card.path));
     return (
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1600px]">
         <CategoryTitle icon={Star} label="Favoritos" />
         {favoriteCards.length === 0 ? (
           <Panel className="p-6 text-center text-sm text-text-soft">
@@ -63,14 +63,14 @@ export function MenuHome() {
 
   if (!category) {
     return (
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1600px]">
         <Panel className="p-6 text-center text-sm text-text-soft">No hay módulos disponibles.</Panel>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1600px]">
       <CategoryTitle icon={category.icon} label={category.label} />
       <div className="space-y-8">
         {category.sections.map((section) => (

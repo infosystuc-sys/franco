@@ -405,6 +405,28 @@ export interface IssuedInvoice {
   remitoFullNumber: string | null;
 }
 
+/**
+ * Cambia a qué cliente se le va a facturar una orden.
+ *
+ * El vehículo entra a nombre de quien lo trae, pero la factura muchas veces va
+ * a otro: la empresa del titular, el seguro, la contratista. Reasigna también
+ * el presupuesto que salió de esa orden, para que no quede pendiente de
+ * autorizar en la cuenta de alguien que ya no tiene nada que ver.
+ *
+ * La base lo rechaza si la orden ya tiene factura emitida: mover una factura
+ * entregada arrastra saldos y recibos ya aplicados.
+ */
+export async function reasignarClienteDeOrden(
+  workOrderId: string,
+  customerId: string
+): Promise<void> {
+  const { error } = await supabase.rpc('reasignar_cliente_de_orden', {
+    p_work_order_id: workOrderId,
+    p_customer_id: customerId,
+  });
+  if (error) throw error;
+}
+
 export async function issueInvoice(
   workOrderId: string,
   items: WorkOrderItemInput[],

@@ -115,7 +115,7 @@ export function Treasury() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6">
       <PageHeader
         title={canViewHistory ? 'Tesorería' : ''}
         subtitle={canViewHistory ? 'El libro de caja: gastos sin factura, ingresos y movimientos entre medios.' : undefined}

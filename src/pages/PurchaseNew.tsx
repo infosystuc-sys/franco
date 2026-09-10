@@ -152,7 +152,7 @@ export function PurchaseNew() {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-6xl p-8 text-center text-text-soft">Cargando padrones…</div>;
+    return <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">Cargando padrones…</div>;
   }
 
   function patchLine(index: number, patch: Partial<PurchaseLine>) {
@@ -262,7 +262,7 @@ export function PurchaseNew() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1600px]">
       <PageHeader
         title={isArticles ? 'Compra de artículos' : 'Compra de conceptos'}
         meta={

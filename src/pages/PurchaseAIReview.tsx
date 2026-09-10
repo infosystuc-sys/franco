@@ -397,8 +397,8 @@ export function PurchaseAIReview() {
   const confianzas = ((draft?.rawExtraction as any)?.confianzas ?? {}) as Record<string, number>;
 
   if (role !== 'admin') return <Navigate to="/" replace />;
-  if (loading) return <div className="mx-auto max-w-6xl p-8 text-center text-text-soft">Leyendo el borrador…</div>;
-  if (!draft) return <div className="mx-auto max-w-6xl p-8 text-center text-danger">No se encontró esa lectura.</div>;
+  if (loading) return <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">Leyendo el borrador…</div>;
+  if (!draft) return <div className="mx-auto max-w-[1600px] p-8 text-center text-danger">No se encontró esa lectura.</div>;
 
   // ── Guardas por estado. Solo un borrador EXTRAIDO y con lectura encima se
   // puede revisar. Sin esto, volver con Atrás después de guardar mostraba el
@@ -759,7 +759,7 @@ export function PurchaseAIReview() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1600px]">
       <PageHeader
         title={isArticles ? 'Revisar factura de artículos (IA)' : 'Revisar factura de conceptos (IA)'}
         subtitle={

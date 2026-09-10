@@ -217,6 +217,47 @@ export function defaultValidUntil(): string {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Manda al cliente el presupuesto para que lo autorice, y lo deja en ENVIADA.
+ *
+ * Se puede repetir: el caso más común es que el cliente diga que no le llegó,
+ * o que haya que insistir a la semana. La llave de deduplicación lleva el
+ * número de envío, así que dos clics seguidos no mandan dos mensajes pero un
+ * reenvío pedido después sí sale.
+ */
+export type EnvioCotizacionResultado =
+  | 'ENVIADA'
+  | 'YA_ENCOLADA'
+  | 'YA_RESUELTA'
+  | 'SIN_RENGLONES'
+  | 'NO_EXISTE';
+
+export async function enviarCotizacionParaAutorizar(
+  quotationId: string
+): Promise<EnvioCotizacionResultado> {
+  const { data, error } = await supabase.rpc('enviar_cotizacion_para_autorizar', {
+    p_quotation_id: quotationId,
+  });
+  if (error) throw error;
+  return (data ?? 'NO_EXISTE') as EnvioCotizacionResultado;
+}
+
+/** Qué decirle al usuario según lo que contestó el envío. */
+export function describirEnvioCotizacion(resultado: EnvioCotizacionResultado): string {
+  switch (resultado) {
+    case 'ENVIADA':
+      return 'Presupuesto enviado al cliente para que lo autorice.';
+    case 'YA_ENCOLADA':
+      return 'Ese envío ya estaba en camino: no se mandó otro mensaje igual.';
+    case 'YA_RESUELTA':
+      return 'El cliente ya respondió este presupuesto, así que no se vuelve a pedir autorización.';
+    case 'SIN_RENGLONES':
+      return 'Cargá al menos un renglón antes de mandarlo a autorizar.';
+    default:
+      return 'No se encontró el presupuesto.';
+  }
+}
+
 export async function updateQuotationStatus(id: string, status: QuotationStatus) {
   const { error } = await supabase.from('quotations').update({ status }).eq('id', id);
   if (error) throw error;

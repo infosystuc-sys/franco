@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ArrowLeft,
   Save,
+  Send,
   FileCheck2,
   AlertTriangle,
   Lock,
@@ -21,6 +22,8 @@ import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import {
+  describirEnvioCotizacion,
+  enviarCotizacionParaAutorizar,
   rejectQuotationWorkOrder,
   fetchQuotationByNumber,
   isExpired,
@@ -85,12 +88,12 @@ export function QuotationDetails() {
   }, [isAdmin]);
 
   if (loading) {
-    return <div className="max-w-7xl mx-auto p-8 text-center text-text-soft">Cargando cotización...</div>;
+    return <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">Cargando cotización...</div>;
   }
 
   if (!quotation) {
     return (
-      <div className="max-w-7xl mx-auto p-8 text-center text-text-soft">
+      <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">
         No se encontró la cotización {number}.{' '}
         <Link to="/cotizaciones" className="text-accent-deep underline">Volver al listado</Link>
       </div>
@@ -146,6 +149,18 @@ export function QuotationDetails() {
     volverAlMenu();
   });
 
+  /**
+   * Mandarlo a autorizar no cierra la pantalla como el resto de las acciones:
+   * después de enviar se suele mirar el estado, y a veces reenviar. Salir al
+   * menú obligaría a volver a entrar para hacer exactamente eso.
+   */
+  const handleEnviarAutorizar = () => run(async () => {
+    await guardarLoEditado();
+    const resultado = await enviarCotizacionParaAutorizar(quotation.id);
+    setNotice(describirEnvioCotizacion(resultado));
+    await loadQuotation();
+  });
+
   const handlePrint = () => run(async () => {
     await guardarLoEditado();
     // Se vuelve recién cuando se cierra el diálogo de impresión: navegar
@@ -164,7 +179,7 @@ export function QuotationDetails() {
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-[1600px] mx-auto space-y-6">
       <div className="no-print space-y-6">
       <PageHeader
         title={<span className="font-mono text-3xl font-medium tracking-normal text-text">{quotation.number}</span>}
@@ -193,6 +208,12 @@ export function QuotationDetails() {
         actions={
           isAdmin && (
             <div className="flex flex-wrap items-center gap-2">
+              {(quotation.status === 'EMITIDA' || quotation.status === 'ENVIADA') && (
+                <Button type="button" disabled={busy} onClick={handleEnviarAutorizar}>
+                  <Send size={16} />{' '}
+                  {quotation.status === 'ENVIADA' ? 'Reenviar para autorizar' : 'Enviar para autorizar'}
+                </Button>
+              )}
               <Button variant="ghost" type="button" disabled={busy} onClick={handlePrint}>
                 <Printer size={16} /> Imprimir
               </Button>

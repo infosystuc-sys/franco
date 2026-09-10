@@ -61,12 +61,37 @@
     color: var(--color-text);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* Base más grande: se carga de pie, con la pantalla lejos y a veces con
+       las manos sucias. 14px era cómodo de diseñar y incómodo de leer. */
+    font-size: 15px;
   }
 
   /* Foco visible en todo lo operable: el taller se maneja mucho con teclado. */
   :focus-visible {
     outline: 2px solid var(--color-accent-deep);
     outline-offset: 1px;
+  }
+
+  /* El campo donde está el cursor, marcado de lejos.
+     El foco fino no alcanza cuando se carga mirando el papel y no la pantalla:
+     al volver la vista hay que encontrar en un golpe dónde se estaba
+     escribiendo. Por eso además del borde va un halo y el fondo en blanco,
+     que separa el campo activo de los demás incluso de reojo. */
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--color-accent-deep);
+    box-shadow: 0 0 0 3px rgb(245 197 24 / 0.45);
+    background-color: var(--color-panel);
+  }
+
+  /* Los de tipo casilla no llevan halo: son cuadraditos, y el halo los tapa. */
+  input[type="checkbox"]:focus,
+  input[type="radio"]:focus {
+    outline: 2px solid var(--color-accent-deep);
+    outline-offset: 2px;
+    box-shadow: none;
   }
 
   /* Los números tabulan parejo en tablas de precios y cantidades. */

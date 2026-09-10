@@ -93,7 +93,7 @@ export function ReportView() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1600px]">
       <div className="no-print">
         <PageHeader
           title={report.name}

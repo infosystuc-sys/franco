@@ -82,7 +82,7 @@ export function Button({
     <button
       {...props}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]',
+        'inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em]',
         'transition-colors disabled:opacity-45 disabled:cursor-not-allowed',
         BUTTON_VARIANTS[variant],
         className
@@ -100,7 +100,7 @@ export function Label({
   return (
     <label
       {...props}
-      className={cn('block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft', className)}
+      className={cn('block text-xs font-semibold uppercase tracking-[0.06em] text-text-soft', className)}
     >
       {children}
     </label>

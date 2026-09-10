@@ -170,7 +170,7 @@ export function WorkOrders() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6">
       <PageHeader
         title="Órdenes de Trabajo"
         subtitle="Todas las órdenes, en cualquier estado."
@@ -205,23 +205,25 @@ export function WorkOrders() {
       {/* Una sola fila: las columnas se reparten el ancho entre todos los
           estados que haya, sean cinco o nueve. En pantalla angosta vuelven a
           envolverse, que es preferible a dejarlas ilegibles. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-flow-col md:auto-cols-fr md:grid-cols-none">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {statuses.map((status) => (
           <button
             key={status.id}
             onClick={() => setStatusFilter(statusFilter === status.id ? '' : status.id)}
             title={status.label}
             className={cn(
-              'relative overflow-hidden border px-1.5 py-1.5 text-left transition-colors',
+              // Ancho mínimo por tarjeta y scroll si no entran: apretarlas hasta
+              // que quepan partía las palabras al medio ("INGRESA/DO"), que es
+              // peor que tener que arrastrar la fila en una pantalla angosta.
+              'relative min-w-[7.5rem] flex-1 overflow-hidden rounded-md border px-2 py-1.5 text-left transition-colors',
               statusFilter === status.id
                 ? 'border-accent bg-accent/10'
                 : 'border-line-strong bg-panel hover:bg-panel-alt'
             )}
           >
             <StateStrip color={status.color} />
-            {/* Envuelve en vez de cortarse: "COTIZADO" y "RECHAZADA" leídos
-                como "COTIZA…" y "RECHA…" no distinguen nada. */}
-            <span className="block break-words pl-1.5 text-[9px] font-semibold uppercase leading-[1.15] text-text-soft">
+            {/* Envuelve por espacios, nunca al medio de una palabra. */}
+            <span className="block pl-1.5 text-[10px] font-semibold uppercase leading-[1.15] text-text-soft">
               {status.label}
             </span>
             <span className="block pl-1.5 font-display text-lg font-medium leading-tight text-text">
