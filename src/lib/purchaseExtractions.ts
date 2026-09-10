@@ -1,5 +1,6 @@
 // src/lib/purchaseExtractions.ts
 import { supabase } from '@/src/lib/supabase';
+import type { AiProvider } from '@/src/lib/aiCredentials';
 import type { PurchaseKind } from '@/src/lib/purchases';
 
 /**
@@ -27,11 +28,13 @@ export interface PurchaseExtraction {
   status: PurchaseExtractionStatus;
   errorMessage: string | null;
   purchaseInvoiceId: string | null;
+  /** Con qué servicio se leyó. Null en los borradores previos a la elección. */
+  aiProvider: AiProvider | null;
   createdAt: string;
 }
 
 const SELECT =
-  'id, kind, supplier_id, attachment_storage_path, attachment_mime_type, raw_extraction, status, error_message, purchase_invoice_id, created_at';
+  'id, kind, supplier_id, attachment_storage_path, attachment_mime_type, raw_extraction, status, error_message, purchase_invoice_id, ai_provider, created_at';
 
 function mapExtraction(row: any): PurchaseExtraction {
   return {
@@ -44,6 +47,7 @@ function mapExtraction(row: any): PurchaseExtraction {
     status: row.status,
     errorMessage: row.error_message,
     purchaseInvoiceId: row.purchase_invoice_id,
+    aiProvider: row.ai_provider ?? null,
     createdAt: row.created_at,
   };
 }

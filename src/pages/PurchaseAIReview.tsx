@@ -1,5 +1,6 @@
 // src/pages/PurchaseAIReview.tsx
 import React from 'react';
+import { AI_PROVIDER_LABELS } from '@/src/lib/aiCredentials';
 import { Plus, Save, XCircle, AlertTriangle, CheckCircle2, Package, Trash2 } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
@@ -761,7 +762,14 @@ export function PurchaseAIReview() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title={isArticles ? 'Revisar factura de artículos (IA)' : 'Revisar factura de conceptos (IA)'}
-        subtitle="Cotejá contra el original. Los campos con chip de confianza los completó Gemini."
+        subtitle={
+          // Se nombra el servicio que de verdad leyó este comprobante, no el
+          // configurado hoy: si el elegido estaba saturado, leyó el otro, y
+          // quien revisa tiene que saber de dónde salieron los datos.
+          `Cotejá contra el original. Los campos con chip de confianza los completó ${
+            draft.aiProvider ? AI_PROVIDER_LABELS[draft.aiProvider] : 'la IA'
+          }.`
+        }
         actions={
           <>
             <Button variant="ghost" type="button" onClick={handleDiscard}><XCircle size={16} /> Descartar</Button>

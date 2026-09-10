@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -16,6 +16,18 @@ import {
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
 import { fetchYardCells, updateYardCells } from '@/src/lib/yardCapacity';
+import {
+  AI_PROVIDER_CONSOLES,
+  AI_PROVIDER_LABELS,
+  AI_PROVIDERS,
+  deleteAiKey,
+  fetchAiKeyStatus,
+  fetchAiProvider,
+  saveAiKey,
+  saveAiProvider,
+  type AiKeyStatus,
+  type AiProvider,
+} from '@/src/lib/aiCredentials';
 
 const EMPTY_FORM: CompanySettingsInput = {
   legalName: '',
@@ -52,6 +64,15 @@ export function Settings() {
   const [gmailSaved, setGmailSaved] = React.useState(false);
   const [gmailError, setGmailError] = React.useState<string | null>(null);
 
+  // Lectura de comprobantes con IA. La clave no se puede traer: solo se sabe
+  // si está cargada y sus últimos cuatro caracteres.
+  const [aiProvider, setAiProvider] = React.useState<AiProvider>('GEMINI');
+  const [aiKeys, setAiKeys] = React.useState<AiKeyStatus[]>([]);
+  const [aiNuevaClave, setAiNuevaClave] = React.useState<Record<string, string>>({});
+  const [aiGuardando, setAiGuardando] = React.useState<string | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
+  const [aiAviso, setAiAviso] = React.useState<string | null>(null);
+
   const [celdas, setCeldas] = React.useState(0);
   const [cupoError, setCupoError] = React.useState<string | null>(null);
   const guardadoPendiente = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -82,6 +103,68 @@ export function Settings() {
       .then(setCeldas)
       .catch((err) => setCupoError(`No se pudo leer la cantidad de celdas: ${getErrorMessage(err)}`));
   }, []);
+
+  const cargarEstadoIA = React.useCallback(async () => {
+    const [proveedor, claves] = await Promise.all([fetchAiProvider(), fetchAiKeyStatus()]);
+    setAiProvider(proveedor);
+    setAiKeys(claves);
+  }, []);
+
+  React.useEffect(() => {
+    cargarEstadoIA().catch((err) =>
+      setAiError(`No se pudo leer la configuración de lectura: ${getErrorMessage(err)}`)
+    );
+  }, [cargarEstadoIA]);
+
+  async function handleAiProvider(proveedor: AiProvider) {
+    setAiError(null);
+    setAiAviso(null);
+    const anterior = aiProvider;
+    setAiProvider(proveedor); // optimista: el selector no debe quedar trabado
+    try {
+      await saveAiProvider(proveedor);
+      setAiAviso(`Los comprobantes se van a leer con ${AI_PROVIDER_LABELS[proveedor]}.`);
+    } catch (err) {
+      setAiProvider(anterior);
+      setAiError(getErrorMessage(err));
+    }
+  }
+
+  async function handleGuardarClaveIA(proveedor: AiProvider) {
+    const clave = (aiNuevaClave[proveedor] ?? '').trim();
+    if (!clave) return;
+    setAiGuardando(proveedor);
+    setAiError(null);
+    setAiAviso(null);
+    try {
+      await saveAiKey(proveedor, clave);
+      setAiNuevaClave((actuales) => ({ ...actuales, [proveedor]: '' }));
+      await cargarEstadoIA();
+      setAiAviso(`Clave de ${AI_PROVIDER_LABELS[proveedor]} guardada.`);
+    } catch (err) {
+      setAiError(getErrorMessage(err));
+    } finally {
+      setAiGuardando(null);
+    }
+  }
+
+  async function handleBorrarClaveIA(proveedor: AiProvider) {
+    if (!window.confirm(`¿Sacar la clave de ${AI_PROVIDER_LABELS[proveedor]}? Los comprobantes dejan de poder leerse con ese proveedor.`)) {
+      return;
+    }
+    setAiGuardando(proveedor);
+    setAiError(null);
+    setAiAviso(null);
+    try {
+      await deleteAiKey(proveedor);
+      await cargarEstadoIA();
+      setAiAviso(`Clave de ${AI_PROVIDER_LABELS[proveedor]} eliminada.`);
+    } catch (err) {
+      setAiError(getErrorMessage(err));
+    } finally {
+      setAiGuardando(null);
+    }
+  }
 
   // El timer vive fuera del render (un ref, no estado) porque no tiene que
   // disparar un re-render propio: solo importa para cancelarlo, al tipear de
@@ -431,6 +514,106 @@ export function Settings() {
             {gmailSaved && !gmailSaving ? <Check size={16} /> : <Save size={16} />}
             {gmailSaving ? 'Guardando…' : gmailSaved ? 'Guardada' : 'Guardar credencial'}
           </Button>
+        </div>
+      </Panel>
+
+      <Panel className="space-y-4 p-5">
+        <h3 className={sectionTitleClass}><Sparkles size={14} /> Lectura de comprobantes con IA</h3>
+        <p className="text-xs text-text-soft">
+          Con qué servicio se leen las facturas de compra que se suben en Compras con IA.
+          Si el elegido está saturado y el otro tiene clave cargada, la lectura se
+          resuelve con ese y el comprobante queda marcado con cuál se leyó.
+        </p>
+        <p className="text-xs text-text-soft">
+          {/* Sin esta aclaración, ver "sin clave" en Gemini hace pensar que la
+              lectura está rota, cuando en realidad sigue andando con el
+              secreto que ya estaba puesto en el servidor. */}
+          Sin clave cargada acá, se usa la que esté configurada en el servidor. Cargar
+          una en esta pantalla la reemplaza.
+        </p>
+
+        {aiError && (
+          <div className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{aiError}</div>
+        )}
+        {aiAviso && !aiError && (
+          <div className="border border-line-strong bg-panel-alt px-3 py-2 text-xs text-text">{aiAviso}</div>
+        )}
+
+        <label className={cn(labelClass, 'block sm:max-w-sm')}>
+          Servicio a usar
+          <select
+            value={aiProvider}
+            onChange={(e) => handleAiProvider(e.target.value as AiProvider)}
+            className={cn(inputClass, 'bg-panel')}
+          >
+            {AI_PROVIDERS.map((p) => (
+              <option key={p} value={p}>{AI_PROVIDER_LABELS[p]}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {AI_PROVIDERS.map((proveedor) => {
+            const estado = aiKeys.find((k) => k.provider === proveedor);
+            const cargada = estado?.configurada ?? false;
+            return (
+              <div key={proveedor} className="border border-line bg-panel-alt p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.06em] text-text">
+                    {AI_PROVIDER_LABELS[proveedor]}
+                  </span>
+                  {cargada ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-state-ok">
+                      <Check size={13} /> Cargada ····{estado?.ultimos4}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      <AlertTriangle size={13} /> Sin clave
+                    </span>
+                  )}
+                </div>
+
+                <label className={cn(labelClass, 'mt-3 block')}>
+                  {cargada ? 'Reemplazar clave' : 'Clave de API'}
+                  <input
+                    type="password"
+                    value={aiNuevaClave[proveedor] ?? ''}
+                    onChange={(e) =>
+                      setAiNuevaClave((actuales) => ({ ...actuales, [proveedor]: e.target.value }))
+                    }
+                    className={cn(inputClass, 'font-mono')}
+                    placeholder={proveedor === 'ANTHROPIC' ? 'sk-ant-…' : 'AIza…'}
+                    autoComplete="off"
+                  />
+                  <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                    Se saca de {AI_PROVIDER_CONSOLES[proveedor]}. Una vez guardada no se
+                    puede volver a ver, solo reemplazar.
+                  </span>
+                </label>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={aiGuardando === proveedor || !(aiNuevaClave[proveedor] ?? '').trim()}
+                    onClick={() => handleGuardarClaveIA(proveedor)}
+                  >
+                    <Save size={16} /> {aiGuardando === proveedor ? 'Guardando…' : 'Guardar clave'}
+                  </Button>
+                  {cargada && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={aiGuardando === proveedor}
+                      onClick={() => handleBorrarClaveIA(proveedor)}
+                    >
+                      <Trash2 size={16} /> Sacar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 

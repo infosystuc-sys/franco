@@ -1,26 +1,27 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
-import { GoogleGenAI, Type } from 'npm:@google/genai@2.4.0';
+import { GoogleGenAI } from 'npm:@google/genai@2.4.0';
 
 /*
-  Lee una factura de compra (PDF o foto) con Gemini y arma un borrador en
+  Lee una factura de compra (PDF o foto) y arma un borrador en
   purchase_invoice_extractions. No escribe nada en purchase_invoices — eso
   pasa recién cuando el usuario confirma desde la pantalla de revisión, por
   la misma RPC save_purchase_invoice de siempre.
 
-  Mismo patrón de autorización que gestionar-empleado: la API key de Gemini
-  vive acá, nunca en el navegador, y solo un admin con sesión puede pedir
-  una extracción.
+  La lectura la hace Gemini o Anthropic, según lo configurado en la app. Las
+  claves viven en ai_credentials, una tabla que solo la llave de servicio
+  puede leer: nunca llegan al navegador.
+
+  Mismo patrón de autorización que gestionar-empleado: solo un admin con
+  sesión puede pedir una extracción.
 */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')!;
 const BUCKET = 'purchase-invoice-drafts';
 
 const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,36 +33,43 @@ function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: CORS_HEADERS });
 }
 
+type Proveedor = 'GEMINI' | 'ANTHROPIC';
+
+const NOMBRE_PROVEEDOR: Record<Proveedor, string> = {
+  GEMINI: 'Gemini',
+  ANTHROPIC: 'Anthropic',
+};
+
 /**
- * Fallas del lado de Google que se arreglan solas esperando: el modelo
+ * Fallas del lado del proveedor que se arreglan solas esperando: el modelo
  * saturado (503 UNAVAILABLE), la cuota momentánea (429) y el error interno
  * (500). No entran acá la clave inválida ni el archivo ilegible, que por más
  * que se reintenten van a fallar igual.
  */
 function esFallaPasajera(err: unknown): boolean {
   const texto = err instanceof Error ? err.message : String(err);
-  return /\b(429|500|503)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand/i.test(texto);
+  return /\b(429|500|503|529)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand/i.test(texto);
 }
 
 /**
- * El mensaje que ve quien está cargando la factura. El error de Google llega
- * como un JSON crudo en inglés —"This model is currently experiencing high
- * demand"— que no le dice a nadie qué hacer con eso.
+ * El mensaje que ve quien está cargando la factura. El error del proveedor
+ * llega como un JSON crudo en inglés —"This model is currently experiencing
+ * high demand"— que no le dice a nadie qué hacer con eso.
  */
 function mensajeParaElUsuario(err: unknown): string {
   const texto = err instanceof Error ? err.message : String(err);
   if (texto.startsWith('TIEMPO_AGOTADO')) {
-    return 'El lector de comprobantes de Google tardó demasiado en contestar y se cortó la espera. ' +
+    return 'El lector de comprobantes tardó demasiado en contestar y se cortó la espera. ' +
       'Suele pasar cuando está saturado. Probá de nuevo en unos minutos, ' +
       'o cargá la factura a mano: el archivo subido queda guardado.';
   }
   if (esFallaPasajera(texto)) {
-    return 'El lector de comprobantes de Google está saturado en este momento. ' +
+    return 'El lector de comprobantes está saturado en este momento. ' +
       'Ya se reintentó automáticamente sin suerte. Probá de nuevo en unos minutos, ' +
       'o cargá la factura a mano: el archivo subido queda guardado.';
   }
-  if (/API key|API_KEY|PERMISSION_DENIED|401|403/i.test(texto)) {
-    return 'El lector de comprobantes rechazó la credencial. Hay que revisar la clave de Gemini en la configuración del servidor.';
+  if (/API key|API_KEY|PERMISSION_DENIED|authentication|invalid x-api-key|\b401\b|\b403\b/i.test(texto)) {
+    return 'El lector de comprobantes rechazó la credencial. Revisá la clave del proveedor en Configuración.';
   }
   return `No se pudo leer el comprobante: ${texto}`;
 }
@@ -83,7 +91,7 @@ function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promesa,
     new Promise<never>((_, rechazar) =>
-      setTimeout(() => rechazar(new Error(`TIEMPO_AGOTADO: Gemini no respondió en ${ms / 1000} segundos.`)), ms)
+      setTimeout(() => rechazar(new Error(`TIEMPO_AGOTADO: el lector no respondió en ${ms / 1000} segundos.`)), ms)
     ),
   ]);
 }
@@ -94,8 +102,8 @@ function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
  * termine de leer su factura, y una espera larga se siente como que se colgó.
  *
  * Un intento agotado NO se reintenta: si tardó 45 segundos en no contestar, es
- * el SDK dando vueltas por su cuenta, y otra ronda solo acerca el límite de la
- * función sin mejorar nada.
+ * el proveedor dando vueltas por su cuenta, y otra ronda solo acerca el límite
+ * de la función sin mejorar nada.
  */
 async function conReintentos<T>(accion: () => Promise<T>): Promise<T> {
   // Dos reintentos y nada más: son para el 503 que vuelve rápido. Los saltos
@@ -107,7 +115,7 @@ async function conReintentos<T>(accion: () => Promise<T>): Promise<T> {
     } catch (err) {
       const agotado = err instanceof Error && err.message.startsWith('TIEMPO_AGOTADO');
       if (agotado || intento >= esperas.length || !esFallaPasajera(err)) throw err;
-      console.log(`Gemini falló (intento ${intento + 1}), reintentando: ${err instanceof Error ? err.message : err}`);
+      console.log(`Lectura fallida (intento ${intento + 1}), reintentando: ${err instanceof Error ? err.message : err}`);
       await esperar(esperas[intento]);
     }
   }
@@ -132,55 +140,70 @@ async function verificarAdmin(req: Request): Promise<Autorizacion> {
   return perfil.role === 'admin' ? { estado: 'admin', userId: user.id } : { estado: 'sin-permiso' };
 }
 
-// ── Schemas de structured output. La Task 2 del plan confirmó que el schema
-// de ARTICULOS (el más grande) compila en un solo llamado, sin partir en dos
-// pasadas. Cadena vacía en vez de null para "no figura"; confianza como
-// objeto paralelo a valores, no anidada campo por campo — mismo criterio que
-// PH_FAC (ver spec).
+// ── Schema de la extracción ────────────────────────────────────────────────
+// Se define UNA vez como JSON Schema, que es lo que come Anthropic, y se
+// traduce a Gemini uppercaseando los tipos. Dos definiciones paralelas se
+// habrían despegado en el primer campo nuevo que alguien agregue de un lado.
+// Cadena vacía en vez de null para "no figura"; confianza como objeto paralelo
+// a valores, no anidada campo por campo — mismo criterio que PH_FAC (ver spec).
 
 const HEADER_FIELDS = [
   'proveedor_cuit', 'proveedor_razon_social', 'tipo_comprobante', 'letra',
   'punto_venta', 'numero', 'fecha_comprobante', 'condicion_pago', 'total',
 ];
 
-function headerSchema() {
-  const stringProps = Object.fromEntries(HEADER_FIELDS.map((f) => [f, { type: Type.STRING }]));
-  const numberProps = Object.fromEntries(HEADER_FIELDS.map((f) => [f, { type: Type.NUMBER }]));
-  return {
-    valores: { type: Type.OBJECT, properties: stringProps, required: HEADER_FIELDS },
-    confianzas: { type: Type.OBJECT, properties: numberProps, required: HEADER_FIELDS },
-    percepciones: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: { nombre: { type: Type.STRING }, importe: { type: Type.STRING } },
-        required: ['nombre', 'importe'],
-      },
-    },
-  };
-}
-
 const ARTICULOS_ITEM_FIELDS = ['codigo', 'descripcion', 'cantidad', 'precio_unitario', 'bonificacion_porcentaje', 'alicuota_iva'];
 const CONCEPTOS_ITEM_FIELDS = ['descripcion', 'importe', 'alicuota_iva'];
 
-function schemaFor(kind: 'ARTICULOS' | 'CONCEPTOS') {
+// deno-lint-ignore no-explicit-any
+type Esquema = Record<string, any>;
+
+function esquemaFor(kind: 'ARTICULOS' | 'CONCEPTOS'): Esquema {
   const itemFields = kind === 'ARTICULOS' ? ARTICULOS_ITEM_FIELDS : CONCEPTOS_ITEM_FIELDS;
-  const itemProps = Object.fromEntries(itemFields.map((f) => [f, { type: Type.STRING }]));
+  const strings = (campos: string[]) => Object.fromEntries(campos.map((f) => [f, { type: 'string' }]));
+  const numbers = (campos: string[]) => Object.fromEntries(campos.map((f) => [f, { type: 'number' }]));
+
   return {
-    type: Type.OBJECT,
+    type: 'object',
     properties: {
-      ...headerSchema(),
-      renglones: {
-        type: Type.ARRAY,
+      valores: { type: 'object', properties: strings(HEADER_FIELDS), required: HEADER_FIELDS },
+      confianzas: { type: 'object', properties: numbers(HEADER_FIELDS), required: HEADER_FIELDS },
+      percepciones: {
+        type: 'array',
         items: {
-          type: Type.OBJECT,
-          properties: { ...itemProps, confianza: { type: Type.NUMBER } },
+          type: 'object',
+          properties: { nombre: { type: 'string' }, importe: { type: 'string' } },
+          required: ['nombre', 'importe'],
+        },
+      },
+      renglones: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { ...strings(itemFields), confianza: { type: 'number' } },
           required: [...itemFields, 'confianza'],
         },
       },
     },
     required: ['valores', 'confianzas', 'percepciones', 'renglones'],
   };
+}
+
+/** Gemini espera los tipos en mayúsculas ("STRING"); JSON Schema los usa en minúscula. */
+function aEsquemaGemini(nodo: Esquema): Esquema {
+  const copia: Esquema = {};
+  for (const [clave, valor] of Object.entries(nodo)) {
+    if (clave === 'type' && typeof valor === 'string') {
+      copia[clave] = valor.toUpperCase();
+    } else if (Array.isArray(valor)) {
+      copia[clave] = valor.map((v) => (v && typeof v === 'object' ? aEsquemaGemini(v) : v));
+    } else if (valor && typeof valor === 'object') {
+      copia[clave] = aEsquemaGemini(valor);
+    } else {
+      copia[clave] = valor;
+    }
+  }
+  return copia;
 }
 
 function promptFor(kind: 'ARTICULOS' | 'CONCEPTOS', ownTaxId: string | null): string {
@@ -236,6 +259,106 @@ function parseExtraction(text: string): ExtractedHeader {
     percepciones: Array.isArray(parsed.percepciones) ? parsed.percepciones : [],
     renglones: Array.isArray(parsed.renglones) ? parsed.renglones : [],
   };
+}
+
+// ── Los dos lectores ───────────────────────────────────────────────────────
+// Los dos reciben lo mismo y devuelven el JSON crudo de la extracción, para
+// que el resto de la función no sepa con cuál se leyó.
+
+interface PedidoDeLectura {
+  apiKey: string;
+  mimeType: string;
+  base64: string;
+  kind: 'ARTICULOS' | 'CONCEPTOS';
+  ownTaxId: string | null;
+}
+
+async function leerConGemini({ apiKey, mimeType, base64, kind, ownTaxId }: PedidoDeLectura): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey });
+  const respuesta = await ai.models.generateContent({
+    model: 'gemini-3.5-flash',
+    contents: [
+      { text: 'Extraé los datos de este comprobante según el schema.' },
+      { inlineData: { mimeType, data: base64 } },
+    ],
+    config: {
+      systemInstruction: promptFor(kind, ownTaxId),
+      responseMimeType: 'application/json',
+      responseSchema: aEsquemaGemini(esquemaFor(kind)),
+    },
+  });
+  return respuesta.text ?? '';
+}
+
+/**
+ * Anthropic no tiene "responseSchema": la forma de pedirle una salida
+ * estructurada es darle una herramienta con ese schema y obligarlo a usarla.
+ * Lo que devuelve es el input de esa llamada, que ya viene como objeto.
+ */
+async function leerConAnthropic({ apiKey, mimeType, base64, kind, ownTaxId }: PedidoDeLectura): Promise<string> {
+  const esPdf = mimeType === 'application/pdf';
+  const bloqueArchivo = esPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+    : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } };
+
+  const respuesta = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-5',
+      max_tokens: 8000,
+      system: promptFor(kind, ownTaxId),
+      tools: [{
+        name: 'cargar_comprobante',
+        description: 'Carga los datos leídos del comprobante en el sistema.',
+        input_schema: esquemaFor(kind),
+      }],
+      tool_choice: { type: 'tool', name: 'cargar_comprobante' },
+      messages: [{
+        role: 'user',
+        content: [bloqueArchivo, { type: 'text', text: 'Extraé los datos de este comprobante según el schema.' }],
+      }],
+    }),
+  });
+
+  if (!respuesta.ok) {
+    // El código va en el mensaje para que esFallaPasajera lo reconozca: es lo
+    // que decide si se reintenta y si se pasa al otro proveedor.
+    throw new Error(`${respuesta.status} ${await respuesta.text()}`);
+  }
+
+  const datos = await respuesta.json();
+  const uso = (datos.content ?? []).find((bloque: { type: string }) => bloque.type === 'tool_use');
+  if (!uso) throw new Error('Anthropic no devolvió la extracción estructurada.');
+  return JSON.stringify(uso.input);
+}
+
+const LECTORES: Record<Proveedor, (p: PedidoDeLectura) => Promise<string>> = {
+  GEMINI: leerConGemini,
+  ANTHROPIC: leerConAnthropic,
+};
+
+/**
+ * Las claves salen de ai_credentials, que solo la llave de servicio puede
+ * leer. El secreto de entorno sigue valiendo como respaldo: quien ya lo tenía
+ * configurado no necesita volver a cargar nada para que siga andando.
+ */
+async function credenciales(): Promise<Record<Proveedor, string | null>> {
+  const { data } = await db.from('ai_credentials').select('provider, api_key');
+  const cargadas = new Map((data ?? []).map((fila) => [fila.provider as Proveedor, fila.api_key as string]));
+  return {
+    GEMINI: cargadas.get('GEMINI') ?? Deno.env.get('GEMINI_API_KEY') ?? null,
+    ANTHROPIC: cargadas.get('ANTHROPIC') ?? Deno.env.get('ANTHROPIC_API_KEY') ?? null,
+  };
+}
+
+async function proveedorElegido(): Promise<Proveedor> {
+  const { data } = await db.from('app_settings').select('value').eq('key', 'ai_provider').maybeSingle();
+  return data?.value === 'ANTHROPIC' ? 'ANTHROPIC' : 'GEMINI';
 }
 
 Deno.serve(async (req: Request) => {
@@ -302,29 +425,49 @@ Deno.serve(async (req: Request) => {
     // celular fallaba siempre.
     const base64 = encodeBase64(new Uint8Array(await fileData.arrayBuffer()));
 
-    let respuesta;
-    try {
-      respuesta = await conReintentos(() => ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: [
-          { text: 'Extraé los datos de este comprobante según el schema.' },
-          { inlineData: { mimeType, data: base64 } },
-        ],
-        config: {
-          systemInstruction: promptFor(kind, ownTaxId),
-          responseMimeType: 'application/json',
-          responseSchema: schemaFor(kind),
-        },
-      }));
-    } catch (err) {
-      return await marcarError(mensajeParaElUsuario(err));
+    const elegido = await proveedorElegido();
+    const claves = await credenciales();
+    const respaldo: Proveedor = elegido === 'GEMINI' ? 'ANTHROPIC' : 'GEMINI';
+    // El elegido primero; el otro solo si tiene clave cargada. Sin clave no se
+    // intenta: daría un error de credencial que no explica nada.
+    const aProbar = [elegido, respaldo].filter((p) => claves[p]);
+
+    if (aProbar.length === 0) {
+      return await marcarError(
+        `No hay ninguna clave cargada para leer comprobantes. Cargá la de ${NOMBRE_PROVEEDOR[elegido]} en Configuración.`
+      );
+    }
+
+    let crudo: string | null = null;
+    let usado: Proveedor | null = null;
+    let ultimoError: unknown = null;
+
+    for (const proveedor of aProbar) {
+      try {
+        crudo = await conReintentos(() => LECTORES[proveedor]({
+          apiKey: claves[proveedor]!,
+          mimeType,
+          base64,
+          kind,
+          ownTaxId,
+        }));
+        usado = proveedor;
+        break;
+      } catch (err) {
+        ultimoError = err;
+        console.log(`${NOMBRE_PROVEEDOR[proveedor]} no pudo leer: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
+    if (!usado || crudo === null) {
+      return await marcarError(mensajeParaElUsuario(ultimoError));
     }
 
     let extraccion: ExtractedHeader;
     try {
-      extraccion = parseExtraction(respuesta.text ?? '');
+      extraccion = parseExtraction(crudo);
     } catch {
-      return await marcarError('La respuesta de Gemini no vino en un JSON legible.');
+      return await marcarError(`La respuesta de ${NOMBRE_PROVEEDOR[usado]} no vino en un JSON legible.`);
     }
 
     // ── Matcheo de proveedor por CUIT exacto.
@@ -369,6 +512,7 @@ Deno.serve(async (req: Request) => {
         supplier_id: supplierId,
         raw_extraction: { ...extraccion, renglones: renglonesConMatch },
         status: 'EXTRAIDO',
+        ai_provider: usado,
       })
       .eq('id', draft.id);
 
@@ -380,7 +524,7 @@ Deno.serve(async (req: Request) => {
       return await marcarError(`No se pudo guardar la lectura: ${errorUpdate.message}`);
     }
 
-    return json({ id: draft.id });
+    return json({ id: draft.id, provider: usado });
   } catch (err) {
     return await marcarError(`No se pudo procesar el archivo: ${err instanceof Error ? err.message : String(err)}`);
   }
