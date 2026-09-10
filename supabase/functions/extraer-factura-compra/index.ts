@@ -230,10 +230,26 @@ Reglas:
   siempre el TOTAL del comprobante, nunca el neto a pagar con ese descuento.
 - La bonificación por renglón sí va: es la columna "%BON", "BONIF" o "DTO"
   de la grilla de artículos, que ya está aplicada en el importe del renglón.
-- Las percepciones e impuestos del pie (IIBB, percepción de IVA, impuestos
-  internos) van SIEMPRE en "percepciones", con el nombre tal como está
-  impreso. Son parte del total: omitir una hace que el comprobante cierre
-  por debajo de lo que dice el papel.
+- Las percepciones e impuestos (IIBB, percepción de IVA, impuestos internos)
+  van SIEMPRE en "percepciones", con el nombre tal como está impreso. Son
+  parte del total: omitir una hace que el comprobante cierre por debajo de lo
+  que dice el papel.
+- BUSCÁ LAS PERCEPCIONES EN TODO EL COMPROBANTE, no solo en el cuadro de
+  totales. Muchos proveedores las escriben como una línea suelta de texto, al
+  pie, mezcladas entre las leyendas legales o al margen. Por ejemplo:
+      LA MERCADERIA VIAJA POR CUENTA Y RIESGO DEL COMPRADOR.
+      PASADAS LAS 72HS, NO SE ACEPTAN DEVOLUCIONES
+      Perc. Tucumán: 4456.66,
+  Ahí "Perc. Tucumán: 4456.66," ES una percepción y va en la lista, con
+  nombre "Perc. Tucumán" e importe "4456.66". Las otras dos líneas son
+  leyendas legales y NO se cargan: no tienen importe.
+- Formas habituales de nombrarlas, todas válidas: "Perc.", "Percep.",
+  "Percepción", "Ret.", "IIBB", "I.I.B.B.", "Ing. Brutos", seguidas de una
+  provincia ("Tucumán", "Bs. As.", "Salta") o de "IVA". Si una línea tiene
+  algo así y un importe al lado, es una percepción.
+- En "importe" va SOLO el número, sin el nombre y sin el signo pesos, y sin
+  la puntuación que cierra la frase: de "Perc. Tucumán: $ 4.456,66," el
+  importe es "4.456,66".
 - confianza (0 a 1): qué tan seguro estás de haber leído bien ese campo/renglón. 1 = perfectamente legible, 0.5 = dudoso, 0 = adivinado.
 `.trim();
 

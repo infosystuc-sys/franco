@@ -87,8 +87,17 @@ function FieldMark({ applied, confidence }: { applied: boolean; confidence: numb
  *   "1,234,567.89" -> 1234567.89 "1.234.567,89" -> 1234567.89
  *   "12.500"       -> 12500      "12,50"        -> 12.5
  */
-function parseArgNumber(text: string): number {
-  const cleaned = text.trim();
+export function parseArgNumber(text: string): number {
+  // Primero se descarta todo lo que no puede ser parte del número. En el papel
+  // el importe viene con símbolo y con espacios, y las percepciones muchas
+  // veces no están en el cuadro del pie sino escritas como leyenda suelta
+  // ("Perc. Tucumán: $ 4.456,66,"). Sin esto, un "$" adelante devolvía 0.
+  const soloNumero = (text ?? '').replace(/[^\d.,-]/g, '');
+
+  // Los separadores pegados a los extremos son puntuación de la leyenda, no
+  // del número. La coma final de "4456.66," se tomaba como el decimal y movía
+  // el punto: el importe entraba como 445666, cien veces más grande.
+  const cleaned = soloNumero.replace(/^[.,]+/, '').replace(/[.,]+$/, '');
   if (!cleaned) return 0;
 
   const dots = (cleaned.match(/\./g) ?? []).length;
@@ -172,6 +181,63 @@ function normalizeForMatch(text: string): string {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim();
+}
+
+/**
+ * Palabras significativas de un nombre de percepción.
+ *
+ * Los proveedores abrevian distinto que el plan de alícuotas: la factura dice
+ * "Perc. Tucumán" y la alícuota se llama "Perc.IB.Gral.Tucuman". Se parte por
+ * todo lo que no sea letra o número —puntos, espacios, guiones— y se tiran las
+ * partículas de una o dos letras, que no distinguen nada.
+ */
+function tokensDePercepcion(text: string): string[] {
+  return normalizeForMatch(text)
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+}
+
+/**
+ * Dos palabras que nombran lo mismo aunque una venga abreviada:
+ * "perc" y "percepcion", "tucuman" y "tucuman". La abreviatura tiene que
+ * tener al menos cuatro letras para valer como prefijo, si no "gra" ataría
+ * "gral" con "gravado".
+ */
+function mismaPalabra(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length >= 4 && b.startsWith(a)) return true;
+  return b.length >= 4 && a.startsWith(b);
+}
+
+/**
+ * Cuánto se parecen dos nombres de percepción: cuántas palabras comparten.
+ *
+ * Antes se comparaba por subcadena, y fallaba justo en el caso común: ni
+ * "perctucuman" contiene a "percibgraltucuman" ni al revés, porque la alícuota
+ * lleva palabras en el medio. La percepción quedaba sin aplicar y la factura
+ * cerraba por debajo de lo que decía el papel.
+ *
+ * Hace falta compartir al menos una palabra LARGA —en la práctica, la
+ * provincia o el impuesto— y no solo el "perc" que traen todas. Sin esa
+ * exigencia, "Perc. Salta" se ataría a la percepción de Tucumán, que es peor
+ * que no atar nada: el importe entra a la alícuota equivocada y nadie lo mira
+ * de nuevo.
+ */
+export function afinidadDePercepcion(nombreLeido: string, nombreAlicuota: string): number {
+  const leido = tokensDePercepcion(nombreLeido);
+  const alicuota = tokensDePercepcion(nombreAlicuota);
+  if (leido.length === 0 || alicuota.length === 0) return 0;
+
+  let compartidas = 0;
+  let hayPalabraLarga = false;
+  for (const t of leido) {
+    const par = alicuota.find((o) => mismaPalabra(t, o));
+    if (!par) continue;
+    compartidas++;
+    if (Math.max(t.length, par.length) >= 5) hayPalabraLarga = true;
+  }
+
+  return hayPalabraLarga ? compartidas : 0;
 }
 
 export function PurchaseAIReview() {
@@ -306,11 +372,15 @@ export function PurchaseAIReview() {
         for (const p of (raw.percepciones ?? []) as any[]) {
           const nombre = String(p?.nombre ?? '').trim();
           if (!nombre) continue;
-          const normalizedName = normalizeForMatch(nombre);
-          const match = footCandidates.find((rate) => {
-            const normalizedRateName = normalizeForMatch(rate.name);
-            return normalizedRateName.includes(normalizedName) || normalizedName.includes(normalizedRateName);
-          });
+          // Se queda con la alícuota que más palabras comparte. Si dos empatan
+          // no se elige ninguna: aplicar la percepción equivocada es peor que
+          // dejarla para que la asigne quien revisa.
+          const puntajes = footCandidates
+            .map((rate) => ({ rate, puntaje: afinidadDePercepcion(nombre, rate.name) }))
+            .filter((c) => c.puntaje > 0)
+            .sort((a, b) => b.puntaje - a.puntaje);
+          const hayEmpate = puntajes.length > 1 && puntajes[0].puntaje === puntajes[1].puntaje;
+          const match = hayEmpate ? undefined : puntajes[0]?.rate;
           if (match) {
             matchedFootTaxes.push({ taxRateId: match.id, amount: parseArgNumber(String(p?.importe ?? '0')) });
           } else {
