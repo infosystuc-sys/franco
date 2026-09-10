@@ -71,8 +71,11 @@ export function SupplierModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-      <div className="bg-panel w-full max-w-2xl flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center px-5 py-4 border-b border-line">
+      {/* Del mismo ancho que el ingreso, igual que la ficha de cliente: son
+          los mismos veinte campos y en una ventana angosta había que
+          scrollear para llegar a las condiciones comerciales y a los botones. */}
+      <div className="bg-panel w-full max-w-[1600px] flex flex-col max-h-[92vh]">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
             {supplier ? 'Editar proveedor' : 'Nuevo proveedor'}
           </h2>
@@ -81,19 +84,26 @@ export function SupplierModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
           {error && <div className="bg-danger-soft border border-danger/40 text-danger text-xs px-3 py-2">{error}</div>}
 
-          <FiscalFields
-            form={form}
-            patch={patch}
-            nameLabel="Nombre / Denominación comercial"
-            namePlaceholder="Diesel Parts S.A."
-            legalNamePlaceholder="Diesel Parts Sociedad Anónima"
-            activeLabel="Activo (disponible para asignar a artículos)"
-          />
+          {/* Con el ancho de sobra, los datos fiscales y las condiciones
+              comerciales van lado a lado: el ancho es lo que sobra y el alto
+              lo que falta. */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <FiscalFields
+                form={form}
+                patch={patch}
+                nameLabel="Nombre / Denominación comercial"
+                namePlaceholder="Diesel Parts S.A."
+                legalNamePlaceholder="Diesel Parts Sociedad Anónima"
+                activeLabel="Activo (disponible para asignar a artículos)"
+              />
+            </div>
 
-          <div className="space-y-3 border-t border-line pt-4">
+          <div className="space-y-3 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
               <CalendarClock size={14} /> Condiciones comerciales
             </h3>
@@ -131,6 +141,7 @@ export function SupplierModal({
               </label>
             </div>
           </div>
+          </div>
 
           {supplier && (
             <div className="border-t border-line pt-4 space-y-3">
@@ -147,7 +158,7 @@ export function SupplierModal({
                   Ningún artículo tiene asignado este proveedor. Asignalo desde la sección Inventario.
                 </p>
               ) : (
-                <ul className="space-y-1 max-h-48 overflow-y-auto">
+                <ul className="grid grid-cols-1 gap-1 lg:grid-cols-2">
                   {supplier.articles.map((article) => (
                     <li key={article.id} className="flex items-center justify-between bg-panel-alt border border-line px-3 py-2 text-sm gap-3">
                       <span className="min-w-0">
@@ -169,7 +180,11 @@ export function SupplierModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-line">
+          </div>
+
+          {/* Fuera del área que scrollea: guardar y cancelar tienen que estar
+              a mano sin importar cuánto se haya bajado. */}
+          <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
             <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cancelar
             </button>
