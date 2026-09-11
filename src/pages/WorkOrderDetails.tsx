@@ -397,23 +397,39 @@ export function WorkOrderDetails() {
   // Con factura emitida la OT queda congelada: lo único que la desbloquea es
   // anular esa factura (fuera de esta pantalla, desde Facturación).
   const locked = !!invoice;
-  const statusIndex = statuses.findIndex((s) => s.id === order.status.id);
 
   /**
-   * Las etapas por las que esta orden realmente pasó, en el orden del
-   * circuito, terminando en la actual.
+   * La línea de tiempo de ESTA orden: los estados por los que pasó, en el
+   * orden en que se los fue eligiendo.
    *
-   * Sale del historial y no de la posición del estado en la lista: una orden
-   * rechazada está última en la secuencia, y contando por posición aparecía
-   * como si hubiera pasado por todas las anteriores, terminada incluida.
+   * No hay un circuito único para todas las órdenes. Un inyector que se manda
+   * a laboratorio y vuelve no recorre lo mismo que una bomba que se repara en
+   * el taller, y forzar a las dos por una secuencia fija obligaba a inventar
+   * un orden global que después no describía a ninguna. Cada orden arma el
+   * suyo: el historial ES la línea de tiempo.
+   *
+   * Si una orden vuelve sobre un estado —de Cotizado a Ingresado y otra vez a
+   * Cotizado— aparece las dos veces, porque eso fue lo que pasó. Esconder la
+   * repetición sería dibujar un recorrido que la orden no hizo.
    */
   const recorrido = (() => {
     // Sin useMemo a propósito: esto se calcula después de los returns tempranos
     // de "cargando" y "no existe", y un hook ahí adentro corre en unos renders
-    // y en otros no. Filtrar una lista de diez estados no necesita memoria.
-    const alcanzados = new Set(history.map((cambio) => cambio.toStatus.id));
-    if (order?.status?.id) alcanzados.add(order.status.id);
-    return statuses.filter((s) => alcanzados.has(s.id));
+    // y en otros no. Recorrer unos pocos cambios no necesita memoria.
+    const pasos = [...history]
+      .sort((a, b) => a.changedAt.localeCompare(b.changedAt))
+      .map((cambio) => cambio.toStatus);
+
+    // Las órdenes anteriores al registro de historial no tienen pasos: al menos
+    // se muestra dónde están paradas hoy.
+    if (pasos.length === 0) return order.status ? [order.status] : [];
+
+    // El estado actual cierra la línea aunque el cambio no haya quedado
+    // registrado, para que la punta coincida siempre con lo que dice arriba.
+    if (order.status && pasos[pasos.length - 1].id !== order.status.id) {
+      pasos.push(order.status);
+    }
+    return pasos;
   })();
   const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
   // Una orden sin renglones y con presupuesto es una que todavía espera la
@@ -661,7 +677,10 @@ export function WorkOrderDetails() {
             {recorrido.map((status, idx) => {
               const esActual = idx === recorrido.length - 1;
               return (
-                <div key={status.id} className="relative z-10 flex w-24 flex-col items-center gap-2">
+                // La clave lleva la posición además del id: un estado puede
+                // repetirse en el recorrido, y con solo el id React vería dos
+                // nodos iguales.
+                <div key={`${status.id}-${idx}`} className="relative z-10 flex w-24 flex-col items-center gap-2">
                   {esActual ? (
                     <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
                       <span className="h-2 w-2 bg-accent" />

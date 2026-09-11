@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, X, Pencil, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -12,7 +12,6 @@ import {
   fetchWorkOrderStatuses,
   getErrorMessage,
   updateWorkOrderStatus,
-  ordenarWorkOrderStatuses,
   type WorkOrderStatusDef,
   type WorkOrderStatusInput,
 } from '@/src/lib/workOrders';
@@ -70,7 +69,6 @@ export function WorkOrderStatuses() {
     }, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const [reordering, setReordering] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -101,31 +99,6 @@ export function WorkOrderStatuses() {
     }
   }
 
-  /**
-   * Mover uno de lugar es reescribir la secuencia entera: se arma la lista
-   * como debería quedar y la base la numera de una. Así nunca quedan dos
-   * estados compartiendo posición.
-   */
-  async function handleMover(status: WorkOrderStatusDef, desplazamiento: -1 | 1) {
-    const desde = statuses.findIndex((s) => s.id === status.id);
-    const hasta = desde + desplazamiento;
-    if (desde < 0 || hasta < 0 || hasta >= statuses.length) return;
-
-    const orden = statuses.map((s) => s.id);
-    [orden[desde], orden[hasta]] = [orden[hasta], orden[desde]];
-
-    setReordering(true);
-    setError(null);
-    try {
-      await ordenarWorkOrderStatuses(orden);
-      await load();
-    } catch (err) {
-      setError(describeWorkOrderStatusError(getErrorMessage(err)));
-    } finally {
-      setReordering(false);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
@@ -149,7 +122,6 @@ export function WorkOrderStatuses() {
           <table className="table-stack w-full text-left text-[13px]">
             <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
-                <th className="w-16 px-3 py-1"></th>
                 <th className="px-4 py-1">Estado</th>
                 <th className="w-28 px-3 py-1">Inicial</th>
                 <th className="w-28 px-3 py-1">Terminal</th>
@@ -167,7 +139,7 @@ export function WorkOrderStatuses() {
                 </tr>
               )}
 
-              {statuses.map((status, idx) => (
+              {statuses.map((status) => (
                 <tr
                   key={status.id}
                   className={cn(
@@ -175,26 +147,6 @@ export function WorkOrderStatuses() {
                     !status.active && 'text-text-faint'
                   )}
                 >
-                  <td className="px-3 py-1">
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        onClick={() => handleMover(status, -1)}
-                        disabled={idx === 0 || reordering}
-                        aria-label={`Subir ${status.label}`}
-                        className="p-1 text-text-soft transition-colors hover:text-accent-deep disabled:opacity-30"
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleMover(status, 1)}
-                        disabled={idx === statuses.length - 1 || reordering}
-                        aria-label={`Bajar ${status.label}`}
-                        className="p-1 text-text-soft transition-colors hover:text-accent-deep disabled:opacity-30"
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                    </div>
-                  </td>
                   <td data-primary className="px-4 py-1 font-semibold">
                     <span className="inline-flex items-center gap-2">
                       <span
@@ -271,16 +223,6 @@ function WorkOrderStatusModal({
   const [form, setForm] = React.useState<WorkOrderStatusInput>(
     status ? statusToForm(status) : { ...EMPTY_FORM, sortOrder: statuses.length + 1 }
   );
-  /**
-   * Detrás de cuál va el estado nuevo. Cadena vacía = va primero.
-   *
-   * Se pregunta "después de cuál" y no "qué número": el número de posición no
-   * significa nada para quien está definiendo el circuito, y obliga a contar.
-   * En cambio "después de Cotizado" es exactamente como se piensa el paso.
-   */
-  const [despuesDe, setDespuesDe] = React.useState<string>(
-    statuses.length > 0 ? statuses[statuses.length - 1].id : ''
-  );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -297,17 +239,10 @@ function WorkOrderStatusModal({
     setSaving(true);
     setError(null);
     try {
-      if (status) {
-        await updateWorkOrderStatus(status.id, form);
-      } else {
-        const creado = await createWorkOrderStatus(form);
-        // Nace último y después se lo ubica: insertarlo en el medio requiere
-        // correr a todos los que siguen, y eso lo hace la base de una sola vez.
-        const orden = statuses.map((s) => s.id).filter((id) => id !== creado.id);
-        const posicion = despuesDe ? orden.indexOf(despuesDe) + 1 : 0;
-        orden.splice(posicion, 0, creado.id);
-        await ordenarWorkOrderStatuses(orden);
-      }
+      // Un estado nuevo no necesita ubicarse en ninguna secuencia: la línea de
+      // tiempo la arma cada orden con los estados que se le van eligiendo.
+      if (status) await updateWorkOrderStatus(status.id, form);
+      else await createWorkOrderStatus(form);
       onSaved();
     } catch (err) {
       setError(describeWorkOrderStatusError(getErrorMessage(err)));
@@ -354,27 +289,6 @@ function WorkOrderStatusModal({
               />
             </label>
           </div>
-
-          {/* Solo al crear: mover uno existente se hace con las flechas de la
-              lista, donde se ve la secuencia completa mientras se mueve. */}
-          {!status && statuses.length > 0 && (
-            <label className={labelClass}>
-              Dónde va en la secuencia
-              <select
-                value={despuesDe}
-                onChange={(e) => setDespuesDe(e.target.value)}
-                className={cn(inputClass, 'bg-panel')}
-              >
-                <option value="">Primero, antes de {statuses[0].label}</option>
-                {statuses.map((s) => (
-                  <option key={s.id} value={s.id}>Después de {s.label}</option>
-                ))}
-              </select>
-              <span className="mt-1 block text-[11px] font-normal normal-case text-text-soft">
-                Los que vengan después se corren solos.
-              </span>
-            </label>
-          )}
 
           <label className={labelClass}>
             Descripción para el cliente

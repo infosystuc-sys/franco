@@ -120,22 +120,41 @@ export function ClientPortal() {
   const ETAPAS_DEL_CLIENTE = ['INGRESADO', 'COTIZADO', 'TERMINADO'];
 
   /**
-   * Solo las etapas por las que la orden REALMENTE pasó, en el orden del
-   * circuito. Una etapa que todavía no se abrió no se muestra: mostrarla en
-   * gris es prometerle al cliente un paso que quizás nunca ocurra —una orden
-   * rechazada no llega nunca a "terminado"— y además le adelanta cuánto falta
-   * con una precisión que el taller no puede sostener.
+   * Solo las etapas por las que la orden REALMENTE pasó, en el orden en que
+   * las fue pasando. Una etapa que todavía no se abrió no se muestra:
+   * mostrarla en gris es prometerle al cliente un paso que quizás nunca
+   * ocurra —una orden rechazada no llega nunca a "terminado"— y además le
+   * adelanta cuánto falta con una precisión que el taller no puede sostener.
    *
-   * Se mira el historial y no el orden de los estados: una orden rechazada
-   * está en la última posición de la lista y, contando por posición, aparecía
-   * como si hubiera pasado por todas las anteriores.
+   * El orden sale del historial, no de una secuencia fija: no hay un circuito
+   * único para todas las órdenes, y cada una arma el suyo con los estados que
+   * se le van eligiendo.
    */
-  const visibleStatuses = statuses.filter(
-    (s) =>
-      s.systemKey !== null &&
-      ETAPAS_DEL_CLIENTE.includes(s.systemKey) &&
-      (reachedAt[s.id] !== undefined || s.id === order.statusId)
-  );
+  const porId = new Map(statuses.map((s) => [s.id, s]));
+  const visibleStatuses = (() => {
+    const pasos = [...history]
+      .sort((a, b) => a.changedAt.localeCompare(b.changedAt))
+      .map((cambio) => porId.get(cambio.toStatusId))
+      .filter((s): s is WorkOrderStatusDef => !!s);
+
+    // El estado actual cierra la línea aunque su cambio no esté registrado.
+    const actual = porId.get(order.statusId);
+    if (actual && pasos[pasos.length - 1]?.id !== actual.id) pasos.push(actual);
+
+    const delCliente = pasos.filter(
+      (s) => s.systemKey !== null && ETAPAS_DEL_CLIENTE.includes(s.systemKey)
+    );
+
+    // Acá sí se quita la repetición: al cliente le importa por dónde va su
+    // equipo, no que el taller lo haya vuelto a cotizar. Se conserva la
+    // primera vez que llegó a cada etapa.
+    const vistos = new Set<string>();
+    return delCliente.filter((s) => {
+      if (vistos.has(s.id)) return false;
+      vistos.add(s.id);
+      return true;
+    });
+  })();
 
   // La última que se abrió es la que se está informando. Si la orden está en
   // un estado interno —en reparación, por ejemplo— lo que se informa es la
