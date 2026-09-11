@@ -1,15 +1,12 @@
 import React from 'react';
 import { Plus, Trash2, Package, Search, X, Check, PackagePlus } from 'lucide-react';
+import { ArticleModal } from '@/src/components/ArticleModal';
+import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
+import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import { createArticle, type Article } from '@/src/lib/articles';
+import { type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
-
-/** Traduce el único error de base que puede dar el alta rápida desde acá. */
-function describeQuickArticleError(message: string): string {
-  if (message.includes('articles_code_key')) return 'Ese código ya existe. Elegí otro.';
-  return message;
-}
 
 const IVA_RATE = 0.21;
 
@@ -349,110 +346,45 @@ function ArticlePicker({
 }
 
 /**
- * Alta rápida de un artículo sin salir de la cotización/orden. El código ya
- * existe en Inventario (createArticle): acá solo se pide lo mínimo para
- * poder facturarlo — marca, stock y utilidad se completan después si hace
- * falta.
+ * Alta de un artículo sin salir de la orden o la cotización.
+ *
+ * Abre la MISMA ficha que Inventario, no una versión reducida. Antes acá se
+ * pedían solo código, descripción y precio, y el artículo nacía sin marca, sin
+ * stock y sin proveedor: quien lo cargaba en el apuro de una recepción no
+ * volvía después a completarlo, y el catálogo se llenaba de fichas a medias.
  */
 function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void }) {
   const [open, setOpen] = React.useState(false);
-  const [code, setCode] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [unitPrice, setUnitPrice] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
+  const [defaultMarkup, setDefaultMarkup] = React.useState(0);
 
-  const canSave = code.trim() !== '' && description.trim() !== '' && Number(unitPrice) >= 0;
-
-  async function handleSave() {
-    if (!canSave) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const article = await createArticle({
-        code: code.trim(),
-        description: description.trim(),
-        brand: null,
-        tracksStock: false,
-        stockQuantity: 0,
-        active: true,
-        markupPercent: null,
-        unitPrice: Number(unitPrice) || 0,
-      });
-      onCreated(article);
-      setCode('');
-      setDescription('');
-      setUnitPrice('');
-      setOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'No se pudo crear el artículo.';
-      setError(describeQuickArticleError(message));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <Button type="button" variant="ghost" onClick={() => setOpen(true)} className="px-3 whitespace-nowrap">
-        <PackagePlus size={16} /> Nuevo artículo
-      </Button>
-    );
-  }
+  React.useEffect(() => {
+    if (!open) return;
+    // Proveedores y utilidad por defecto son ayudas del formulario: si fallan,
+    // el artículo se carga igual, solo que sin la vinculación ni el precio
+    // sugerido.
+    fetchSuppliers(true).then(setSuppliers).catch(() => {});
+    fetchDefaultMarkup().then(setDefaultMarkup).catch(() => {});
+  }, [open]);
 
   return (
     <>
-      <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="px-3 whitespace-nowrap">
-        <X size={16} /> Cancelar
+      <Button type="button" variant="ghost" onClick={() => setOpen(true)} className="px-3 whitespace-nowrap">
+        <PackagePlus size={16} /> Nuevo artículo
       </Button>
-      <div className="fixed inset-0 bg-black/40 z-70 flex items-center justify-center p-4">
-        <div className="bg-white w-full max-w-sm flex max-h-[90vh] flex-col">
-          <div className="flex justify-between items-center px-5 py-4 border-b border-line">
-            <h3 className="text-sm font-bold text-text">Artículo nuevo</h3>
-            <button type="button" onClick={() => setOpen(false)} className="text-text-soft hover:text-text">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="p-5 space-y-3 overflow-y-auto">
-            {error && <p className="text-xs text-danger">{error}</p>}
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
-              Código *
-              <input
-                autoFocus
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="mt-1 w-full border border-line px-3 py-2 text-sm font-mono normal-case focus:border-accent-deep focus:outline-none"
-              />
-            </label>
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
-              Descripción *
-              <input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
-              />
-            </label>
-            <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
-              Precio unitario *
-              <input
-                type="number" step="0.01" min="0"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                className="mt-1 w-full border border-line px-3 py-2 text-sm font-mono normal-case focus:border-accent-deep focus:outline-none"
-              />
-            </label>
-            <p className="text-[10px] normal-case text-text-soft">
-              Queda cargado en el catálogo con lo mínimo. Marca, stock y utilidad se completan
-              después desde Inventario si hace falta.
-            </p>
-            <div className="flex justify-end pt-1">
-              <Button type="button" onClick={handleSave} disabled={!canSave || saving}>
-                {saving ? 'Creando…' : 'Crear y agregar'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+
+      {open && (
+        <ArticleModal
+          article={null}
+          suppliers={suppliers}
+          defaultMarkup={defaultMarkup}
+          onClose={() => setOpen(false)}
+          onSaved={(article) => {
+            setOpen(false);
+            onCreated(article);
+          }}
+        />
+      )}
     </>
   );
 }
