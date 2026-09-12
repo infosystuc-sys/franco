@@ -101,34 +101,32 @@ export function ClientPortal() {
     );
   }
 
-  // Fecha en que la orden alcanzó cada estado, según el historial real.
-  const reachedAt: Record<string, string> = {};
-  history.forEach((change) => {
-    reachedAt[change.toStatusId] = change.changedAt;
-  });
-
   /**
-   * Lo que el cliente ve del circuito: recibimos el equipo, te pasamos el
-   * presupuesto, está listo. El taller mueve la orden por muchos más estados
-   * —autorizada, esperando repuestos, en reparación, calibración— pero eso es
-   * cocina interna: al cliente le sirve saber en cuál de los tres momentos
-   * está su vehículo, no seguir cada paso del taller.
+   * Cuándo ocurrió cada paso del recorrido, en el mismo orden que los pasos.
    *
-   * Se identifican por system_key y no por etiqueta porque las etiquetas las
-   * renombra el taller cuando quiere.
+   * No se puede guardar por estado: un estado que se repite tiene dos fechas
+   * distintas, y un mapa por id se quedaría con una sola —mostrando la vez
+   * equivocada en uno de los dos pasos—.
    */
-  const ETAPAS_DEL_CLIENTE = ['INGRESADO', 'COTIZADO', 'TERMINADO'];
+  const fechasDelRecorrido = [...history]
+    .sort((a, b) => a.changedAt.localeCompare(b.changedAt))
+    .map((cambio) => cambio.changedAt);
 
   /**
-   * Solo las etapas por las que la orden REALMENTE pasó, en el orden en que
-   * las fue pasando. Una etapa que todavía no se abrió no se muestra:
-   * mostrarla en gris es prometerle al cliente un paso que quizás nunca
-   * ocurra —una orden rechazada no llega nunca a "terminado"— y además le
-   * adelanta cuánto falta con una precisión que el taller no puede sostener.
+   * Todo el recorrido de la orden, en el orden en que pasó.
    *
-   * El orden sale del historial, no de una secuencia fija: no hay un circuito
-   * único para todas las órdenes, y cada una arma el suyo con los estados que
-   * se le van eligiendo.
+   * Antes se mostraban solo tres momentos —ingresado, cotizado, terminado— y
+   * el resto se consideraba cocina interna. Pero el cliente que entra por el
+   * link viene justamente a saber en qué anda su equipo: enterarse de que
+   * está esperando repuestos o en el banco de prueba es la respuesta que
+   * busca, y esconderlo lo deja llamando por teléfono.
+   *
+   * Cada estado trae su propia descripción para el cliente, que el taller
+   * escribe en el ABM. Un estado sin descripción se muestra igual, con su
+   * nombre: es mejor que desaparezca del seguimiento.
+   *
+   * Si la orden volvió sobre un estado, aparece las dos veces, igual que en la
+   * pantalla del taller: eso fue lo que pasó con el equipo.
    */
   const porId = new Map(statuses.map((s) => [s.id, s]));
   const visibleStatuses = (() => {
@@ -141,26 +139,16 @@ export function ClientPortal() {
     const actual = porId.get(order.statusId);
     if (actual && pasos[pasos.length - 1]?.id !== actual.id) pasos.push(actual);
 
-    const delCliente = pasos.filter(
-      (s) => s.systemKey !== null && ETAPAS_DEL_CLIENTE.includes(s.systemKey)
-    );
-
-    // Acá sí se quita la repetición: al cliente le importa por dónde va su
-    // equipo, no que el taller lo haya vuelto a cotizar. Se conserva la
-    // primera vez que llegó a cada etapa.
-    const vistos = new Set<string>();
-    return delCliente.filter((s) => {
-      if (vistos.has(s.id)) return false;
-      vistos.add(s.id);
-      return true;
-    });
+    // Sin historial —órdenes anteriores al registro— al menos se muestra
+    // dónde está parada hoy.
+    if (pasos.length === 0) return actual ? [actual] : [];
+    return pasos;
   })();
 
-  // La última que se abrió es la que se está informando. Si la orden está en
-  // un estado interno —en reparación, por ejemplo— lo que se informa es la
-  // última etapa visible que sí alcanzó.
-  const informada = visibleStatuses[visibleStatuses.length - 1] ?? null;
-  const currentStatus = informada;
+  // El último paso del recorrido es donde está la orden hoy. Ahora que se
+  // muestran todos los estados, coincide con el estado real: ya no hay que
+  // informar "lo último que el cliente podía ver".
+  const currentStatus = visibleStatuses[visibleStatuses.length - 1] ?? null;
 
   return (
     <div className="min-h-screen bg-panel-alt flex flex-col font-sans">
@@ -362,8 +350,11 @@ export function ClientPortal() {
                   —eso volvería a insinuar un paso siguiente— y en qué momento
                   está la orden lo dice el rótulo de arriba. */}
               {visibleStatuses.map((status, idx) => {
+                const fecha = fechasDelRecorrido[idx];
                 return (
-                  <div key={status.id} className="flex gap-6 relative mb-10 last:mb-0">
+                  // La clave lleva la posición: un estado repetido daría dos
+                  // nodos con la misma clave.
+                  <div key={`${status.id}-${idx}`} className="flex gap-6 relative mb-10 last:mb-0">
                     {idx < visibleStatuses.length - 1 && (
                       <div className="absolute top-[40px] left-[20px] bottom-[-40px] w-0.5 bg-line z-0"></div>
                     )}
@@ -378,10 +369,12 @@ export function ClientPortal() {
                       <div className="flex justify-between items-start mb-1">
                         <h3 className="text-sm font-bold text-text">{status.label}</h3>
                       </div>
-                      <p className="text-xs text-text-soft mt-1 leading-relaxed">{status.clientDescription}</p>
-                      {reachedAt[status.id] && (
+                      {status.clientDescription && (
+                        <p className="text-xs text-text-soft mt-1 leading-relaxed">{status.clientDescription}</p>
+                      )}
+                      {fecha && (
                         <span className="text-[10px] font-bold uppercase tracking-wider text-text-soft block mt-3">
-                          {new Date(reachedAt[status.id]!).toLocaleString('es-AR', {
+                          {new Date(fecha).toLocaleString('es-AR', {
                             day: '2-digit', month: 'short', year: 'numeric',
                             hour: '2-digit', minute: '2-digit',
                           })}

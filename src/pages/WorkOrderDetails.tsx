@@ -324,12 +324,33 @@ export function WorkOrderDetails() {
     if (!order || !order.customer) return;
     setCotizando(true);
     setError(null);
+    setAviso(null);
     try {
       await saveWorkOrderItems(order.id, items);
       const creada = await quoteFromWorkOrder(order.id, defaultValidUntil());
-      navigate(`/cotizacion/${creada.number}`);
+
+      // Se pregunta después de crearla, no antes: si el alta falla no hay nada
+      // que mandar, y preguntar primero habría hecho decidir sobre algo que
+      // todavía no existe.
+      const mandar = window.confirm(
+        `Se creó el presupuesto ${creada.number}.` +
+          '\n\n¿Enviarlo ahora al cliente para que lo autorice?' +
+          '\n\nSi no, queda listo y se manda cuando quieras desde acá o desde la cotización.'
+      );
+
+      let mensaje = `Se creó el presupuesto ${creada.number}.`;
+      if (mandar) {
+        const resultado = await enviarCotizacionParaAutorizar(creada.id);
+        mensaje = `${creada.number}: ${describirEnvioCotizacion(resultado)}`;
+      }
+
+      // Se queda en la orden: cotizar es un paso del trabajo, no el final.
+      // Desde acá se sigue cargando renglones o se manda el presupuesto.
+      await loadOrder();
+      setAviso(mensaje);
     } catch (err) {
       setError(getErrorMessage(err));
+    } finally {
       setCotizando(false);
     }
   }
