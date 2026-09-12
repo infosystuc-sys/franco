@@ -37,6 +37,49 @@ export interface Employee {
   hourlyCost: number | null;
 }
 
+/**
+ * La ficha de empleado del usuario logueado, si tiene.
+ *
+ * Sirve para sugerirlo como quien toma la orden: la recibe el que la está
+ * cargando casi siempre, y tener que elegirse a uno mismo en un desplegable
+ * es un paso que no aporta nada. Queda sugerido, no impuesto: es un valor en
+ * un formulario que se puede cambiar antes de guardar.
+ *
+ * NO filtra por cargo, a diferencia de fetchOperarios. La recepción y el alta
+ * de órdenes son pantallas de admin, así que quien carga es casi siempre un
+ * dueño: filtrando por "operario" la sugerencia no se activaría nunca, que es
+ * exactamente el error que tenía la primera versión de esto.
+ *
+ * Devuelve null si el usuario no tiene ficha de empleado —un contador que solo
+ * consulta, por ejemplo— o si está inactiva.
+ */
+export async function fetchEmpleadoDelUsuario(userId: string | undefined): Promise<Employee | null> {
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('employees')
+    .select(SELECT)
+    .eq('profile_id', userId)
+    .eq('active', true)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapEmployee(data) : null;
+}
+
+/**
+ * Agrega al propio usuario a la lista de asignables si no está.
+ *
+ * La lista ofrece solo operarios, y un dueño que además trabaja no figura ahí.
+ * Sin esto, sugerirlo dejaría el desplegable mostrando un valor que no existe
+ * entre sus opciones: el navegador lo muestra vacío y el campo miente.
+ */
+export function conElUsuarioIncluido(
+  empleados: Employee[],
+  propio: Employee | null
+): Employee[] {
+  if (!propio || empleados.some((e) => e.id === propio.id)) return empleados;
+  return [propio, ...empleados];
+}
+
 export interface EmployeeInput {
   name: string;
   role: string;

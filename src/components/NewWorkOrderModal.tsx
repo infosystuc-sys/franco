@@ -1,8 +1,9 @@
 import React from 'react';
 import { Trash2, X } from 'lucide-react';
+import { useAuth } from '@/src/lib/auth';
 import { Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
-import { fetchOperarios, type Employee } from '@/src/lib/employees';
+import { conElUsuarioIncluido, fetchEmpleadoDelUsuario, fetchOperarios, type Employee } from '@/src/lib/employees';
 import { disponibilidad, fetchYardCells, fetchYardOccupancy, type YardAvailability } from '@/src/lib/yardCapacity';
 import { vehicleLabel, type Vehicle } from '@/src/lib/vehicles';
 import { CustomerModal } from '@/src/components/CustomerModal';
@@ -33,6 +34,7 @@ export function NewWorkOrderModal({
   /** Vehículo recién recibido en el ingreso: llega elegido, con su dueño. */
   initialVehicleId?: string | null;
 }) {
+  const { session } = useAuth();
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
   const [customerId, setCustomerId] = React.useState('');
@@ -89,8 +91,14 @@ export function NewWorkOrderModal({
       .finally(() => !cancelled && setLoadingCustomers(false));
     // Sin operarios se puede crear igual la orden, sin asignar. Que falle
     // esta lista no es motivo para trabar una recepción.
-    fetchOperarios()
-      .then((data) => !cancelled && setEmployees(data))
+    Promise.all([fetchOperarios(), fetchEmpleadoDelUsuario(session?.user?.id)])
+      .then(([operarios, propio]) => {
+        if (cancelled) return;
+        setEmployees(conElUsuarioIncluido(operarios, propio));
+        // Queda sugerido quien está cargando la orden: es quien la toma casi
+        // siempre. Se puede cambiar antes de guardar.
+        if (propio) setEmployeeId((actual) => actual || propio.id);
+      })
       .catch(() => {});
     Promise.all([fetchYardCells(), fetchYardOccupancy()])
       .then(([celdas, ocupantes]) => {

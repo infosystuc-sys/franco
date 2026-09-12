@@ -7,7 +7,12 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, inputClass, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
-import { fetchOperarios, type Employee } from '@/src/lib/employees';
+import {
+  conElUsuarioIncluido,
+  fetchEmpleadoDelUsuario,
+  fetchOperarios,
+  type Employee,
+} from '@/src/lib/employees';
 import {
   fetchInvoiceForWorkOrder,
   INVOICE_TYPE_LABELS,
@@ -48,7 +53,7 @@ import {
 } from '@/src/lib/workOrders';
 
 export function WorkOrderDetails() {
-  const { role } = useAuth();
+  const { role, session } = useAuth();
   const isAdmin = role === 'admin';
   const { id } = useParams();
   const navigate = useNavigate();
@@ -185,8 +190,14 @@ export function WorkOrderDetails() {
   React.useEffect(() => {
     if (!isAdmin) return;
     let cancelled = false;
-    fetchOperarios()
-      .then((data) => !cancelled && setEmployees(data))
+    // El propio usuario entra a la lista aunque su cargo no sea "operario":
+    // si tomó la orden desde la recepción, el desplegable tiene que poder
+    // mostrarlo. Sin él, el select quedaría con un valor que no existe entre
+    // sus opciones y el navegador lo dibuja en blanco.
+    Promise.all([fetchOperarios(), fetchEmpleadoDelUsuario(session?.user?.id)])
+      .then(([operarios, propio]) => {
+        if (!cancelled) setEmployees(conElUsuarioIncluido(operarios, propio));
+      })
       .catch(() => {/* si falla, el selector queda vacío y se puede reintentar recargando */});
     return () => {
       cancelled = true;
@@ -412,6 +423,17 @@ export function WorkOrderDetails() {
    * Cotizado— aparece las dos veces, porque eso fue lo que pasó. Esconder la
    * repetición sería dibujar un recorrido que la orden no hizo.
    */
+  /**
+   * Quién está mirando la orden, si es empleado.
+   *
+   * Acá NO se preselecciona: este desplegable guarda al instante, así que
+   * sugerir por defecto reasignaría la orden con solo abrirla —y el RLS filtra
+   * por empleado, o sea que cambiaría quién la ve—. Se marca la opción propia
+   * para que tomarla sea un clic, y la sugerencia automática vive donde la
+   * orden se está creando: la recepción y el alta.
+   */
+  const propioId = employees.find((e) => e.profileId === session?.user?.id)?.id ?? null;
+
   const recorrido = (() => {
     // Sin useMemo a propósito: esto se calcula después de los returns tempranos
     // de "cargando" y "no existe", y un hook ahí adentro corre en unos renders
@@ -628,9 +650,19 @@ export function WorkOrderDetails() {
               className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
             >
               <option value="">Sin asignar</option>
+              {/* Quien ya tiene la orden aparece siempre, aunque no esté en la
+                  lista de asignables: puede ser un dueño que la tomó, o un
+                  operario dado de baja después. Si no figurara, el select
+                  mostraría un valor inexistente —en blanco— y el primer
+                  cambio le borraría la asignación sin que nadie lo pida. */}
+              {order.employee && !employees.some((e) => e.id === order.employee?.id) && (
+                <option value={order.employee.id}>{order.employee.name}</option>
+              )}
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.name}{employee.workplace ? ` — ${employee.workplace}` : ''}
+                  {employee.name}
+                  {employee.id === propioId ? ' (vos)' : ''}
+                  {employee.workplace ? ` — ${employee.workplace}` : ''}
                 </option>
               ))}
             </select>
@@ -667,20 +699,25 @@ export function WorkOrderDetails() {
               pasos que quizás nunca ocurran —una orden rechazada no llega a
               terminada— y con estados que el taller agrega y saca, la fila se
               llenaba de casilleros que esa orden nunca iba a tocar. */}
-          <div className="relative flex items-start justify-between">
-            <div className="absolute left-0 top-3 z-0 h-[3px] w-full bg-line" />
-            <div
-              className="absolute left-0 top-3 z-0 h-[3px] bg-accent transition-all duration-300"
-              style={{ width: `${recorrido.length > 1 ? ((recorrido.length - 1) / (recorrido.length - 1)) * 100 : 0}%` }}
-            />
-
+          {/* Los casilleros se llenan de izquierda a derecha, uno al lado del
+              otro. Estirados a todo el ancho, una orden con dos estados los
+              mostraba en los extremos con un metro de línea en el medio, como
+              si faltaran pasos que en realidad no existen. */}
+          <div className="relative flex items-start justify-start overflow-x-auto pb-1">
             {recorrido.map((status, idx) => {
               const esActual = idx === recorrido.length - 1;
+              const esUltimo = idx === recorrido.length - 1;
               return (
                 // La clave lleva la posición además del id: un estado puede
                 // repetirse en el recorrido, y con solo el id React vería dos
                 // nodos iguales.
-                <div key={`${status.id}-${idx}`} className="relative z-10 flex w-24 flex-col items-center gap-2">
+                <div key={`${status.id}-${idx}`} className="relative z-10 flex w-24 shrink-0 flex-col items-center gap-2">
+                  {/* El tramo de línea va de este casillero al siguiente, en
+                      vez de una línea única de punta a punta: así termina
+                      donde termina el recorrido. */}
+                  {!esUltimo && (
+                    <div className="absolute left-1/2 top-3 -z-10 h-[3px] w-full bg-accent" />
+                  )}
                   {esActual ? (
                     <span className="flex h-[26px] w-[26px] -mt-[6px] items-center justify-center border-[3px] border-accent bg-panel">
                       <span className="h-2 w-2 bg-accent" />

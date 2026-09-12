@@ -5,7 +5,12 @@ import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { createWorkOrder, getErrorMessage } from '@/src/lib/workOrders';
-import { fetchOperarios, type Employee } from '@/src/lib/employees';
+import {
+  conElUsuarioIncluido,
+  fetchEmpleadoDelUsuario,
+  fetchOperarios,
+  type Employee,
+} from '@/src/lib/employees';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { CustomerModal } from '@/src/components/CustomerModal';
@@ -88,7 +93,7 @@ function DatoCliente({
 }
 
 export function VehicleNew() {
-  const { role } = useAuth();
+  const { role, session } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = React.useState<VehicleInput>(EMPTY_VEHICLE_FORM);
@@ -162,7 +167,15 @@ export function VehicleNew() {
     fetchVehiclePartTypes().then((d) => !cancelado && setTiposDePieza(d)).catch(() => {});
     // Sin operarios se puede recibir igual, sin asignar: que falle esta lista
     // no es motivo para trabar una recepción.
-    fetchOperarios().then((d) => !cancelado && setEmployees(d)).catch(() => {});
+    Promise.all([fetchOperarios(), fetchEmpleadoDelUsuario(session?.user?.id)])
+      .then(([operarios, propio]) => {
+        if (cancelado) return;
+        setEmployees(conElUsuarioIncluido(operarios, propio));
+        // Queda sugerido quien está cargando la recepción: es quien la toma
+        // casi siempre. Se puede cambiar antes de guardar.
+        if (propio) setEmployeeId((actual) => actual || propio.id);
+      })
+      .catch(() => {});
     return () => { cancelado = true; };
   }, []);
 
@@ -706,7 +719,7 @@ export function VehicleNew() {
                   ))}
                 </select>
                 <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
-                  Se puede dejar sin asignar y decidirlo después.
+                  Viene sugerido quien está cargando la recepción. Se puede cambiar o dejar sin asignar.
                 </span>
               </label>
 
