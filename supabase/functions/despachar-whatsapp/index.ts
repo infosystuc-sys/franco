@@ -30,6 +30,63 @@ const LIMITE_MS = 12000;
 
 const base = () => EVOLUTION_URL.replace(/\/+$/, '');
 
+/*
+  Los números argentinos de celular tienen una ambigüedad que no se resuelve
+  mirando el número: WhatsApp guarda algunas cuentas con el "9" después del 54
+  en el JID y otras sin él, según cuándo se dio de alta esa cuenta — no hay
+  forma de saberlo de antemano. Mandar a ciegas con el número tal cual está
+  cargado hace que Evolution rechace de a ratos clientes que sí tienen
+  WhatsApp. Se prueban las dos variantes contra el padrón antes de mandar.
+*/
+function candidatosWhatsapp(numeroCrudo: string): string[] {
+  const digitos = numeroCrudo.replace(/\D/g, '');
+  if (!digitos.startsWith('54')) return [digitos];
+  const resto = digitos.slice(2);
+  return resto.startsWith('9') ? [digitos, '54' + resto.slice(1)] : [digitos, '549' + resto];
+}
+
+/**
+ * Confirma contra WhatsApp cuál de los candidatos existe de verdad. Si el
+ * chequeo mismo falla, no se bloquea el envío por eso: se sigue con el número
+ * tal cual está cargado, que es como funcionaba antes de esta confirmación.
+ */
+async function resolverNumeroWhatsapp(
+  numeroCrudo: string
+): Promise<{ ok: true; numero: string } | { ok: false; error: string }> {
+  const candidatos = candidatosWhatsapp(numeroCrudo);
+  if (!candidatos[0]) return { ok: false, error: 'El teléfono no tiene ningún dígito.' };
+
+  try {
+    const respuesta = await fetch(`${base()}/chat/whatsappNumbers/${EVOLUTION_INSTANCE}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
+      body: JSON.stringify({ numbers: candidatos }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!respuesta.ok) return { ok: true, numero: candidatos[0] };
+
+    const cuerpo = await respuesta.json().catch(() => null);
+    const lista: Array<{ exists?: boolean; jid?: string; number?: string }> = Array.isArray(cuerpo)
+      ? cuerpo
+      : Array.isArray(cuerpo?.message)
+        ? cuerpo.message
+        : [];
+
+    const encontrado = lista.find((item) => item?.exists);
+    if (encontrado) return { ok: true, numero: encontrado.jid || encontrado.number || candidatos[0] };
+
+    if (candidatos.length > 1) {
+      return {
+        ok: false,
+        error: `Ese número no tiene WhatsApp. Se probó con y sin el 9 (${candidatos.join(' y ')}) y ninguno existe.`,
+      };
+    }
+    return { ok: false, error: `Ese número no tiene WhatsApp (${candidatos[0]}).` };
+  } catch {
+    return { ok: true, numero: candidatos[0] };
+  }
+}
+
 const db = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false },
 });
@@ -64,11 +121,14 @@ async function enviar(telefono: string, texto: string): Promise<string | null> {
   const falta = faltaConfig();
   if (falta) return falta;
 
+  const resuelto = await resolverNumeroWhatsapp(telefono);
+  if (!resuelto.ok) return resuelto.error;
+
   try {
     const respuesta = await fetch(`${base()}/message/sendText/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
-      body: JSON.stringify({ number: telefono, text: texto }),
+      body: JSON.stringify({ number: resuelto.numero, text: texto }),
       signal: AbortSignal.timeout(LIMITE_MS),
     });
 

@@ -122,6 +122,72 @@ async function enviarPorMail(pedido: CuerpoPedido): Promise<string | null> {
   }
 }
 
+/*
+  Los números argentinos de celular tienen una ambigüedad que no se resuelve
+  mirando el número: WhatsApp guarda algunas cuentas con el "9" después del 54
+  en el JID y otras sin él, según cuándo se dio de alta esa cuenta — no hay
+  forma de saberlo de antemano. Mandar a ciegas con el número tal cual se
+  escribió hace que Evolution rechace de a ratos números que sí tienen
+  WhatsApp, con un 400 que no explica nada ("exists": false y listo).
+
+  Por eso antes de mandar se prueban las dos variantes contra el padrón de
+  WhatsApp (el mismo chequeo que Evolution hace puertas adentro al mandar, acá
+  se hace antes y con las dos formas del número) y se usa la que exista de
+  verdad.
+*/
+function candidatosWhatsapp(numeroCrudo: string): string[] {
+  const digitos = numeroCrudo.replace(/\D/g, '');
+  if (!digitos.startsWith('54')) return [digitos];
+  const resto = digitos.slice(2);
+  return resto.startsWith('9') ? [digitos, '54' + resto.slice(1)] : [digitos, '549' + resto];
+}
+
+/**
+ * Confirma contra WhatsApp cuál de los candidatos existe de verdad. Si el
+ * chequeo mismo falla —el endpoint no está en esta versión de Evolution, un
+ * problema de red— no se bloquea el envío por eso: se sigue con el número tal
+ * cual se escribió, que es como funcionaba antes de esta confirmación previa.
+ */
+async function resolverNumeroWhatsapp(
+  base: string,
+  numeroCrudo: string
+): Promise<{ ok: true; numero: string } | { ok: false; error: string }> {
+  const candidatos = candidatosWhatsapp(numeroCrudo);
+  if (!candidatos[0]) return { ok: false, error: 'El teléfono no tiene ningún dígito.' };
+
+  try {
+    const respuesta = await fetch(`${base}/chat/whatsappNumbers/${EVOLUTION_INSTANCE}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
+      body: JSON.stringify({ numbers: candidatos }),
+      signal: AbortSignal.timeout(10000),
+    });
+    // Si el chequeo no está disponible en esta instancia, se sigue igual: es
+    // una confirmación de más, no un requisito para poder mandar.
+    if (!respuesta.ok) return { ok: true, numero: candidatos[0] };
+
+    const cuerpo = await respuesta.json().catch(() => null);
+    const lista: Array<{ exists?: boolean; jid?: string; number?: string }> = Array.isArray(cuerpo)
+      ? cuerpo
+      : Array.isArray(cuerpo?.message)
+        ? cuerpo.message
+        : [];
+
+    const encontrado = lista.find((item) => item?.exists);
+    if (encontrado) return { ok: true, numero: encontrado.jid || encontrado.number || candidatos[0] };
+
+    if (candidatos.length > 1) {
+      return {
+        ok: false,
+        error: `Ese número no tiene WhatsApp. Se probó con y sin el 9 (${candidatos.join(' y ')}) y ninguno existe.`,
+      };
+    }
+    return { ok: false, error: `Ese número no tiene WhatsApp (${candidatos[0]}).` };
+  } catch {
+    return { ok: true, numero: candidatos[0] };
+  }
+}
+
 async function enviarPorWhatsapp(pedido: CuerpoPedido): Promise<string | null> {
   if (!EVOLUTION_URL || !EVOLUTION_KEY || !EVOLUTION_INSTANCE) {
     return 'Falta configurar EVOLUTION_API_URL, EVOLUTION_API_KEY o EVOLUTION_INSTANCE.';
@@ -129,12 +195,15 @@ async function enviarPorWhatsapp(pedido: CuerpoPedido): Promise<string | null> {
 
   const base = EVOLUTION_URL.replace(/\/+$/, '');
 
+  const resuelto = await resolverNumeroWhatsapp(base, pedido.destinatario);
+  if (!resuelto.ok) return resuelto.error;
+
   try {
     const respuesta = await fetch(`${base}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
       body: JSON.stringify({
-        number: pedido.destinatario,
+        number: resuelto.numero,
         mediatype: 'document',
         mimetype: 'application/pdf',
         media: pedido.archivoBase64,
