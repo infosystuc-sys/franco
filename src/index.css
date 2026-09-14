@@ -47,9 +47,9 @@
   --color-state-open: #2b6cb0;
 
   /* Tipografía */
-  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-sans: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+  --font-display: "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, "Cascadia Mono", monospace;
 
   /*
     Escala de texto propia, corrida hacia arriba respecto de la de fábrica.
@@ -80,7 +80,11 @@
     background-color: var(--color-surface);
     color: var(--color-text);
     font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
+    /*
+      Sin suavizado en escala de grises. En Windows —que es donde corre esto—
+      pedirlo apaga el subpíxel de ClearType: el trazo pierde definición y el
+      texto se ve gris y desenfocado. El navegador solo rinde mejor.
+    */
     /* Base más grande: se carga de pie, con la pantalla lejos y a veces con
        las manos sucias. 14px era cómodo de diseñar y incómodo de leer. */
     font-size: 17px;
