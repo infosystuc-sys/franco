@@ -9,6 +9,13 @@ coverage/
 .env*
 !.env.example
 
+# Certificados de ARCA: la clave privada firma consultas y comprobantes a
+# nombre del titular. Viven en la base, cargados desde Configuración, nunca acá.
+*.key
+*.crt
+*.csr
+*.pem
+
 # Export original de AI Studio y su carpeta vacía: no son parte del código.
 dieselpro-erp.zip
 dieselpro-erp/

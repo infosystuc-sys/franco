@@ -1,6 +1,8 @@
 import React from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, Download, Loader2 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
+import { consultarPadron, volcarEnFicha } from '@/src/lib/arcaPadron';
+import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   isValidCuit,
   TAX_CONDITION_LABELS,
@@ -36,6 +38,45 @@ export function FiscalFields({
 }) {
   const cuitInvalid = form.taxId.trim() !== '' && !isValidCuit(form.taxId);
 
+  const [buscando, setBuscando] = React.useState(false);
+  const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null);
+  const [errorPadron, setErrorPadron] = React.useState<string | null>(null);
+
+  /**
+   * Trae la ficha de ARCA con lo que esté escrito en el campo de CUIT. Acepta
+   * también un DNI: la función del servidor resuelve a qué CUIT corresponde.
+   */
+  async function handleTraerDeArca() {
+    const documento = form.taxId.replace(/\D/g, '');
+    setErrorPadron(null);
+    setAvisoPadron(null);
+    setBuscando(true);
+    try {
+      const { datos, aviso } = await consultarPadron(documento);
+      patch(volcarEnFicha(form, datos));
+      const partes: string[] = [];
+      if (aviso) partes.push(aviso);
+      // Una clave inactiva se avisa pero no frena: el taller igual necesita
+      // cargar al cliente, y la letra del comprobante la decide quien factura.
+      if (datos.estadoClave && datos.estadoClave.toUpperCase() !== 'ACTIVO') {
+        partes.push(`ARCA marca esta clave como ${datos.estadoClave.toLowerCase()}.`);
+      }
+      if (datos.categoriaMonotributo) {
+        partes.push(`Monotributo categoría ${datos.categoriaMonotributo}.`);
+      }
+      setAvisoPadron(partes.length ? partes.join(' ') : 'Datos traídos de ARCA.');
+    } catch (err) {
+      setErrorPadron(getErrorMessage(err));
+    } finally {
+      setBuscando(false);
+    }
+  }
+
+  // Once dígitos es un CUIT; siete u ocho, un DNI. Cualquier otra cosa todavía
+  // se está escribiendo, y consultarla sería un viaje a ARCA para nada.
+  const digitos = form.taxId.replace(/\D/g, '').length;
+  const sePuedeBuscar = digitos === 11 || digitos === 7 || digitos === 8;
+
   return (
     <>
       {/* Identificación */}
@@ -56,16 +97,41 @@ export function FiscalFields({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className={labelClass}>
             CUIT / CUIL
-            <input
-              value={form.taxId}
-              onChange={(e) => patch({ taxId: e.target.value })}
-              className={cn(inputClass, 'font-mono', cuitInvalid && 'border-danger bg-danger-soft')}
-              placeholder="30-71044366-8"
-            />
+            <div className="flex gap-2">
+              <input
+                value={form.taxId}
+                onChange={(e) => patch({ taxId: e.target.value })}
+                className={cn(inputClass, 'font-mono', cuitInvalid && 'border-danger bg-danger-soft')}
+                placeholder="30-71044366-8"
+              />
+              {/* Traer de ARCA en vez de copiar de una constancia en PDF. Va
+                  pegado al CUIT porque es el único dato que necesita: el resto
+                  de la ficha lo completa él. */}
+              <button
+                type="button"
+                onClick={handleTraerDeArca}
+                disabled={buscando || !sePuedeBuscar}
+                title={
+                  sePuedeBuscar
+                    ? 'Traer razón social, condición de IVA y domicilio desde ARCA'
+                    : 'Escribí un CUIT de 11 dígitos o un DNI'
+                }
+                className="mt-1 flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-panel-alt px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft transition-colors hover:bg-accent hover:text-accent-ink disabled:opacity-40 disabled:hover:bg-panel-alt disabled:hover:text-text-soft"
+              >
+                {buscando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                {buscando ? 'Buscando…' : 'ARCA'}
+              </button>
+            </div>
             {cuitInvalid && (
               <span className="block mt-1 text-[12px] font-normal normal-case text-danger">
                 CUIT/CUIL inválido (dígito verificador incorrecto).
               </span>
+            )}
+            {errorPadron && (
+              <span className="block mt-1 text-[12px] font-normal normal-case text-danger">{errorPadron}</span>
+            )}
+            {avisoPadron && !errorPadron && (
+              <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">{avisoPadron}</span>
             )}
           </label>
           <label className={labelClass}>

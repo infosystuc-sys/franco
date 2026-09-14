@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2 } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -16,6 +16,16 @@ import {
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
 import { fetchYardCells, updateYardCells } from '@/src/lib/yardCapacity';
+import {
+  borrarCertificado,
+  cuitDelCertificado,
+  fetchEstadoCertificados,
+  guardarCertificado,
+  PROPOSITO_AYUDA,
+  PROPOSITO_LABELS,
+  type EstadoCertificado,
+  type PropositoArca,
+} from '@/src/lib/arcaPadron';
 import {
   AI_PROVIDER_CONSOLES,
   AI_PROVIDER_LABELS,
@@ -617,6 +627,8 @@ export function Settings() {
         </div>
       </Panel>
 
+      <CertificadosArca />
+
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Warehouse size={14} /> Capacidad de la playa</h3>
         <p className="text-xs text-text-soft">
@@ -666,5 +678,198 @@ function ComprobanteMatrix({ issuerCondition }: { issuerCondition: TaxCondition 
         })}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Los certificados de ARCA.
+ *
+ * Se cargan los archivos tal cual se bajaron: el .crt y el .key. Van derecho a
+ * una tabla que solo el servidor lee —ni siquiera un admin puede recuperarlos
+ * desde acá— y de ahí los toma la función que consulta el padrón.
+ *
+ * Son dos y hacen cosas distintas: uno consulta datos de terceros y puede ser
+ * de cualquier CUIT, el otro factura y tiene que ser del CUIT que emite.
+ */
+function CertificadosArca() {
+  const [estados, setEstados] = React.useState<EstadoCertificado[]>([]);
+  const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [aviso, setAviso] = React.useState<string | null>(null);
+  const [guardando, setGuardando] = React.useState<PropositoArca | null>(null);
+  // Lo que se leyó de los archivos elegidos, por propósito. Vive en memoria y
+  // se descarta al guardar: no hay razón para tener una clave privada dando
+  // vueltas en la pantalla más tiempo del que dura el clic.
+  const [pendientes, setPendientes] = React.useState<
+    Partial<Record<PropositoArca, { cert?: string; key?: string; cuit?: string | null }>>
+  >({});
+
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      setEstados(await fetchEstadoCertificados());
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  React.useEffect(() => { cargar(); }, [cargar]);
+
+  async function handleArchivo(proposito: PropositoArca, tipo: 'cert' | 'key', file: File | null) {
+    if (!file) return;
+    setError(null);
+    setAviso(null);
+    const texto = await file.text();
+    setPendientes((actuales) => ({
+      ...actuales,
+      [proposito]: {
+        ...actuales[proposito],
+        [tipo]: texto,
+        // El CUIT sale del propio certificado: escribirlo a mano es una
+        // oportunidad más de equivocarse, y uno que no coincide hace que ARCA
+        // rechace todas las consultas sin explicar por qué.
+        ...(tipo === 'cert' ? { cuit: cuitDelCertificado(texto) } : {}),
+      },
+    }));
+  }
+
+  async function handleGuardar(proposito: PropositoArca) {
+    const pendiente = pendientes[proposito];
+    if (!pendiente?.cert || !pendiente?.key) return;
+    if (!pendiente.cuit) {
+      setError('No se pudo leer el CUIT del certificado. ¿Es el .crt que bajaste de ARCA?');
+      return;
+    }
+    setGuardando(proposito);
+    setError(null);
+    setAviso(null);
+    try {
+      await guardarCertificado(proposito, pendiente.cuit, pendiente.cert, pendiente.key);
+      setPendientes((actuales) => ({ ...actuales, [proposito]: undefined }));
+      setAviso(`Certificado de ${PROPOSITO_LABELS[proposito].toLowerCase()} guardado.`);
+      await cargar();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setGuardando(null);
+    }
+  }
+
+  async function handleBorrar(proposito: PropositoArca) {
+    if (!window.confirm(`¿Sacar el certificado de ${PROPOSITO_LABELS[proposito].toLowerCase()}?`)) return;
+    setGuardando(proposito);
+    try {
+      await borrarCertificado(proposito);
+      setAviso('Certificado sacado.');
+      await cargar();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setGuardando(null);
+    }
+  }
+
+  return (
+    <Panel className="space-y-4 p-5">
+      <h3 className={sectionTitleClass}><Landmark size={14} /> Certificados de ARCA</h3>
+      <p className="text-xs text-text-soft">
+        Los archivos que ARCA entrega al generar un certificado digital: el .crt y la
+        clave .key. Quedan guardados de manera que solo el servidor puede leerlos; ni
+        esta pantalla ni nadie con sesión los recupera después.
+      </p>
+
+      {error && (
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>
+      )}
+      {aviso && !error && (
+        <div className="rounded-md border border-line-strong bg-panel-alt px-3 py-2 text-xs text-text">{aviso}</div>
+      )}
+
+      {cargando ? (
+        <p className="text-xs text-text-soft">Cargando…</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {(['PADRON', 'FACTURACION'] as PropositoArca[]).map((proposito) => {
+            const estado = estados.find((e) => e.proposito === proposito);
+            const pendiente = pendientes[proposito];
+            const listo = Boolean(pendiente?.cert && pendiente?.key);
+            return (
+              <div key={proposito} className="border border-line bg-panel-alt p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.06em] text-text">
+                    {PROPOSITO_LABELS[proposito]}
+                  </span>
+                  {estado?.cargado ? (
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-state-done">
+                      <Check size={13} /> CUIT {estado.cuit}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      <AlertTriangle size={13} /> Sin certificado
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-2 text-[13px] text-text-soft">{PROPOSITO_AYUDA[proposito]}</p>
+
+                <div className="mt-3 grid grid-cols-1 gap-2">
+                  <label className={cn(labelClass, 'block')}>
+                    Certificado (.crt)
+                    <input
+                      type="file"
+                      accept=".crt,.pem,.cer"
+                      onChange={(e) => handleArchivo(proposito, 'cert', e.target.files?.[0] ?? null)}
+                      className="mt-1 w-full text-[13px] font-normal normal-case text-text-soft file:mr-2 file:border file:border-line file:bg-panel file:px-2 file:py-1 file:text-[13px] file:font-bold file:uppercase file:tracking-wider"
+                    />
+                    {pendiente?.cert && (
+                      <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                        {pendiente.cuit
+                          ? `Leído. Es del CUIT ${pendiente.cuit}.`
+                          : 'Leído, pero no se encontró el CUIT adentro.'}
+                      </span>
+                    )}
+                  </label>
+                  <label className={cn(labelClass, 'block')}>
+                    Clave privada (.key)
+                    <input
+                      type="file"
+                      accept=".key,.pem"
+                      onChange={(e) => handleArchivo(proposito, 'key', e.target.files?.[0] ?? null)}
+                      className="mt-1 w-full text-[13px] font-normal normal-case text-text-soft file:mr-2 file:border file:border-line file:bg-panel file:px-2 file:py-1 file:text-[13px] file:font-bold file:uppercase file:tracking-wider"
+                    />
+                    {pendiente?.key && (
+                      <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">Leída.</span>
+                    )}
+                  </label>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!listo || guardando === proposito}
+                    onClick={() => handleGuardar(proposito)}
+                  >
+                    <Upload size={16} /> {guardando === proposito ? 'Guardando…' : 'Guardar certificado'}
+                  </Button>
+                  {estado?.cargado && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={guardando === proposito}
+                      onClick={() => handleBorrar(proposito)}
+                    >
+                      <Trash2 size={16} /> Sacar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
   );
 }
