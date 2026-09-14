@@ -8,7 +8,7 @@ import html2canvas from 'html2canvas';
  * hay render del lado del servidor, así que el PDF se arma en el navegador
  * con lo que ya está dibujado.
  */
-export async function renderElementToPdfBase64(element: HTMLElement): Promise<string> {
+async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
@@ -35,5 +35,23 @@ export async function renderElementToPdfBase64(element: HTMLElement): Promise<st
     heightLeft -= pageHeight;
   }
 
+  return pdf;
+}
+
+export async function renderElementToPdfBase64(element: HTMLElement): Promise<string> {
+  const pdf = await renderElementToPdf(element);
   return pdf.output('datauristring').split(',')[1];
+}
+
+/**
+ * El mismo PDF, pero bajado como archivo.
+ *
+ * Lo usa el cliente desde el link que le llega por WhatsApp: entra, ve el
+ * presupuesto y se lo guarda. Se arma en su propio navegador con lo que ya
+ * está en pantalla, así que siempre baja la versión vigente —no una copia
+ * congelada del día que se mandó el mensaje—.
+ */
+export async function downloadElementAsPdf(element: HTMLElement, fileName: string): Promise<void> {
+  const pdf = await renderElementToPdf(element);
+  pdf.save(fileName);
 }

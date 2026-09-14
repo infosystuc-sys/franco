@@ -750,20 +750,12 @@ export function VehicleNew() {
           />
         </Panel>
 
-        {/* Observaciones y estado quedan siempre a la vista: son lo que se
-            escribe al recibir, no un dato técnico que se busca. */}
+        {/* El estado del equipo queda a la vista. Las observaciones NO están
+            acá: la sección Orden de trabajo ya tiene las suyas, y dos campos
+            de observaciones en la misma pantalla obligan a adivinar en cuál
+            va lo que se quiere anotar. */}
         <Panel className="p-5">
-          <label className={labelClass}>
-            Observaciones
-            <textarea
-              value={form.notes}
-              onChange={(e) => patch({ notes: e.target.value })}
-              rows={2}
-              className={cn(inputClass, 'resize-y')}
-              placeholder="Historial, particularidades del equipo…"
-            />
-          </label>
-          <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-text">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
               checked={form.active}

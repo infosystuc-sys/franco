@@ -12,7 +12,7 @@ import {
   Mail,
   MessageCircle,
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -56,7 +56,19 @@ export function QuotationDetails() {
   const [notice, setNotice] = React.useState<string | null>(null);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  /** Ya se disparó la impresión automática: sin esto se repetiría en cada render. */
+  const yaImprimio = React.useRef(false);
   const documentRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * A dónde se vuelve al terminar. Normalmente el menú, pero si se llegó desde
+   * una orden —con ?volver=OT-x— se vuelve a esa orden: quien mandó a imprimir
+   * desde ahí está trabajando en la orden, no en el presupuesto.
+   */
+  const destinoAlSalir = searchParams.get('volver')
+    ? `/orden/${searchParams.get('volver')}`
+    : '/';
 
   const loadQuotation = React.useCallback(async () => {
     if (!number) return;
@@ -86,6 +98,35 @@ export function QuotationDetails() {
       .catch(() => {/* el catálogo es opcional: se pueden cargar líneas manuales */});
     return () => { cancelled = true; };
   }, [isAdmin]);
+
+  /**
+   * Llegar con ?imprimir=1 abre el diálogo solo. Es el botón "Imprimir
+   * presupuesto" de la orden: desde ahí se quiere el papel, no esta pantalla.
+   *
+   * Vive acá arriba, con el resto de los hooks, porque más abajo hay returns
+   * tempranos —cargando, no encontrada— y un hook detrás de un return se saltea
+   * en esos renders: React cuenta los hooks por posición y el orden se rompe.
+   *
+   * Se espera a que la cotización esté cargada —imprimir un cartel de
+   * "cargando" no le sirve a nadie— y se hace una sola vez.
+   */
+  React.useEffect(() => {
+    if (yaImprimio.current) return;
+    if (searchParams.get('imprimir') !== '1') return;
+    if (loading || !quotation) return;
+    // Un respiro para que el navegador termine de pintar el documento antes
+    // de capturarlo. La marca de "ya imprimí" se pone recién acá adentro, no
+    // antes del timeout: en desarrollo React monta el efecto dos veces, y
+    // marcarla afuera hacía que el segundo montaje se diera por impreso
+    // mientras el primero ya había cancelado su timeout.
+    const t = setTimeout(() => {
+      if (yaImprimio.current) return;
+      yaImprimio.current = true;
+      window.addEventListener('afterprint', () => navigate(destinoAlSalir), { once: true });
+      window.print();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [loading, quotation, searchParams, navigate, destinoAlSalir]);
 
   if (loading) {
     return <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">Cargando cotización...</div>;
@@ -134,7 +175,7 @@ export function QuotationDetails() {
    * —guardarla, mandarla, imprimirla— cierra el trámite de esa cotización, y
    * quedarse en la pantalla invita a repetir la acción sobre algo ya resuelto.
    */
-  const volverAlMenu = () => navigate('/');
+  const volverAlMenu = () => navigate(destinoAlSalir);
 
   const handleSave = () => run(async () => {
     await guardarLoEditado();

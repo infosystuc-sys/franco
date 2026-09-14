@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, X, Star, Factory, PackageX } from 'lucide-react';
+import { Plus, Trash2, X, Star, Factory, PackageX, Boxes } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { Button } from '@/src/components/ui';
@@ -12,6 +12,14 @@ import {
   type ArticleInput,
 } from '@/src/lib/articles';
 import { type Supplier } from '@/src/lib/suppliers';
+import {
+  addArticleComponent,
+  describeComboError,
+  fetchArticleComponents,
+  removeArticleComponent,
+  updateArticleComponent,
+  type ArticleComponent,
+} from '@/src/lib/articleCombos';
 import {
   addArticleSupplier,
   describePriceError,
@@ -48,12 +56,15 @@ export const EMPTY_ARTICLE_FORM: ArticleInput = {
 export function ArticleModal({
   article,
   suppliers,
+  catalogo = [],
   defaultMarkup,
   onClose,
   onSaved,
 }: {
   article: Article | null;
   suppliers: Supplier[];
+  /** Catálogo, para elegir qué artículos entran en un combo. */
+  catalogo?: Article[];
   defaultMarkup: number;
   onClose: () => void;
   /** Recibe el artículo guardado: desde una orden se agrega como renglón. */
@@ -247,6 +258,10 @@ export function ArticleModal({
             />
           )}
 
+          {/* Combo: también solo al editar, por lo mismo. Un artículo que
+              todavía no existe no puede contener a otros. */}
+          {article && <ComboSection articleId={article.id} catalogo={catalogo} />}
+
           <div className="flex justify-end gap-2 pt-2 border-t border-line">
             <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cerrar
@@ -421,6 +436,149 @@ function SuppliersSection({
             disabled={busy}
             title="Vincular proveedor"
             className="col-span-1 bg-accent text-accent-ink h-[38px] flex items-center justify-center hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Qué artículos trae adentro este combo.
+ *
+ * Vive en la misma ficha que todo lo demás del artículo para no inventar una
+ * pantalla aparte: un combo ES un artículo, con su código, su descripción y su
+ * precio; lo único distinto es que tiene una lista de partes.
+ */
+function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Article[] }) {
+  const [componentes, setComponentes] = React.useState<ArticleComponent[]>([]);
+  const [elegido, setElegido] = React.useState('');
+  const [cantidad, setCantidad] = React.useState('1');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const cargar = React.useCallback(async () => {
+    try {
+      setComponentes(await fetchArticleComponents(articleId));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }, [articleId]);
+
+  React.useEffect(() => { cargar(); }, [cargar]);
+
+  async function correr(accion: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await accion();
+      await cargar();
+    } catch (err) {
+      setError(describeComboError(getErrorMessage(err)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // El propio artículo no puede ser parte de sí mismo, y los que ya están no
+  // se ofrecen de nuevo: agregarlos daría un error de duplicado en vez de
+  // cambiar la cantidad, que es lo que se quería hacer.
+  const yaEstan = new Set(componentes.map((c) => c.componentArticleId));
+  const disponibles = catalogo.filter((a) => a.id !== articleId && !yaEstan.has(a.id) && a.active);
+
+  // Lo que costarían los componentes sueltos, para comparar contra el precio
+  // del combo sin tener que sacar la cuenta a mano.
+  const sueltos = componentes.reduce((sum, c) => sum + c.quantity * c.unitPrice, 0);
+
+  return (
+    <div className="border-t border-line pt-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+          <Boxes size={14} /> Artículos que trae el combo
+        </h3>
+        {componentes.length > 0 && (
+          <span className="text-[11px] text-text-soft">
+            Sueltos costarían $ {sueltos.toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {error && <p className="text-xs text-danger">{error}</p>}
+
+      {componentes.length === 0 ? (
+        <p className="text-xs text-text-soft">
+          Este artículo no es un combo. Agregale abajo los artículos que trae y pasa a serlo:
+          en la orden entra como un solo renglón con el precio de arriba, y el stock
+          se descuenta de las partes.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {componentes.map((c) => (
+            <li key={c.id} className="grid grid-cols-1 gap-2 border border-line bg-panel-alt px-3 py-2 sm:grid-cols-12 sm:items-center">
+              <span className="col-span-3 font-mono text-xs font-bold text-accent-deep">{c.code}</span>
+              <span className="col-span-5 text-sm">{c.description}</span>
+              <label className="col-span-3 flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-soft">
+                Cantidad
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  defaultValue={c.quantity}
+                  disabled={busy}
+                  onBlur={(e) => {
+                    const valor = Math.max(1, Math.trunc(Number(e.target.value) || 1));
+                    if (valor !== c.quantity) correr(() => updateArticleComponent(c.id, valor));
+                  }}
+                  className="w-16 border border-line bg-panel px-2 py-1 text-right text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => correr(() => removeArticleComponent(c.id))}
+                disabled={busy}
+                title="Sacar del combo"
+                className="col-span-1 flex justify-center text-text-soft hover:text-danger"
+              >
+                <Trash2 size={15} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {disponibles.length > 0 && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-center">
+          <select
+            value={elegido}
+            onChange={(e) => setElegido(e.target.value)}
+            className="col-span-8 border border-line bg-panel px-2 py-2 text-sm"
+          >
+            <option value="">Agregar un artículo al combo...</option>
+            {disponibles.map((a) => (
+              <option key={a.id} value={a.id}>{a.code} — {a.description}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            placeholder="Cant."
+            className="col-span-3 border border-line px-2 py-2 text-right text-sm"
+          />
+          <button
+            type="button"
+            disabled={busy || !elegido}
+            onClick={() => correr(async () => {
+              await addArticleComponent(articleId, elegido, Number(cantidad));
+              setElegido('');
+              setCantidad('1');
+            })}
+            title="Agregar al combo"
+            className="col-span-1 flex h-[38px] items-center justify-center bg-accent text-accent-ink transition-colors hover:bg-accent-deep hover:text-white disabled:opacity-50"
           >
             <Plus size={18} />
           </button>

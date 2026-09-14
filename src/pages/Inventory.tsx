@@ -244,6 +244,7 @@ export function Inventory() {
         <ArticleModal
           article={editing === 'new' ? null : editing}
           suppliers={suppliers}
+          catalogo={articles}
           defaultMarkup={defaultMarkup}
           onClose={() => setEditing(null)}
           onSaved={() => {

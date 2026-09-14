@@ -169,23 +169,6 @@ export function InvoiceNew() {
     );
   }
 
-  if (!order.status.isTerminal) {
-    return (
-      <Blocked title={`La orden ${order.number} todavía no está terminada.`}>
-        <p className="mb-4 text-sm text-text-soft">
-          Está en <strong>{order.status.label}</strong>. Se factura recién
-          cuando el trabajo cierra, para no emitir sobre renglones que todavía
-          pueden cambiar.
-        </p>
-        <Link to={`/orden/${order.number}`}>
-          <Button variant="ghost">
-            <XCircle size={16} /> Volver a la orden
-          </Button>
-        </Link>
-      </Blocked>
-    );
-  }
-
   if (!isReadyToInvoice(company)) {
     return (
       <Blocked title="Faltan los datos fiscales del taller.">

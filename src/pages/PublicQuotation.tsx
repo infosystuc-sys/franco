@@ -1,9 +1,10 @@
 import React from 'react';
-import { Check, X, AlertTriangle, Truck, Settings, CheckCircle2 } from 'lucide-react';
+import { Check, X, AlertTriangle, Truck, Settings, CheckCircle2, Download } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { PageHeader, Panel, Button } from '@/src/components/ui';
 import { QUOTATION_STATUS_LABELS } from '@/src/lib/quotations';
+import { downloadElementAsPdf } from '@/src/lib/pdf';
 import {
   decideQuotation,
   DECISION_MESSAGES,
@@ -30,6 +31,8 @@ export function PublicQuotation() {
   const [loading, setLoading] = React.useState(true);
   const [deciding, setDeciding] = React.useState(false);
   const [confirming, setConfirming] = React.useState<'aceptar' | 'rechazar' | null>(null);
+  const [bajando, setBajando] = React.useState(false);
+  const documentoRef = React.useRef<HTMLDivElement>(null);
   const [result, setResult] = React.useState<DecisionResult | null>(null);
   const [reason, setReason] = React.useState('');
 
@@ -89,6 +92,20 @@ export function PublicQuotation() {
   const vencido =
     quotation.validUntil !== null &&
     quotation.validUntil < new Date().toISOString().slice(0, 10);
+  async function handleDescargarPdf() {
+    if (!documentoRef.current) return;
+    setBajando(true);
+    try {
+      await downloadElementAsPdf(documentoRef.current, `Presupuesto-${quotation.number}.pdf`);
+    } catch {
+      // El cliente no puede hacer nada con un error técnico: se le dice que
+      // reintente, y si no, que la página igual muestra todo.
+      window.alert('No se pudo armar el PDF. Probá de nuevo; el presupuesto se ve igual en esta pantalla.');
+    } finally {
+      setBajando(false);
+    }
+  }
+
   const pendiente = quotation.status === 'EMITIDA' || quotation.status === 'ENVIADA';
   const puedeDecidir = pendiente && !vencido && !quotation.alreadyConverted;
 
@@ -98,9 +115,14 @@ export function PublicQuotation() {
         title="Presupuesto"
         subtitle={`N° ${quotation.number}${quotation.customerName ? ` · ${quotation.customerName}` : ''}`}
         actions={
-          <span className="border border-line bg-panel px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
-            {QUOTATION_STATUS_LABELS[quotation.status]}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="ghost" disabled={bajando} onClick={handleDescargarPdf}>
+              <Download size={16} /> {bajando ? 'Armando PDF…' : 'Descargar PDF'}
+            </Button>
+            <span className="border border-line bg-panel px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
+              {QUOTATION_STATUS_LABELS[quotation.status]}
+            </span>
+          </div>
         }
       />
 
@@ -126,6 +148,10 @@ export function PublicQuotation() {
         </div>
       )}
 
+      {/* Todo lo que es el presupuesto en sí va adentro de este bloque: es lo
+          que se convierte en PDF. Los botones de aceptar y rechazar quedan
+          afuera a propósito —en un papel guardado no significan nada—. */}
+      <div ref={documentoRef}>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Panel className="p-4">
           <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
@@ -222,6 +248,7 @@ export function PublicQuotation() {
           <p className="whitespace-pre-line text-sm text-text">{quotation.notes}</p>
         </Panel>
       )}
+      </div>
 
       {puedeDecidir && !result && (
         <Panel className="p-5">

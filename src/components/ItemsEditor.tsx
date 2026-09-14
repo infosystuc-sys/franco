@@ -3,10 +3,21 @@ import { Plus, Trash2, Package, Search, X, Check, PackagePlus } from 'lucide-rea
 import { ArticleModal } from '@/src/components/ArticleModal';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
 import { fetchDefaultMarkup } from '@/src/lib/priceLists';
+import { fetchComboArticleIds } from '@/src/lib/articleCombos';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
 import { type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
+
+/**
+ * Las cantidades de una orden son piezas: tres toberas, un filtro. No hay
+ * medio inyector. Se redondea hacia abajo y nunca baja de uno, así borrar el
+ * campo no deja un renglón de cero unidades que igual suma al total.
+ */
+function enteroDeCantidad(valor: string): number {
+  const n = Math.floor(Number(valor));
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
 
 const IVA_RATE = 0.21;
 
@@ -142,7 +153,14 @@ export function ItemsEditor({
                       </>
                     )}
                     <td data-label="Cant." className="px-1 py-1">
-                      <input type="number" step="0.01" min="0" value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="w-full bg-transparent px-2 py-1 text-right" />
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => updateItem(idx, { quantity: enteroDeCantidad(e.target.value) })}
+                        className="w-full bg-transparent px-2 py-1 text-right"
+                      />
                     </td>
                     <td data-label="P. unit." className="px-1 py-1">
                       <input type="number" step="0.01" min="0" value={item.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })} className="w-full bg-transparent px-2 py-1 text-right" />
@@ -152,7 +170,7 @@ export function ItemsEditor({
                   <>
                     <td data-primary className="px-3 py-1 text-text-soft">{item.code}</td>
                     <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
-                    <td data-label="Cant." className="px-3 py-1 text-right">{item.quantity.toFixed(2)}</td>
+                    <td data-label="Cant." className="px-3 py-1 text-right">{item.quantity}</td>
                     <td data-label="P. unit." className="px-3 py-1 text-right">$ {formatMoney(item.unitPrice)}</td>
                   </>
                 )}
@@ -231,6 +249,14 @@ function ArticlePicker({
   const [search, setSearch] = React.useState('');
   const [justAdded, setJustAdded] = React.useState<string | null>(null);
   const searchRef = React.useRef<HTMLInputElement>(null);
+  /** Cuáles del catálogo son combos, para marcarlos en la lista. */
+  const [combos, setCombos] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    // Si falla, la lista se ve igual pero sin la marca: no vale trabar la
+    // carga de renglones por una etiqueta.
+    fetchComboArticleIds().then(setCombos).catch(() => {});
+  }, []);
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -311,7 +337,17 @@ function ArticlePicker({
                   onClick={() => handlePick(article)}
                   className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
                 >
-                  <td data-primary className="p-2 font-bold">{article.code}</td>
+                  <td data-primary className="p-2 font-bold">
+                    {article.code}
+                    {combos.has(article.id) && (
+                      // Se avisa acá porque el combo entra como un renglón
+                      // solo: sin la marca, quien carga no sabe que ese
+                      // renglón se lleva varias piezas del estante.
+                      <span className="ml-1.5 rounded-full bg-accent/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent-deep">
+                        Combo
+                      </span>
+                    )}
+                  </td>
                   <td data-label="Descripción" className="p-2">{article.description}</td>
                   <td data-label="Precio" className="p-2 text-right">$ {formatMoney(article.unitPrice)}</td>
                   <td data-label="Stock" className="p-2 text-center">
@@ -377,6 +413,7 @@ function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void
         <ArticleModal
           article={null}
           suppliers={suppliers}
+          catalogo={[]}
           defaultMarkup={defaultMarkup}
           onClose={() => setOpen(false)}
           onSaved={(article) => {

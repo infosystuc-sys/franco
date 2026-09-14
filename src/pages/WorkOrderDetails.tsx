@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send } from 'lucide-react';
+import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -541,6 +541,20 @@ export function WorkOrderDetails() {
                 onClick={handleCotizar}
               >
                 <Receipt size={16} /> {cotizando ? 'Creando…' : 'Cotizar'}
+              </Button>
+            )}
+            {/* Imprimir el presupuesto sin salir a buscarlo: se abre la
+                cotización ya lista para imprimir y, al cerrar el diálogo,
+                vuelve sola a esta orden. Se reusa el documento de la
+                cotización en vez de dibujar otro acá: dos versiones del mismo
+                papel se despegan en el primer cambio. */}
+            {isAdmin && order.quotationNumber && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate(`/cotizacion/${order.quotationNumber}?imprimir=1&volver=${order.number}`)}
+              >
+                <Printer size={16} /> Imprimir presupuesto
               </Button>
             )}
             {isAdmin && order.quotationId &&
