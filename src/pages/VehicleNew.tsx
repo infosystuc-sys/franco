@@ -47,6 +47,7 @@ import {
   fetchVehicleModels,
   modelsOfBrand,
   registerBrandAndModel,
+  sizeOfModel,
   type VehicleBrand,
   type VehicleModel,
 } from '@/src/lib/vehicleCatalog';
@@ -211,6 +212,9 @@ export function VehicleNew() {
     setExistente(encontrado);
     const datos = vehicleToForm(encontrado);
     setForm({ ...datos, licensePlate: patente });
+    // Un vehículo ya cargado trae su propio tamaño guardado: no es una
+    // sugerencia del catálogo, es el dato real de ese equipo, y no se toca.
+    setTamanoSugerido(false);
 
     fetchVehiclePhotos(encontrado.id).then(setFotosGuardadas).catch(() => {});
     // Una ficha ya cargada puede traer sus renglones: se editan, no se pierden.
@@ -225,6 +229,27 @@ export function VehicleNew() {
   const clienteDelExistente = existente
     ? customers.find((c) => c.id === existente.customerId)?.name ?? null
     : null;
+
+  /**
+   * Si el tamaño que se ve en pantalla es una sugerencia (se puede reemplazar
+   * o borrar solo al cambiar marca o modelo) o una elección real (de un
+   * vehículo ya cargado que se trajo por patente, o que tocó el usuario a
+   * mano: no se toca más). Arranca en sugerencia: la pantalla se abre vacía.
+   */
+  const [tamanoSugerido, setTamanoSugerido] = React.useState(true);
+
+  /**
+   * Mientras el tamaño siga siendo una sugerencia, se recalcula en cada
+   * cambio de marca o modelo: si hay una combinación conocida, la trae; si no
+   * hay ninguna (o se dejó de escribir la que había), se borra en vez de
+   * quedar pegada al modelo anterior — un Volvo GRANDE sugerido no puede
+   * seguir ahí después de borrar "Volvo" y escribir "Ford".
+   */
+  React.useEffect(() => {
+    if (esPieza || !tamanoSugerido) return;
+    const sugerido = sizeOfModel(brands, models, form.brand, form.model);
+    patch({ sizeClass: sugerido ?? '' });
+  }, [form.brand, form.model, esPieza, brands, models, tamanoSugerido]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -297,7 +322,14 @@ export function VehicleNew() {
       // ensucia con una marca que en realidad no se usó. Y si esto falla, el
       // vehículo ya quedó guardado igual, así que no se interrumpe por algo
       // que no le importa a quien está cargando.
-      registerBrandAndModel(aGuardar.brand, aGuardar.model).catch(() => {});
+      // El tamaño solo aplica a vehículos: una pieza no ocupa lugar en la
+      // playa, y grabar el tamaño por defecto de una pieza ensuciaría el
+      // catálogo de un modelo real que compartiera el mismo nombre.
+      registerBrandAndModel(
+        aGuardar.brand,
+        aGuardar.model,
+        aGuardar.kind === 'VEHICULO' ? (aGuardar.sizeClass || null) : null
+      ).catch(() => {});
       if (form.kind === 'PIEZA') registrarTiposDePieza(partes).catch(() => {});
 
       // Las fotos van al final, cuando el equipo ya tiene id. Las que fallen se
@@ -552,7 +584,10 @@ export function VehicleNew() {
                 Tamaño en playa *
                 <select
                   value={form.sizeClass}
-                  onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
+                  onChange={(e) => {
+                    patch({ sizeClass: e.target.value as SizeClass });
+                    setTamanoSugerido(false);
+                  }}
                   className={cn(inputClass, 'bg-panel')}
                 >
                   <option value="">Elegí el tamaño…</option>
@@ -560,6 +595,11 @@ export function VehicleNew() {
                     <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
                   ))}
                 </select>
+                {tamanoSugerido && form.sizeClass && (
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                    Sugerido por los vehículos de este modelo. Se puede cambiar.
+                  </span>
+                )}
               </label>
             </div>
           )}

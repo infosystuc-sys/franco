@@ -6,6 +6,7 @@ import {
   fetchVehicleModels,
   modelsOfBrand,
   registerBrandAndModel,
+  sizeOfModel,
   type VehicleBrand,
   type VehicleModel,
 } from '@/src/lib/vehicleCatalog';
@@ -79,6 +80,29 @@ export function VehicleModal({
     setForm((prev) => ({ ...prev, ...changes }));
   }
 
+  /**
+   * Si el tamaño que se ve en pantalla es una sugerencia (se puede reemplazar
+   * o borrar solo al cambiar marca o modelo) o una elección real (de un
+   * vehículo que se está editando, o que tocó el usuario a mano: no se toca
+   * más). Arranca en sugerencia solo al dar de alta uno nuevo — un vehículo
+   * existente ya trae su propio tamaño guardado, y ese no lo decide el
+   * catálogo.
+   */
+  const [tamanoSugerido, setTamanoSugerido] = React.useState(!vehicle);
+
+  /**
+   * Mientras el tamaño siga siendo una sugerencia, se recalcula en cada
+   * cambio de marca o modelo: si hay una combinación conocida, la trae: si no
+   * hay ninguna (o se dejó de escribir la que había), se borra en vez de
+   * quedar pegada al modelo anterior — un Volvo GRANDE sugerido no puede
+   * seguir ahí después de borrar "Volvo" y escribir "Ford".
+   */
+  React.useEffect(() => {
+    if (form.kind !== 'VEHICULO' || !tamanoSugerido) return;
+    const sugerido = sizeOfModel(brands, models, form.brand, form.model);
+    patch({ sizeClass: sugerido ?? '' });
+  }, [form.brand, form.model, form.kind, brands, models, tamanoSugerido]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.customerId) {
@@ -100,7 +124,14 @@ export function VehicleModal({
       // Suma al catálogo lo recién escrito, para que la próxima carga lo
       // ofrezca. Después de guardar y sin cortar el flujo si falla: el
       // vehículo ya quedó bien, y esto no le importa a quien está cargando.
-      registerBrandAndModel(form.brand, form.model).catch(() => {});
+      // El tamaño solo aplica a vehículos: una pieza no ocupa lugar en la
+      // playa, y grabar el tamaño por defecto de una pieza ensuciaría el
+      // catálogo de un modelo real que compartiera el mismo nombre.
+      registerBrandAndModel(
+        form.brand,
+        form.model,
+        form.kind === 'VEHICULO' ? (form.sizeClass || null) : null
+      ).catch(() => {});
       onSaved(saved);
     } catch (err) {
       setError(describeVehicleError(getErrorMessage(err)));
@@ -184,7 +215,10 @@ export function VehicleModal({
                 Tamaño en playa
                 <select
                   value={form.sizeClass}
-                  onChange={(e) => patch({ sizeClass: e.target.value as SizeClass })}
+                  onChange={(e) => {
+                    patch({ sizeClass: e.target.value as SizeClass });
+                    setTamanoSugerido(false);
+                  }}
                   className={cn(inputClass, 'bg-panel')}
                 >
                   <option value="">Elegí el tamaño…</option>
@@ -192,6 +226,11 @@ export function VehicleModal({
                     <option key={size} value={size}>{SIZE_CLASS_LABELS[size]}</option>
                   ))}
                 </select>
+                {tamanoSugerido && form.sizeClass && (
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                    Sugerido por los vehículos de este modelo. Se puede cambiar.
+                  </span>
+                )}
               </label>
               <label className={cn(labelClass, 'col-span-2')}>
                 Patente

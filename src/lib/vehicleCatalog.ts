@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import type { SizeClass } from '@/src/lib/vehicles';
 
 /**
  * Catálogo de marcas y modelos.
@@ -21,6 +22,12 @@ export interface VehicleModel {
   id: string;
   brandId: string;
   name: string;
+  /**
+   * El tamaño que quedó registrado la primera vez que alguien lo eligió para
+   * esta marca y modelo. Null cuando todavía no se cargó ningún vehículo de
+   * este modelo, o cuando los que hay no coinciden entre sí.
+   */
+  sizeClass: SizeClass | null;
 }
 
 export async function fetchVehicleBrands(): Promise<VehicleBrand[]> {
@@ -36,10 +43,15 @@ export async function fetchVehicleBrands(): Promise<VehicleBrand[]> {
 export async function fetchVehicleModels(): Promise<VehicleModel[]> {
   const { data, error } = await supabase
     .from('vehicle_models')
-    .select('id, brand_id, name')
+    .select('id, brand_id, name, size_class')
     .order('name');
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({ id: r.id, brandId: r.brand_id, name: r.name }));
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    brandId: r.brand_id,
+    name: r.name,
+    sizeClass: r.size_class ?? null,
+  }));
 }
 
 /**
@@ -55,10 +67,21 @@ export async function fetchVehicleModels(): Promise<VehicleModel[]> {
  * pasar en silencio en vez de mostrar un error por algo que no le importa a
  * quien está cargando.
  */
-export async function registerBrandAndModel(brand: string, model: string): Promise<void> {
+export async function registerBrandAndModel(
+  brand: string,
+  model: string,
+  /**
+   * El tamaño elegido para este vehículo. Solo se graba en el catálogo la
+   * primera vez que una marca y modelo lo reciben — ver el comentario de
+   * registrar_marca_modelo en la migración. Piezas y vehículos sin tamaño
+   * mandan null y no tocan nada.
+   */
+  size: SizeClass | null = null
+): Promise<void> {
   const { error } = await supabase.rpc('registrar_marca_modelo', {
     p_marca: brand,
     p_modelo: model,
+    p_tamano: size,
   });
   if (error) throw error;
 }
@@ -74,4 +97,25 @@ export function modelsOfBrand(
   const marca = brands.find((b) => b.name.toLowerCase() === nombre);
   if (!marca) return [];
   return models.filter((m) => m.brandId === marca.id);
+}
+
+/**
+ * El tamaño recordado para una marca y modelo exactos, o null si esa
+ * combinación todavía no tiene uno registrado (o no coincide con nada del
+ * catálogo). La búsqueda es exacta y sin distinguir mayúsculas: mientras se
+ * está escribiendo "Volvo FH" no hay combinación completa todavía, así que
+ * no sugiere nada hasta que el modelo esté escrito entero.
+ */
+export function sizeOfModel(
+  brands: VehicleBrand[],
+  models: VehicleModel[],
+  brandName: string,
+  modelName: string
+): SizeClass | null {
+  const nombreModelo = modelName.trim().toLowerCase();
+  if (!nombreModelo) return null;
+  const encontrado = modelsOfBrand(brands, models, brandName).find(
+    (m) => m.name.toLowerCase() === nombreModelo
+  );
+  return encontrado?.sizeClass ?? null;
 }
