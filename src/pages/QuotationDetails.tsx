@@ -129,12 +129,12 @@ export function QuotationDetails() {
   }, [loading, quotation, searchParams, navigate, destinoAlSalir]);
 
   if (loading) {
-    return <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">Cargando cotización...</div>;
+    return <div className="w-full p-8 text-center text-text-soft">Cargando cotización...</div>;
   }
 
   if (!quotation) {
     return (
-      <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">
+      <div className="w-full p-8 text-center text-text-soft">
         No se encontró la cotización {number}.{' '}
         <Link to="/cotizaciones" className="text-accent-deep underline">Volver al listado</Link>
       </div>
@@ -220,7 +220,7 @@ export function QuotationDetails() {
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div className="no-print space-y-6">
       <PageHeader
         title={<span className="font-mono text-3xl font-medium tracking-normal text-text">{quotation.number}</span>}
@@ -235,7 +235,7 @@ export function QuotationDetails() {
               {QUOTATION_STATUS_LABELS[quotation.status]}
             </span>
             {expired && (
-              <span className="inline-flex items-center gap-1.5 rounded border border-state-wait px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-state-wait">
+              <span className="inline-flex items-center gap-1.5 rounded border border-state-wait px-2 py-0.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-state-wait">
                 <AlertTriangle size={13} /> Vencida
               </span>
             )}
@@ -285,7 +285,7 @@ export function QuotationDetails() {
           cotización: es justo cuando más sirve tenerlo a la vista. */}
       {quotation.rejectionReason && (
         <div className="border border-line bg-panel-alt px-4 py-3">
-          <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-danger">
+          <span className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-danger">
             <ThumbsDown size={13} />
             {quotation.status === 'RECHAZADA' ? 'El cliente rechazó' : 'Rechazo anterior'}
             {quotation.decidedAt && (
@@ -321,24 +321,24 @@ export function QuotationDetails() {
       {/* Datos de cabecera */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-panel border border-line p-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Cliente</span>
+          <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Cliente</span>
           <span className="text-sm font-bold text-text block">{quotation.customer?.name ?? '—'}</span>
           {quotation.customer?.legal_name && quotation.customer.legal_name !== quotation.customer.name && (
-            <span className="text-[11px] text-text-soft block">{quotation.customer.legal_name}</span>
+            <span className="text-[13px] text-text-soft block">{quotation.customer.legal_name}</span>
           )}
           {quotation.customer?.tax_id && (
-            <span className="text-[11px] text-text-soft block mt-1 font-mono">{formatCuit(quotation.customer.tax_id)}</span>
+            <span className="text-[13px] text-text-soft block mt-1 font-mono">{formatCuit(quotation.customer.tax_id)}</span>
           )}
         </div>
         <div className="bg-panel border border-line p-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo / Equipo</span>
+          <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo / Equipo</span>
           <span className="text-sm font-bold text-text">
             {[quotation.vehicle?.brand, quotation.vehicle?.model].filter(Boolean).join(' ') || '—'}
             {quotation.vehicle?.license_plate ? ` - ${quotation.vehicle.license_plate}` : ''}
           </span>
         </div>
         <div className="bg-panel border border-line p-4">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Válida hasta</span>
+          <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Válida hasta</span>
           {editable ? (
             <input
               type="date"
@@ -402,35 +402,35 @@ export function QuotationDetails() {
       <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
         <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
           <div>
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
               Presupuesto para
             </span>
             <h2 className="font-display text-xl font-medium uppercase leading-tight text-text">
               {quotation.customer?.name ?? '—'}
             </h2>
             {quotation.customer?.tax_id && (
-              <p className="mt-1 font-mono text-[11px] text-text-soft">{formatCuit(quotation.customer.tax_id)}</p>
+              <p className="mt-1 font-mono text-[13px] text-text-soft">{formatCuit(quotation.customer.tax_id)}</p>
             )}
           </div>
           <div className="sm:text-right">
             <h3 className="font-display text-lg uppercase tracking-[0.08em] text-text-faint">Presupuesto</h3>
             <p className="mt-1 font-mono text-lg font-semibold text-text">{quotation.number}</p>
             {quotation.validUntil && (
-              <p className="mt-1 text-[11px] text-text-soft">
+              <p className="mt-1 text-[13px] text-text-soft">
                 Válido hasta {new Date(`${quotation.validUntil}T00:00:00`).toLocaleDateString('es-AR')}
               </p>
             )}
           </div>
         </div>
 
-        <div className="py-4 text-[12px] text-text-soft">
+        <div className="py-4 text-[14px] text-text-soft">
           {[quotation.vehicle?.brand, quotation.vehicle?.model].filter(Boolean).join(' ') || '—'}
           {quotation.vehicle?.license_plate ? ` · ${quotation.vehicle.license_plate}` : ''}
           {quotation.component ? ` · ${quotation.component}` : ''}
         </div>
 
-        <table className="w-full text-left text-[12px]">
-          <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="w-full text-left text-[14px]">
+          <thead className="border-b border-line text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="py-1.5">Detalle</th>
               <th className="w-20 py-1.5 text-right">Cant.</th>
@@ -451,7 +451,7 @@ export function QuotationDetails() {
         </table>
 
         <div className="flex justify-end border-t-2 border-ink pt-4">
-          <dl className="w-full space-y-1 text-[12px] sm:w-72">
+          <dl className="w-full space-y-1 text-[14px] sm:w-72">
             <div className="flex justify-between">
               <dt className="text-text-soft">Subtotal</dt>
               <dd className="font-mono text-text">$ {formatMoney(itemsTotal)}</dd>
@@ -461,7 +461,7 @@ export function QuotationDetails() {
               <dd className="font-mono text-text">$ {formatMoney(itemsIva)}</dd>
             </div>
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
+              <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
               <dd className="font-display text-2xl font-medium text-text">
                 $ {formatMoney(itemsTotal + itemsIva)}
               </dd>
@@ -471,10 +471,10 @@ export function QuotationDetails() {
 
         {quotation.notes && (
           <div className="mt-5 border-t border-line pt-3">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
               Observaciones
             </span>
-            <p className="whitespace-pre-line text-[12px] text-text-soft">{quotation.notes}</p>
+            <p className="whitespace-pre-line text-[14px] text-text-soft">{quotation.notes}</p>
           </div>
         )}
       </div>
@@ -511,7 +511,7 @@ function ActionBar({
   onSave: () => void;
   onReopen: () => void;
 }) {
-  const btn = 'px-4 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50';
+  const btn = 'px-4 py-2 text-[13px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 disabled:opacity-50';
 
   return (
     <div className="flex items-center gap-2 flex-wrap">

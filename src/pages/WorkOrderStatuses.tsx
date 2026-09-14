@@ -119,8 +119,8 @@ export function WorkOrderStatuses() {
 
       {!loading && (
         <Panel className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-4 py-1">Estado</th>
                 <th className="w-28 px-3 py-1">Inicial</th>
@@ -156,7 +156,7 @@ export function WorkOrderStatuses() {
                       />
                       {status.label}
                       {!status.active && (
-                        <span className="rounded bg-panel-head px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="rounded bg-panel-head px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Inactivo
                         </span>
                       )}
@@ -299,7 +299,7 @@ function WorkOrderStatusModal({
               className={cn(inputClass, 'resize-none')}
               placeholder="El componente está siendo revisado en laboratorio."
             />
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               Se muestra en el portal público de seguimiento (/seguimiento/…), no en el panel interno.
             </span>
           </label>

@@ -111,7 +111,7 @@ export function VehicleModal({
 
   const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
   const inputClass = 'mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case';
-  const sectionTitle = 'text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
+  const sectionTitle = 'text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
@@ -283,13 +283,13 @@ export function VehicleModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-line">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+              className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>

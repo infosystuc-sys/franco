@@ -85,7 +85,7 @@ export function Quotations() {
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Cotizaciones"
         subtitle="Las cotizaciones nacen en la orden de trabajo. Acá se controla en qué quedó cada autorización."
@@ -105,8 +105,8 @@ export function Quotations() {
               statusFilter === status ? "border-accent-deep ring-1 ring-accent-deep" : "border-line hover:border-line-strong"
             )}
           >
-            <span className="text-[12px] text-text-soft">{QUOTATION_STATUS_LABELS[status]}</span>
-            <span className="text-[28px] font-bold text-text leading-tight">
+            <span className="text-[14px] text-text-soft">{QUOTATION_STATUS_LABELS[status]}</span>
+            <span className="text-[30px] font-bold text-text leading-tight">
               {loading ? '—' : counts[status]}
             </span>
           </button>
@@ -125,9 +125,9 @@ export function Quotations() {
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-28">N° Cotiz.</th>
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
@@ -164,18 +164,18 @@ export function Quotations() {
                     <td data-label="Vehículo" className="p-3">
                       <div>{quotation.vehicleLabel}</div>
                       {quotation.component && (
-                        <div className="text-[11px] text-text-soft">{quotation.component}</div>
+                        <div className="text-[13px] text-text-soft">{quotation.component}</div>
                       )}
                     </td>
                     <td data-label="Estado" className="p-3">
                       <span className={cn(
-                        "px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        "px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider",
                         QUOTATION_STATUS_BADGE[quotation.status]
                       )}>
                         {QUOTATION_STATUS_LABELS[quotation.status]}
                       </span>
                     </td>
-                    <td data-label="Validez" className="p-3 text-[11px]">
+                    <td data-label="Validez" className="p-3 text-[13px]">
                       {quotation.validUntil ? (
                         <span className={cn(expired && "text-state-wait font-bold inline-flex items-center gap-1")}>
                           {expired && <AlertTriangle size={12} />}

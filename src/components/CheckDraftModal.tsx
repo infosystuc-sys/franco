@@ -94,7 +94,7 @@ export function CheckDraftModal({
           {rows.map((row, idx) => (
             <li key={row.rowKey} className="border border-line bg-panel-alt p-3">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+                <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
                   Cheque {idx + 1}
                 </span>
                 {rows.length > 1 && (

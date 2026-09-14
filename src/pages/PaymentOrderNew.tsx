@@ -479,7 +479,7 @@ export function PaymentOrderNew() {
               ))}
             </select>
             {supplierId && credit > 0 && (
-              <span className="mt-1 block text-[10px] font-normal normal-case text-state-done">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-state-done">
                 Tenés $ {formatMoney(credit)} a favor con este proveedor.
               </span>
             )}
@@ -563,8 +563,8 @@ export function PaymentOrderNew() {
 
         {(docs.length > 0 || provisionalRows.length > 0) && (
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-            <table className="table-stack w-full text-left text-[13px]">
-              <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <table className="table-stack w-full text-left text-[15px]">
+              <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   <th className="px-3 py-1 w-44">Comprobante</th>
                   <th className="px-3 py-1 w-28">Fecha</th>
@@ -582,7 +582,7 @@ export function PaymentOrderNew() {
                   return (
                     <tr key={doc.id} className={cn('h-10 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
                       <td data-primary className="px-3 py-1">
-                        <span className={cn('text-[10px] font-semibold uppercase tracking-[0.06em]', isCredit ? 'text-state-done' : 'text-text-soft')}>
+                        <span className={cn('text-[12px] font-semibold uppercase tracking-[0.06em]', isCredit ? 'text-state-done' : 'text-text-soft')}>
                           {PURCHASE_DOC_TYPE_SHORT[doc.docType]}
                         </span>{' '}
                         <span className="font-mono font-semibold">{doc.letter} {doc.fullNumber}</span>
@@ -628,9 +628,9 @@ export function PaymentOrderNew() {
                       )}
                     >
                       <td data-primary className="px-3 py-1">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-state-done">NC</span>{' '}
+                        <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-state-done">NC</span>{' '}
                         <span className="font-mono font-semibold">{row.fullNumber}</span>
-                        {row.description && <p className="text-[10px] text-text-soft">{row.description}</p>}
+                        {row.description && <p className="text-[12px] text-text-soft">{row.description}</p>}
                       </td>
                       <td data-label="Fecha" className="px-3 py-1 text-text-faint">—</td>
                       <td data-label="Vence" className="px-3 py-1 text-text-faint">—</td>
@@ -683,8 +683,8 @@ export function PaymentOrderNew() {
             }
           />
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-            <table className="table-stack w-full text-left text-[13px]">
-              <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <table className="table-stack w-full text-left text-[15px]">
+              <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   <th className="w-8 px-3 py-1"></th>
                   <th className="px-3 py-1">Número</th>
@@ -720,7 +720,7 @@ export function PaymentOrderNew() {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[15px]">
               <div className="flex items-baseline gap-1.5">
                 <dt className="text-text-soft">Subtotal seleccionado</dt>
                 <dd className="font-mono font-semibold text-text">$ {formatMoney(selectedChecksSubtotal)}</dd>
@@ -799,7 +799,7 @@ export function PaymentOrderNew() {
             >
               <span
                 title={PAYMENT_VALUE_HELP[value.kind]}
-                className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
+                className="w-32 shrink-0 text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
               >
                 {PAYMENT_VALUE_LABELS[value.kind]}
               </span>
@@ -886,11 +886,11 @@ export function PaymentOrderNew() {
       {/* ── El cuadre ───────────────────────────────────────────────── */}
       <Panel className="mb-10 p-5">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <dl className="space-y-1 text-[13px]">
+          <dl className="space-y-1 text-[15px]">
             <Row label="Total de valores" value={totalValues} />
             <Row label="Imputado (neto)" value={totalApplied} />
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 {onAccount >= 0 ? 'Queda a cuenta' : 'Falta pagar'}
               </dt>
               <dd className={cn('font-display text-2xl font-medium', onAccount < 0 ? 'text-danger' : 'text-text')}>
@@ -898,7 +898,7 @@ export function PaymentOrderNew() {
               </dd>
             </div>
             {cashTotal !== totalValues && (
-              <p className="pt-2 text-[10px] text-text-soft">
+              <p className="pt-2 text-[12px] text-text-soft">
                 Sale de caja $ {formatMoney(cashTotal)}. El resto son retenciones o saldo a favor,
                 que cancelan comprobante pero no son plata que sale.
               </p>

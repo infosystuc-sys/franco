@@ -113,7 +113,7 @@ export function Remitos() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Remitos"
         subtitle="Entregas de mercadería, facturadas o pendientes de valorizar."
@@ -134,7 +134,7 @@ export function Remitos() {
             key={f}
             onClick={() => setFilter(f)}
             className={cn(
-              'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
               filter === f
                 ? 'border-accent bg-accent/10 text-accent-deep'
                 : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -145,7 +145,7 @@ export function Remitos() {
         ))}
       </div>
 
-      <div className="relative sm:w-72">
+      <div className="relative sm:w-96">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
         <input
           value={search}
@@ -157,9 +157,9 @@ export function Remitos() {
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="w-28 p-3 font-semibold">N° remito</th>
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="w-20 p-3 text-right font-semibold">Renglones</th>

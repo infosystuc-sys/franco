@@ -50,7 +50,7 @@ export function PurchaseTotalsSummary({
         />
       </label>
 
-      <dl className="space-y-1 text-[13px]">
+      <dl className="space-y-1 text-[15px]">
         <Row label="Bruto" value={totals.gross} />
         {totals.lineDiscount > 0 && (
           <Row label="Bonificación por renglón" value={-totals.lineDiscount} muted />
@@ -72,7 +72,7 @@ export function PurchaseTotalsSummary({
         {totals.otherTaxes > 0 && <Row label="Percepciones e impuestos" value={totals.otherTaxes} />}
 
         <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-          <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
+          <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
           <dd className="font-display text-2xl font-medium text-text">$ {formatMoney(totals.total)}</dd>
         </div>
       </dl>

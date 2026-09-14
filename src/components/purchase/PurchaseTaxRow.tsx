@@ -22,7 +22,7 @@ export function PurchaseTaxRow({
     <li className="flex items-center gap-2 border border-line bg-panel-alt px-3 py-2">
       <span className="min-w-0 flex-1 text-xs">
         <span className="block truncate font-semibold text-text">{rate?.name}</span>
-        <span className="text-[10px] text-text-soft">
+        <span className="text-[12px] text-text-soft">
           {rate?.rate}% s/ {rate?.base === 'TOTAL' ? 'total' : 'neto'}
           {edited && ` · calculado $ ${formatMoney(suggested)}`}
         </span>

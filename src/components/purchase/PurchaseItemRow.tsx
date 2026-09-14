@@ -46,7 +46,7 @@ export function PurchaseItemRow({
             <select
               value={line.conceptId ?? ''}
               onChange={(e) => onPatch({ conceptId: e.target.value || null })}
-              className="w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none"
+              className="w-full bg-transparent px-1 py-1 text-[14px] focus:outline-none"
             >
               <option value="">— texto libre —</option>
               {concepts.map((concept) => (
@@ -97,7 +97,7 @@ export function PurchaseItemRow({
           value={line.vatRateId}
           onChange={(e) => onPatch({ vatRateId: e.target.value })}
           className={cn(
-            'w-full bg-transparent px-1 py-1 text-[12px] focus:outline-none',
+            'w-full bg-transparent px-1 py-1 text-[14px] focus:outline-none',
             !line.vatRateId && 'bg-danger-soft'
           )}
         >

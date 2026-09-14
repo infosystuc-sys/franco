@@ -299,7 +299,7 @@ export function InvoiceNew() {
 
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Emisor
           </span>
           <span className="block text-sm font-semibold text-text">{settings.legalName}</span>
@@ -307,13 +307,13 @@ export function InvoiceNew() {
             {settings.taxId && <span className="font-mono">{formatCuit(settings.taxId)} · </span>}
             {TAX_CONDITION_LABELS[settings.taxCondition]}
           </span>
-          <span className="mt-1 block font-mono text-[11px] text-text-faint">
+          <span className="mt-1 block font-mono text-[13px] text-text-faint">
             Punto de venta {String(settings.salesPoint).padStart(4, '0')}
           </span>
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Cliente
           </span>
           <span className="block text-sm font-semibold text-text">
@@ -336,7 +336,7 @@ export function InvoiceNew() {
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-[10px] text-text-soft">
+          <span className="mt-1 block text-[12px] text-text-soft">
             {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
           </span>
           <span className="mt-1.5 block text-xs text-text-soft">
@@ -346,7 +346,7 @@ export function InvoiceNew() {
             {TAX_CONDITION_LABELS[customerCondition]}
           </span>
           {order.customer && (
-            <span className="mt-1 block text-[11px] text-text-faint">
+            <span className="mt-1 block text-[13px] text-text-faint">
               {formatAddress({
                 addressStreet: order.customer.address_street,
                 addressCity: order.customer.address_city,
@@ -358,7 +358,7 @@ export function InvoiceNew() {
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Condición de pago
           </span>
           <span className="flex items-center gap-1.5 text-sm font-semibold text-text">
@@ -467,7 +467,7 @@ export function InvoiceTypeBadge({ type }: { type: InvoiceType }) {
       className="inline-flex items-center gap-2 border border-line-strong bg-panel px-2.5 py-1"
     >
       <span className="font-display text-xl font-medium leading-none text-text">{type}</span>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+      <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-soft">
         {INVOICE_TYPE_LABELS[type]}
       </span>
     </span>
@@ -508,7 +508,7 @@ export function InvoiceTotals({
           </div>
         )}
         <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
+          <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
           <span className="font-display text-2xl font-medium text-text">
             $ {formatMoney(totals.total)}
           </span>
@@ -584,7 +584,7 @@ export function CashCheckoutFields({
               <button
                 type="button"
                 onClick={onClearChecks}
-                className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
+                className="mt-2 text-[13px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
               >
                 Cambiar
               </button>
@@ -609,7 +609,7 @@ export function CashCheckoutFields({
                 <option value={CHEQUE_OPTION_VALUE}>Cheque</option>
               </select>
               {selectableMethods.length === 0 && (
-                <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                   No hay medios de pago activos. Cargá uno desde Medios de pago.
                 </span>
               )}

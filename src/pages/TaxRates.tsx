@@ -126,8 +126,8 @@ export function TaxRates() {
               </p>
 
               <Panel className="overflow-x-auto overflow-y-hidden">
-                <table className="table-stack w-full text-left text-[13px]">
-                  <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                <table className="table-stack w-full text-left text-[15px]">
+                  <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     <tr>
                       <th className="px-4 py-1">Nombre</th>
                       <th className="px-3 py-1 w-24 text-right">Alícuota</th>
@@ -160,7 +160,7 @@ export function TaxRates() {
                         <td data-primary className="px-4 py-1 font-semibold">
                           {rate.name}
                           {!rate.active && (
-                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                               Inactiva
                             </span>
                           )}
@@ -296,7 +296,7 @@ function TaxRateModal({
                 <option key={kind} value={kind}>{TAX_KIND_LABELS[kind]}</option>
               ))}
             </select>
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               {TAX_KIND_HELP[form.kind]}
             </span>
           </label>
@@ -342,7 +342,7 @@ function TaxRateModal({
                   <option key={treatment} value={treatment}>{VAT_TREATMENT_LABELS[treatment]}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Exento y no gravado dan el mismo IVA cero, pero van a renglones
                 distintos del pie de la factura.
               </span>
@@ -358,7 +358,7 @@ function TaxRateModal({
                 <option value="NETO">{TAX_BASE_LABELS.NETO}</option>
                 <option value="TOTAL">{TAX_BASE_LABELS.TOTAL}</option>
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Hay percepciones que se calculan sobre el neto y otras sobre el
                 total con IVA. Mirá una factura del proveedor para saber cuál es.
               </span>
@@ -373,7 +373,7 @@ function TaxRateModal({
               className={inputClass}
               placeholder="Tucumán"
             />
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               Para las de Ingresos Brutos, que son provinciales. Opcional.
             </span>
           </label>

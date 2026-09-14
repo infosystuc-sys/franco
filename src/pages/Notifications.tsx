@@ -62,7 +62,7 @@ export function Notifications() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title="Mensajes"
         subtitle="Cola de avisos por WhatsApp: qué salió, qué espera y qué falló."
@@ -90,7 +90,7 @@ export function Notifications() {
             )}
           >
             <StateStrip color={STATUS_STRIP[s]} />
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <span className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               {STATUS_LABELS[s]}
             </span>
             <span className="font-display text-3xl font-medium leading-none text-text">
@@ -102,9 +102,9 @@ export function Notifications() {
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="w-40 p-3 font-semibold">Fecha</th>
                 <th className="w-36 p-3 font-semibold">Tipo</th>
                 <th className="p-3 font-semibold">Destinatario</th>
@@ -137,7 +137,7 @@ export function Notifications() {
                     <td data-label="Tipo" className="p-3">{KIND_LABELS[row.kind]}</td>
                     <td data-label="Destinatario" className="p-3">
                       <span className="block">{row.customerName ?? '—'}</span>
-                      <span className="block font-mono text-[11px] text-text-soft">
+                      <span className="block font-mono text-[13px] text-text-soft">
                         {row.toPhone ?? 'sin teléfono'}
                       </span>
                     </td>
@@ -145,7 +145,7 @@ export function Notifications() {
                       {row.workOrderNumber ?? row.quotationNumber ?? '—'}
                     </td>
                     <td data-label="Estado" className="p-3">
-                      <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                         <span
                           aria-hidden
                           className="inline-block h-2 w-2"
@@ -166,7 +166,7 @@ export function Notifications() {
                             {row.lastError}
                           </p>
                         )}
-                        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+                        <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
                           Mensaje
                         </span>
                         <pre className="whitespace-pre-wrap border border-line bg-panel p-3 font-sans text-xs text-text">
@@ -182,7 +182,7 @@ export function Notifications() {
         </div>
       </Panel>
 
-      <p className="mt-3 text-[11px] text-text-soft">
+      <p className="mt-3 text-[13px] text-text-soft">
         Tocá una fila para ver el mensaje completo y el error, si lo hubo.
       </p>
     </div>
@@ -251,7 +251,7 @@ function EstadoDelEnvio({
             placeholder="5491155550001"
             className={fieldClass(false, 'font-mono normal-case')}
           />
-          <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+          <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
             Solo dígitos, con 54 y el 9 de celular.
           </span>
         </Label>
@@ -265,7 +265,7 @@ function EstadoDelEnvio({
             placeholder="https://tu-app.vercel.app"
             className={fieldClass(false, 'font-mono normal-case')}
           />
-          <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+          <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
             Con la que se arman los links. Si apunta a localhost, el cliente no puede abrirlos.
           </span>
         </Label>

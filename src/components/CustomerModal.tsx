@@ -68,7 +68,7 @@ export function CustomerModal({
       {/* Del mismo ancho que el ingreso de vehículos: son los mismos veinte
           campos, y en una ventana angosta obligaban a scrollear para llegar a
           los vehículos del cliente y a los botones. */}
-      <div className="bg-panel w-full max-w-[1600px] flex flex-col max-h-[92vh]">
+      <div className="bg-panel w-full flex flex-col max-h-[92vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
             {customer ? `Editar cliente` : 'Nuevo cliente'}
@@ -104,13 +104,13 @@ export function CustomerModal({
           {/* Fuera del área que scrollea: guardar y cerrar tienen que estar a
               mano sin importar cuánto se haya bajado. */}
           <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cerrar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+              className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
@@ -129,10 +129,10 @@ function VehiclesSection({ customer }: { customer: Customer }) {
   return (
     <div className="space-y-3 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
       <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+        <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Truck size={14} /> Vehículos / Equipos
         </h3>
-        <Link to="/vehiculos" className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline">
+        <Link to="/vehiculos" className="text-[13px] font-bold uppercase tracking-wider text-accent-deep hover:underline">
           Administrar →
         </Link>
       </div>
@@ -156,7 +156,7 @@ function VehiclesSection({ customer }: { customer: Customer }) {
                 {vehicle.year && <span className="ml-2 text-xs text-text-soft">({vehicle.year})</span>}
               </span>
               {!vehicle.active && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
               )}
             </li>
           ))}

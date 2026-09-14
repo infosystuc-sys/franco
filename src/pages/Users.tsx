@@ -89,7 +89,7 @@ export function Users() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Usuarios"
         subtitle="Quién trabaja en el taller, con qué cargo y qué ve en el sistema."
@@ -116,9 +116,9 @@ export function Users() {
 
       <Panel>
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Nombre</th>
                 <th className="p-3 font-semibold w-40">Puesto</th>
                 <th className="p-3 font-semibold w-36">Teléfono</th>
@@ -149,7 +149,7 @@ export function Users() {
                   <td data-label="Puesto" className="p-3 text-text-soft">
                     {employee.role || <span className="text-text-faint">—</span>}
                   </td>
-                  <td data-label="Teléfono" className="p-3 font-mono text-[11px] text-text-soft">
+                  <td data-label="Teléfono" className="p-3 font-mono text-[13px] text-text-soft">
                     {employee.phone || <span className="text-text-faint">—</span>}
                   </td>
                   <td data-label="Usuario" className="p-3">
@@ -171,7 +171,7 @@ export function Users() {
                   </td>
                   <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-wider",
+                      "text-[12px] font-bold uppercase tracking-wider",
                       employee.active ? "text-state-done" : "text-text-faint"
                     )}>
                       {employee.active ? 'Activo' : 'Inactivo'}
@@ -236,7 +236,7 @@ function CargoFields({
             <option key={c} value={c}>{CARGO_LABELS[c]}</option>
           ))}
         </select>
-        <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+        <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
           {cargo === 'contador'
             ? 'Contador tiene su propio acceso: de solo lectura, exclusivo a los informes impositivos.'
             : 'Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta.'}
@@ -441,7 +441,7 @@ function UserModal({
               <button
                 type="button"
                 onClick={onSaved}
-                className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors"
+                className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors"
               >
                 Listo
               </button>
@@ -505,7 +505,7 @@ function UserModal({
 
           {!employee && (
             <div className="border-t border-line pt-4 space-y-3">
-              <span className="block font-semibold uppercase tracking-wider text-[11px] text-text-faint">
+              <span className="block font-semibold uppercase tracking-wider text-[13px] text-text-faint">
                 Acceso al sistema
               </span>
               <CargoFields
@@ -516,7 +516,7 @@ function UserModal({
                 workplace={newWorkplace}
                 onWorkplaceChange={setNewWorkplace}
               />
-              <p className="text-[10px] font-normal normal-case text-text-soft">
+              <p className="text-[12px] font-normal normal-case text-text-soft">
                 El usuario y la contraseña inicial (1234) los arma el sistema. Se muestran al terminar de crear.
               </p>
             </div>
@@ -524,7 +524,7 @@ function UserModal({
 
           {employee && (
             <div className="border-t border-line pt-4 space-y-3">
-              <span className="block font-semibold uppercase tracking-wider text-[11px] text-text-faint">
+              <span className="block font-semibold uppercase tracking-wider text-[13px] text-text-faint">
                 Acceso al sistema
               </span>
 
@@ -552,7 +552,7 @@ function UserModal({
                         type="button"
                         onClick={handleGrantAccess}
                         disabled={grantingAccess}
-                        className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+                        className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
                       >
                         {grantingAccess ? 'Creando...' : 'Dar acceso'}
                       </button>
@@ -606,7 +606,7 @@ function UserModal({
                         setShowChangePassword(true);
                         setChangeSuccess(false);
                       }}
-                      className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt border border-line"
+                      className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt border border-line"
                     >
                       Cambiar contraseña
                     </button>
@@ -640,7 +640,7 @@ function UserModal({
                           type="button"
                           onClick={handleChangePassword}
                           disabled={changingPassword}
-                          className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+                          className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
                         >
                           {changingPassword ? 'Guardando...' : 'Guardar contraseña'}
                         </button>
@@ -650,7 +650,7 @@ function UserModal({
                             setShowChangePassword(false);
                             setChangeError(null);
                           }}
-                          className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                          className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
                         >
                           Cancelar
                         </button>
@@ -663,13 +663,13 @@ function UserModal({
           )}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-line">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+              className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : employee ? 'Guardar' : 'Crear usuario'}
             </button>

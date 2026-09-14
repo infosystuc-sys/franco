@@ -168,7 +168,7 @@ export function ArticleModal({
 
           {/* Precios */}
           <div className="border-t border-line pt-4 space-y-3">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep">Precio de venta</h3>
+            <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep">Precio de venta</h3>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:items-start">
               <label className={cn(labelClass, 'col-span-2')}>
@@ -182,7 +182,7 @@ export function ArticleModal({
                   className={cn(inputClass, 'text-right')}
                   placeholder={`${defaultMarkup} (global)`}
                 />
-                <span className="block mt-1 text-[10px] font-normal normal-case text-text-soft">
+                <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
                   Vacío = usa el global ({defaultMarkup}%)
                 </span>
               </label>
@@ -200,7 +200,7 @@ export function ArticleModal({
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-line pt-2 mt-2">
-                    <span className="font-bold text-[11px] uppercase tracking-wider text-text">Precio de venta:</span>
+                    <span className="font-bold text-[13px] uppercase tracking-wider text-text">Precio de venta:</span>
                     <span className="text-base font-bold text-accent-deep">$ {previewSalePrice!.toFixed(2)}</span>
                   </div>
                 </div>
@@ -215,7 +215,7 @@ export function ArticleModal({
                     onChange={(e) => patch({ unitPrice: Number(e.target.value) })}
                     className={cn(inputClass, 'text-right')}
                   />
-                  <span className="block mt-1 text-[10px] font-normal normal-case text-text-soft">
+                  <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
                     Sin proveedor preferido no hay precio de compra del que calcularlo (ej. mano de obra).
                   </span>
                 </label>
@@ -263,13 +263,13 @@ export function ArticleModal({
           {article && <ComboSection articleId={article.id} catalogo={catalogo} />}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-line">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cerrar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+              className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
@@ -333,10 +333,10 @@ function SuppliersSection({
 
   return (
     <div className="border-t border-line pt-4 space-y-3">
-      <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+      <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
         <Factory size={14} /> Proveedores y precios de compra
       </h3>
-      <p className="text-[11px] text-text-soft">
+      <p className="text-[13px] text-text-soft">
         Cada proveedor usa su propio código. Ese código es el que permite reconocer el artículo
         al importar su lista de precios. La estrella marca el proveedor cuyo precio define la venta.
       </p>
@@ -495,11 +495,11 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
   return (
     <div className="border-t border-line pt-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+        <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Boxes size={14} /> Artículos que trae el combo
         </h3>
         {componentes.length > 0 && (
-          <span className="text-[11px] text-text-soft">
+          <span className="text-[13px] text-text-soft">
             Sueltos costarían $ {sueltos.toFixed(2)}
           </span>
         )}
@@ -519,7 +519,7 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
             <li key={c.id} className="grid grid-cols-1 gap-2 border border-line bg-panel-alt px-3 py-2 sm:grid-cols-12 sm:items-center">
               <span className="col-span-3 font-mono text-xs font-bold text-accent-deep">{c.code}</span>
               <span className="col-span-5 text-sm">{c.description}</span>
-              <label className="col-span-3 flex items-center gap-2 text-[11px] uppercase tracking-wider text-text-soft">
+              <label className="col-span-3 flex items-center gap-2 text-[13px] uppercase tracking-wider text-text-soft">
                 Cantidad
                 <input
                   type="number"

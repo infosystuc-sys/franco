@@ -105,8 +105,8 @@ export function ItemsEditor({
       />
 
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-3 py-1 w-24">Código</th>
               <th className="px-3 py-1">Descripción</th>
@@ -134,7 +134,7 @@ export function ItemsEditor({
                     {item.articleId ? (
                       <>
                         {/* Renglón de catálogo: código y descripción vienen del artículo */}
-                        <td data-primary className="px-3 py-1 font-mono font-semibold text-text-soft">
+                        <td data-primary className="whitespace-nowrap px-3 py-1 font-mono font-semibold text-text-soft">
                           <span className="inline-flex items-center gap-1.5">
                             <Package size={12} className="text-accent-deep" />
                             {item.code}
@@ -187,7 +187,7 @@ export function ItemsEditor({
           </tbody>
           <tfoot className="h-10 border-t-2 border-line-strong bg-panel-head">
             <tr>
-              <td className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft" colSpan={4}>
+              <td className="px-3 py-2 text-right text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft" colSpan={4}>
                 Total neto
               </td>
               <td className="px-3 py-2 text-right font-display text-lg font-medium text-text">
@@ -211,7 +211,7 @@ export function ItemsEditor({
               <span className="text-text">$ {formatMoney(iva)}</span>
             </div>
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
+              <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</span>
               <span className="font-display text-2xl font-medium text-text">
                 $ {formatMoney(total + iva)}
               </span>
@@ -312,7 +312,7 @@ function ArticlePicker({
         </div>
 
         <div className="overflow-y-auto px-5 pb-5">
-          <table className="table-stack w-full text-left text-[12px]">
+          <table className="table-stack w-full text-left text-[14px]">
             <thead className="text-text-soft border-b border-line bg-panel-alt sticky top-0">
               <tr>
                 <th className="p-2 font-bold w-28">Código</th>
@@ -343,7 +343,7 @@ function ArticlePicker({
                       // Se avisa acá porque el combo entra como un renglón
                       // solo: sin la marca, quien carga no sabe que ese
                       // renglón se lleva varias piezas del estante.
-                      <span className="ml-1.5 rounded-full bg-accent/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent-deep">
+                      <span className="ml-1.5 rounded-full bg-accent/25 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
                         Combo
                       </span>
                     )}
@@ -353,7 +353,7 @@ function ArticlePicker({
                   <td data-label="Stock" className="p-2 text-center">
                     {article.tracksStock ? (
                       <span className={cn(
-                        "px-2 py-0.5 text-[10px] font-bold",
+                        "px-2 py-0.5 text-[12px] font-bold",
                         article.stockQuantity === 0 ? "bg-red-100 text-danger"
                           : article.stockQuantity <= 5 ? "bg-orange-100 text-orange-700"
                           : "bg-green-100 text-green-700"
@@ -361,7 +361,7 @@ function ArticlePicker({
                         {article.stockQuantity === 0 ? 'Sin stock' : article.stockQuantity}
                       </span>
                     ) : (
-                      <span className="text-text-faint text-[10px] uppercase tracking-wider">—</span>
+                      <span className="text-text-faint text-[12px] uppercase tracking-wider">—</span>
                     )}
                   </td>
                 </tr>

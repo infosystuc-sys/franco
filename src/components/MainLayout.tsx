@@ -8,20 +8,6 @@ interface MainLayoutProps {
   children: React.ReactNode;
 }
 
-const RAIL_COLLAPSED_KEY = 'dieselpro:rail-collapsed';
-
-function preferenciaGuardada(): boolean {
-  try {
-    // Arranca contraída: la pantalla de inicio es el menú de módulos, y la
-    // barra desplegada le come el ancho repitiendo lo mismo que ya se ve.
-    // Si el usuario la despliega, su preferencia manda de ahí en más.
-    const guardado = localStorage.getItem(RAIL_COLLAPSED_KEY);
-    return guardado === null ? true : guardado === 'true';
-  } catch {
-    return true;
-  }
-}
-
 /**
  * Las pantallas donde se está cargando algo: un comprobante nuevo, una
  * recepción, una facturación. Ahí el ancho es para el formulario, no para un
@@ -42,11 +28,15 @@ export function esPantallaDeCarga(pathname: string): boolean {
 export function MainLayout({ children }: MainLayoutProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const location = useLocation();
-  // Entrar directo por URL a una pantalla de carga también arranca contraída:
-  // el efecto de abajo solo reacciona a los cambios de ruta, no al montaje.
-  const [railCollapsed, setRailCollapsed] = React.useState(
-    () => preferenciaGuardada() || esPantallaDeCarga(location.pathname)
-  );
+
+  /*
+    La barra arranca contraída siempre, sin importar cómo haya quedado la vez
+    anterior. El ancho de la pantalla es para los datos: la barra se despliega
+    cuando hace falta buscar un módulo y se vuelve a cerrar sola al recargar.
+    Antes se recordaba la última posición en localStorage, y eso hacía que un
+    despliegue de hace tres días siguiera comiéndose el ancho hoy.
+  */
+  const [railCollapsed, setRailCollapsed] = React.useState(true);
 
   // Al navegar, el panel deslizable se cierra solo.
   React.useEffect(() => {
@@ -54,27 +44,24 @@ export function MainLayout({ children }: MainLayoutProps) {
   }, [location.pathname]);
 
   /**
-   * Entrar a cargar algo contrae la barra; salir devuelve la preferencia del
-   * usuario. No se guarda: contraerla acá es una conveniencia del momento, no
-   * una decisión suya, y pisarle la preferencia sería quedarse con ella para
-   * siempre. Mientras carga puede desplegarla a mano igual.
+   * Entrar a cargar algo contrae la barra; al salir vuelve a como la había
+   * dejado el usuario en esta sesión. Contraerla ahí es una conveniencia del
+   * momento, no una decisión suya: si la tenía desplegada para navegar, se la
+   * devolvemos cuando termina de cargar.
    */
+  const comoLaDejo = React.useRef(true);
   const cargandoAntes = React.useRef(esPantallaDeCarga(location.pathname));
   React.useEffect(() => {
     const cargando = esPantallaDeCarga(location.pathname);
     if (cargando === cargandoAntes.current) return;
     cargandoAntes.current = cargando;
-    setRailCollapsed(cargando ? true : preferenciaGuardada());
+    setRailCollapsed(cargando ? true : comoLaDejo.current);
   }, [location.pathname]);
 
   function toggleRail() {
     setRailCollapsed((collapsed) => {
       const next = !collapsed;
-      try {
-        localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
-      } catch {
-        // Sin localStorage (modo privado, etc.) el toggle sigue andando, solo no se recuerda.
-      }
+      comoLaDejo.current = next;
       return next;
     });
   }
@@ -106,14 +93,14 @@ export function MainLayout({ children }: MainLayoutProps) {
         )}
         style={{ paddingBottom: 'calc(0.75rem + var(--safe-bottom))' }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-text-soft">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-text-soft">
           <span>
             <span className="font-display font-semibold uppercase tracking-[0.1em] text-accent-deep">
               DieselPro
             </span>
             <span className="ml-2">Sistema de gestión de taller</span>
           </span>
-          <span className="font-mono text-[10px] text-text-faint">
+          <span className="font-mono text-[12px] text-text-faint">
             Inyección diesel · Bosch · Delphi · Denso · CAT
           </span>
         </div>

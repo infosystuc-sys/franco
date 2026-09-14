@@ -74,7 +74,7 @@ export function PurchaseAIUpload() {
             <Sparkles size={32} className="text-accent-deep" />
             <p className="text-sm text-text-soft">Subí el PDF de la factura, o sacale una foto con el celular.</p>
             <p className="text-xs text-text-faint">PDF o imagen, hasta 10 MB.</p>
-            <label className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-accent-ink hover:bg-accent-deep">
+            <label className="cursor-pointer rounded-md bg-accent px-4 py-2 text-[13px] font-semibold uppercase tracking-wider text-accent-ink hover:bg-accent-deep">
               Elegir archivo
               <input
                 type="file"

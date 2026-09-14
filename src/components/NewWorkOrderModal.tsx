@@ -243,7 +243,7 @@ export function NewWorkOrderModal({
                   <option key={k} value={k}>{RECEPTION_KIND_LABELS[k]}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Una pieza suelta no ocupa lugar en la playa, aunque se elija de qué equipo salió.
               </span>
             </Label>
@@ -251,8 +251,8 @@ export function NewWorkOrderModal({
             {receptionKind === 'VEHICULO' && lugar !== null && (
               <p className={
                 lugar.medianos > 0
-                  ? 'border border-line bg-panel-alt px-3 py-2 text-[11px] text-text-soft'
-                  : 'border border-danger/40 bg-danger-soft px-3 py-2 text-[11px] text-danger'
+                  ? 'border border-line bg-panel-alt px-3 py-2 text-[13px] text-text-soft'
+                  : 'border border-danger/40 bg-danger-soft px-3 py-2 text-[13px] text-danger'
               }>
                 {lugar.medianos > 0
                   ? `En la playa entran ${lugar.grandes} grande${lugar.grandes === 1 ? '' : 's'} o ${lugar.medianos} mediano${lugar.medianos === 1 ? '' : 's'}.`
@@ -282,13 +282,13 @@ export function NewWorkOrderModal({
                 <button
                   type="button"
                   onClick={() => setCreatingCustomer(true)}
-                  className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                  className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
                 >
                   + Nuevo
                 </button>
               </div>
               {!loadingCustomers && customers.length === 0 && (
-                <span className="mt-1 block text-[11px] font-normal normal-case text-danger">
+                <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
                   No hay clientes activos. Cargá uno con el botón "+ Nuevo".
                 </span>
               )}
@@ -322,13 +322,13 @@ export function NewWorkOrderModal({
                   type="button"
                   disabled={!selectedCustomer}
                   onClick={() => setCreatingVehicle(true)}
-                  className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   + Nuevo
                 </button>
               </div>
               {selectedCustomer && vehicles.length === 0 && (
-                <span className="mt-1 block text-[11px] font-normal normal-case text-danger">
+                <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
                   Este cliente no tiene vehículos activos. Agregale uno con el botón "+ Nuevo".
                 </span>
               )}
@@ -356,7 +356,7 @@ export function NewWorkOrderModal({
                   <option key={employee.id} value={employee.id}>{employee.name}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 El operario que elijas pasa a ver esta orden en su pantalla; los demás dejan de verla.
               </span>
             </Label>
@@ -370,7 +370,7 @@ export function NewWorkOrderModal({
                   onChange={(e) => setEstimatedDelivery(e.target.value)}
                   className={fieldClass(true, 'font-normal normal-case')}
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   Cuándo se estima entregarlo. Es lo que deja proyectar cuándo se
                   libera su lugar en la playa; se puede corregir después.
                 </span>
@@ -430,7 +430,7 @@ export function NewWorkOrderModal({
                     setPartName('');
                     setPartSerial('');
                   }}
-                  className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
+                  className="border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
                 >
                   Agregar
                 </button>

@@ -117,7 +117,7 @@ export function PaymentMethods() {
             administran junto con el resto de los impuestos.
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+        <span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
           Ver retenciones <ArrowRight size={14} />
         </span>
       </Link>
@@ -152,8 +152,8 @@ export function PaymentMethods() {
               </p>
 
               <Panel className="overflow-x-auto overflow-y-hidden">
-                <table className="table-stack w-full text-left text-[13px]">
-                  <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                <table className="table-stack w-full text-left text-[15px]">
+                  <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     <tr>
                       <th className="px-4 py-1">Nombre</th>
                       <th className="px-3 py-1">Datos</th>
@@ -188,7 +188,7 @@ export function PaymentMethods() {
                             {method.name}
                           </span>
                           {!method.active && (
-                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                            <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                               Inactivo
                             </span>
                           )}
@@ -336,7 +336,7 @@ function PaymentMethodModal({
                 <option key={kind} value={kind}>{PAYMENT_METHOD_KIND_LABELS[kind]}</option>
               ))}
             </select>
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               {PAYMENT_METHOD_KIND_HELP[form.kind]}
             </span>
           </label>
@@ -353,7 +353,7 @@ function PaymentMethodModal({
 
           {isBank && (
             <div className="space-y-3 border-t border-line pt-4">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep">
+              <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep">
                 Datos de la cuenta
               </h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -413,7 +413,7 @@ function PaymentMethodModal({
                   onChange={(e) => patch({ openingDate: e.target.value })}
                   className={cn(inputClass, !form.openingDate && 'field-required')}
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   Fecha a la que ese saldo era el correcto.
                 </span>
               </label>

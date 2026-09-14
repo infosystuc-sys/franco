@@ -116,13 +116,13 @@ export function InvoiceDetails() {
           }
           meta={
             voided ? (
-              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulada
               </span>
             ) : (
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]',
+                  'inline-flex items-center gap-1.5 rounded px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em]',
                   overdue ? 'bg-danger-soft text-danger' : 'bg-panel-head text-text-soft'
                 )}
               >
@@ -274,10 +274,10 @@ export function RemitoDocument({ remito }: { remito: Remito }) {
           <h3 className="font-display text-xl uppercase tracking-[0.08em] text-text-faint">Remito</h3>
           <p className="mt-1 font-mono text-lg font-semibold text-text">{remito.fullNumber}</p>
         </div>
-        <p className="text-[11px] text-text-soft">Fecha de emisión: {formatDate(remito.issueDate)}</p>
+        <p className="text-[13px] text-text-soft">Fecha de emisión: {formatDate(remito.issueDate)}</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[12px] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[14px] sm:grid-cols-2">
         <Field label="Señor(es)" value={remito.customerLegalName || remito.customerName} />
         <Field
           label="CUIT / CUIL"
@@ -288,8 +288,8 @@ export function RemitoDocument({ remito }: { remito: Remito }) {
       </div>
 
       <div className="overflow-x-auto py-4">
-        <table className="w-full text-left text-[12px]">
-          <thead className="border-b-2 border-line-strong text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="w-full text-left text-[14px]">
+          <thead className="border-b-2 border-line-strong text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="w-24 py-1.5 pr-2">Código</th>
               <th className="py-1.5 pr-2">Descripción</th>
@@ -309,7 +309,7 @@ export function RemitoDocument({ remito }: { remito: Remito }) {
       </div>
 
       {voided && remito.voidedReason && (
-        <p className="mt-3 border-t border-line pt-3 text-[11px] text-text-soft">{remito.voidedReason}</p>
+        <p className="mt-3 border-t border-line pt-3 text-[13px] text-text-soft">{remito.voidedReason}</p>
       )}
     </div>
   );
@@ -330,7 +330,7 @@ function Metric({
 }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span
@@ -341,7 +341,7 @@ function Metric({
       >
         {value}
       </span>
-      {hint && <span className="mt-0.5 block text-[11px] text-text-faint">{hint}</span>}
+      {hint && <span className="mt-0.5 block text-[13px] text-text-faint">{hint}</span>}
     </Panel>
   );
 }
@@ -374,7 +374,7 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
           <h2 className="font-display text-2xl font-medium uppercase leading-tight text-text">
             {invoice.issuerLegalName}
           </h2>
-          <dl className="mt-2 space-y-0.5 text-[11px] text-text-soft">
+          <dl className="mt-2 space-y-0.5 text-[13px] text-text-soft">
             {invoice.issuerAddress && <dd>{invoice.issuerAddress}</dd>}
             <dd>{TAX_CONDITION_LABELS[invoice.issuerTaxCondition]}</dd>
             {invoice.issuerTaxId && (
@@ -392,7 +392,7 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
           <span className="font-display text-4xl font-medium leading-none text-text">
             {invoice.invoiceType}
           </span>
-          <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             Cód. {invoice.invoiceType === 'A' ? '01' : invoice.invoiceType === 'B' ? '06' : '11'}
           </span>
         </div>
@@ -402,7 +402,7 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
             {INVOICE_TYPE_LABELS[invoice.invoiceType]}
           </h3>
           <p className="mt-1 font-mono text-lg font-semibold text-text">{invoice.fullNumber}</p>
-          <dl className="mt-2 space-y-0.5 text-[11px] text-text-soft">
+          <dl className="mt-2 space-y-0.5 text-[13px] text-text-soft">
             <dd>Fecha de emisión: {formatDate(invoice.issueDate)}</dd>
             <dd>Vencimiento: {formatDate(invoice.dueDate)}</dd>
           </dl>
@@ -410,7 +410,7 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
       </div>
 
       {/* Cliente */}
-      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[12px] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[14px] sm:grid-cols-2">
         <Field label="Señor(es)" value={invoice.customerLegalName || invoice.customerName} />
         <Field
           label="CUIT / CUIL"
@@ -433,8 +433,8 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
 
       {/* Renglones */}
       <div className="overflow-x-auto py-4">
-        <table className="w-full text-left text-[12px]">
-          <thead className="border-b-2 border-line-strong text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="w-full text-left text-[14px]">
+          <thead className="border-b-2 border-line-strong text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="w-24 py-1.5 pr-2">Código</th>
               <th className="py-1.5 pr-2">Descripción</th>
@@ -469,7 +469,7 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
             <Total label="Subtotal" value={invoice.totalAmount} />
           )}
           <div className="flex items-baseline justify-between border-t-2 border-accent pt-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
               Total
             </span>
             <span className="font-display text-2xl font-medium text-text">
@@ -481,14 +481,14 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
 
       {invoice.notes && (
         <div className="mt-5 border-t border-line pt-3">
-          <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Observaciones
           </span>
-          <p className="whitespace-pre-line text-[12px] text-text-soft">{invoice.notes}</p>
+          <p className="whitespace-pre-line text-[14px] text-text-soft">{invoice.notes}</p>
         </div>
       )}
 
-      <p className="mt-6 border-t border-line pt-3 text-center text-[10px] text-text-faint">
+      <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
         Comprobante no válido como factura: pendiente de autorización de ARCA.
       </p>
     </div>
@@ -506,7 +506,7 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
 
 function Total({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex justify-between text-[12px] text-text-soft">
+    <div className="flex justify-between text-[14px] text-text-soft">
       <span>{label}</span>
       <span className="text-text">$ {formatMoney(value)}</span>
     </div>

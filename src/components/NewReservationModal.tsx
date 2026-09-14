@@ -156,7 +156,7 @@ export function NewReservationModal({
           )}
 
           {reconocido && (
-            <p className="border border-state-open/40 bg-state-open/10 px-3 py-2 text-[11px] text-state-open">
+            <p className="border border-state-open/40 bg-state-open/10 px-3 py-2 text-[13px] text-state-open">
               Esa patente ya está cargada: se completaron el cliente y el tamaño con los datos de su ficha.
             </p>
           )}
@@ -169,7 +169,7 @@ export function NewReservationModal({
               className={fieldClass(true, 'font-mono uppercase')}
               placeholder="ABC-123"
             />
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               Si el vehículo todavía no está cargado, se escribe igual.
             </span>
           </Label>
@@ -202,7 +202,7 @@ export function NewReservationModal({
                 <option key={s} value={s}>{SIZE_CLASS_LABELS[s]}</option>
               ))}
             </select>
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               Un grande toma una celda entera; tres medianos comparten una.
             </span>
           </Label>

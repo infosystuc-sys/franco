@@ -55,7 +55,7 @@ export function PurchaseArticlePicker({
         </div>
 
         <div className="overflow-y-auto px-5 pb-5">
-          <table className="table-stack w-full text-left text-[12px]">
+          <table className="table-stack w-full text-left text-[14px]">
             <thead className="sticky top-0 border-b border-line bg-panel-alt text-text-soft">
               <tr>
                 <th className="w-28 p-2 font-bold">Código</th>
@@ -85,7 +85,7 @@ export function PurchaseArticlePicker({
                   <td data-label="Descripción" className="p-2">
                     {article.description}
                     {article.preferredSupplierName && (
-                      <span className="block text-[10px] text-text-faint">
+                      <span className="block text-[12px] text-text-faint">
                         Preferido: {article.preferredSupplierName}
                       </span>
                     )}
@@ -101,7 +101,7 @@ export function PurchaseArticlePicker({
                     {article.tracksStock ? (
                       <span
                         className={cn(
-                          'px-2 py-0.5 text-[10px] font-bold',
+                          'px-2 py-0.5 text-[12px] font-bold',
                           article.stockQuantity === 0
                             ? 'bg-red-100 text-danger'
                             : article.stockQuantity <= 5
@@ -112,7 +112,7 @@ export function PurchaseArticlePicker({
                         {article.stockQuantity === 0 ? 'Sin stock' : article.stockQuantity}
                       </span>
                     ) : (
-                      <span className="text-[10px] uppercase tracking-wider text-text-faint">
+                      <span className="text-[12px] uppercase tracking-wider text-text-faint">
                         no controla
                       </span>
                     )}

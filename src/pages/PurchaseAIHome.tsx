@@ -86,7 +86,7 @@ export function PurchaseAIHome() {
       </div>
 
       <Panel className="p-5">
-        <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+        <h2 className="mb-3 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
           <Sparkles size={14} /> Leídas por IA sin confirmar {pending.length > 0 && `(${pending.length})`}
         </h2>
         {loading ? (
@@ -113,7 +113,7 @@ export function PurchaseAIHome() {
                       {failed && <AlertTriangle size={14} className="mr-1.5 inline-block align-[-2px]" />}
                       {draft.kind === 'ARTICULOS' ? 'Artículos' : 'Conceptos'}
                       {cual && ` · ${cual}`}
-                      <span className="mt-0.5 block text-[11px] text-text-soft">
+                      <span className="mt-0.5 block text-[13px] text-text-soft">
                         {failed ? 'no se pudo leer' : 'leída'} el {formatDate(draft.createdAt)}
                         {failed && draft.errorMessage && ` — ${draft.errorMessage}`}
                       </span>

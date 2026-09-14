@@ -41,7 +41,7 @@ export function MenuHome() {
   if (activeKey === 'favoritos') {
     const favoriteCards = allCards(isAdmin).filter((card) => favorites.includes(card.path));
     return (
-      <div className="mx-auto max-w-[1600px]">
+      <div className="w-full">
         <CategoryTitle icon={Star} label="Favoritos" />
         {favoriteCards.length === 0 ? (
           <Panel className="p-6 text-center text-sm text-text-soft">
@@ -63,19 +63,19 @@ export function MenuHome() {
 
   if (!category) {
     return (
-      <div className="mx-auto max-w-[1600px]">
+      <div className="w-full">
         <Panel className="p-6 text-center text-sm text-text-soft">No hay módulos disponibles.</Panel>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <CategoryTitle icon={category.icon} label={category.label} />
       <div className="space-y-8">
         {category.sections.map((section) => (
           <section key={section.color}>
-            <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-text-faint">
+            <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-text-faint">
               {SECTION_TITLES[section.color]}
             </h2>
             <CardGrid
@@ -109,7 +109,7 @@ function CardGrid({
   onToggleFavorite: (path: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {cards.map(({ card, color }) => (
         <MenuCardTile
           key={card.path}

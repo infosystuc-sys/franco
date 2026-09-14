@@ -94,7 +94,7 @@ export function BankCombobox({
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-panel-alt"
             >
-              <span className="font-mono text-[11px] text-text-faint">{b.code}</span>
+              <span className="font-mono text-[13px] text-text-faint">{b.code}</span>
               <span>{b.name}</span>
             </button>
           ))}
@@ -111,7 +111,7 @@ export function BankCombobox({
 
           {addingCode !== null && (
             <div className="border-t border-line p-2">
-              {createError && <p className="mb-1 text-[11px] text-danger">{createError}</p>}
+              {createError && <p className="mb-1 text-[13px] text-danger">{createError}</p>}
               <div className="flex items-center gap-1.5">
                 <input
                   autoFocus
@@ -125,7 +125,7 @@ export function BankCombobox({
                   onClick={handleCreate}
                   disabled={creating || !addingCode.trim()}
                   className={cn(
-                    'rounded bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink',
+                    'rounded bg-accent px-2 py-1 text-[13px] font-semibold text-accent-ink',
                     (creating || !addingCode.trim()) && 'opacity-50'
                   )}
                 >

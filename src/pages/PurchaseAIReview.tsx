@@ -60,7 +60,7 @@ type ReviewLine = PurchaseLine & { printedCode?: string; printedDescription?: st
 function ConfidenceChip({ value }: { value: number | undefined }) {
   if (value === undefined) return null;
   const color = value >= 0.8 ? 'text-state-done' : value >= 0.5 ? 'text-state-wait' : 'text-danger';
-  return <span className={cn('ml-1.5 font-mono text-[10px]', color)}>{Math.round(value * 100)}%</span>;
+  return <span className={cn('ml-1.5 font-mono text-[12px]', color)}>{Math.round(value * 100)}%</span>;
 }
 
 /**
@@ -73,7 +73,7 @@ function ConfidenceChip({ value }: { value: number | undefined }) {
 function FieldMark({ applied, confidence }: { applied: boolean; confidence: number | undefined }) {
   if (applied) return <ConfidenceChip value={confidence} />;
   return (
-    <span className="ml-1.5 text-[10px] font-normal normal-case text-state-wait">
+    <span className="ml-1.5 text-[12px] font-normal normal-case text-state-wait">
       no se pudo leer, completalo a mano
     </span>
   );
@@ -467,8 +467,8 @@ export function PurchaseAIReview() {
   const confianzas = ((draft?.rawExtraction as any)?.confianzas ?? {}) as Record<string, number>;
 
   if (role !== 'admin') return <Navigate to="/" replace />;
-  if (loading) return <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">Leyendo el borrador…</div>;
-  if (!draft) return <div className="mx-auto max-w-[1600px] p-8 text-center text-danger">No se encontró esa lectura.</div>;
+  if (loading) return <div className="w-full p-8 text-center text-text-soft">Leyendo el borrador…</div>;
+  if (!draft) return <div className="w-full p-8 text-center text-danger">No se encontró esa lectura.</div>;
 
   // ── Guardas por estado. Solo un borrador EXTRAIDO y con lectura encima se
   // puede revisar. Sin esto, volver con Atrás después de guardar mostraba el
@@ -829,7 +829,7 @@ export function PurchaseAIReview() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title={isArticles ? 'Revisar factura de artículos (IA)' : 'Revisar factura de conceptos (IA)'}
         subtitle={
@@ -870,7 +870,7 @@ export function PurchaseAIReview() {
                 {applied.proveedor_cuit ? (
                   <ConfidenceChip value={confianzas.proveedor_cuit} />
                 ) : (
-                  <span className="ml-1.5 text-[10px] font-normal normal-case text-state-wait">elegilo a mano</span>
+                  <span className="ml-1.5 text-[12px] font-normal normal-case text-state-wait">elegilo a mano</span>
                 )}
                 <div className="flex gap-2">
                   <select
@@ -888,11 +888,11 @@ export function PurchaseAIReview() {
                   </Button>
                 </div>
                 {!draft.supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
-                  <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                     La IA leyó CUIT {(draft.rawExtraction as any).valores.proveedor_cuit} pero no coincide con ningún proveedor cargado.
                   </span>
                 ) : (
-                  <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                     La IA no pudo leer el CUIT del emisor.
                   </span>
                 ))}
@@ -935,7 +935,7 @@ export function PurchaseAIReview() {
                   Fecha <FieldMark applied={!!applied.fecha_comprobante} confidence={confianzas.fecha_comprobante} />
                   <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className={inputClass} />
                   {!applied.fecha_comprobante && (
-                    <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+                    <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                       Quedó la fecha de hoy. De ella salen el vencimiento y el período del Libro IVA.
                     </span>
                   )}
@@ -954,7 +954,7 @@ export function PurchaseAIReview() {
                   onChange={(e) => { setDueDate(e.target.value); setDueDateTouched(true); }}
                   className={cn(inputClass, !dueDate && 'field-required')}
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   {dueDateTouched
                     ? 'Cargado a mano.'
                     : supplier
@@ -1010,7 +1010,7 @@ export function PurchaseAIReview() {
               <AlertTriangle size={14} />
               {unmatchedArticleLines} renglón(es) no están en el catálogo de este proveedor.
             </p>
-            <p className="text-[11px] text-text-soft">
+            <p className="text-[13px] text-text-soft">
               Vinculalos a un artículo que ya exista, o dalos de alta. En los dos casos queda
               guardado el código con que los llama el proveedor, así la próxima factura los
               reconoce sola.
@@ -1033,8 +1033,8 @@ export function PurchaseAIReview() {
           <p className="mb-3 text-xs text-state-done">{catalogNote}</p>
         )}
         <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-2 py-1 w-44">{isArticles ? 'Código' : 'Concepto'}</th>
                 <th className="px-2 py-1">{isArticles ? 'Descripción' : 'Detalle'}</th>
@@ -1076,7 +1076,7 @@ export function PurchaseAIReview() {
                                 type="button"
                                 disabled={catalogBusy || !supplierId}
                                 onClick={() => altaDesdeRenglon(idx)}
-                                className="text-[11px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
+                                className="text-[13px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
                               >
                                 Dar de alta
                               </button>
@@ -1109,7 +1109,7 @@ export function PurchaseAIReview() {
                         />
                         {showPrinted && (
                           <tr className={cn('border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
-                            <td colSpan={8} className="px-2 pb-1.5 text-[11px] leading-tight text-text-soft">
+                            <td colSpan={8} className="px-2 pb-1.5 text-[13px] leading-tight text-text-soft">
                               En la factura decía: <span className="font-mono">{printed}</span>
                             </td>
                           </tr>
@@ -1199,7 +1199,7 @@ export function PurchaseAIReview() {
               referirse: va pegado al total que la IA leyó del papel, que es lo
               que mide. */}
           {aiTotal !== null && (
-            <p className="mb-3 text-[11px] text-text-soft">
+            <p className="mb-3 text-[13px] text-text-soft">
               Total leído del papel: <span className="font-mono text-text">$ {formatMoney(aiTotal)}</span>
               <ConfidenceChip value={confianzas.total} />
             </p>

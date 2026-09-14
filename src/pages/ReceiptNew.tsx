@@ -432,7 +432,7 @@ export function ReceiptNew() {
               ))}
             </select>
             {customer && credit > 0 && (
-              <span className="mt-1 block text-[10px] font-normal normal-case text-state-done">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-state-done">
                 Tiene $ {formatMoney(credit)} a favor de cobros anteriores.
               </span>
             )}
@@ -473,8 +473,8 @@ export function ReceiptNew() {
 
         {invoices.length > 0 && (
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-            <table className="table-stack w-full text-left text-[13px]">
-              <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <table className="table-stack w-full text-left text-[15px]">
+              <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   <th className="px-3 py-1 w-40">Comprobante</th>
                   <th className="px-3 py-1 w-28">Emisión</th>
@@ -580,7 +580,7 @@ export function ReceiptNew() {
             >
               <span
                 title={VALUE_KIND_HELP[value.kind]}
-                className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
+                className="w-32 shrink-0 text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
               >
                 {VALUE_KIND_LABELS[value.kind]}
               </span>
@@ -722,11 +722,11 @@ export function ReceiptNew() {
       {/* ── El cuadre ───────────────────────────────────────────────── */}
       <Panel className="mb-10 p-5">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <dl className="space-y-1 text-[13px]">
+          <dl className="space-y-1 text-[15px]">
             <Row label="Cobrado" value={totalValues} />
             <Row label="Imputado a facturas" value={totalAllocated} />
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 {onAccount >= 0 ? 'Queda a cuenta' : 'Falta cobrar'}
               </dt>
               <dd className={cn('font-display text-2xl font-medium', onAccount < 0 ? 'text-danger' : 'text-text')}>
@@ -734,7 +734,7 @@ export function ReceiptNew() {
               </dd>
             </div>
             {cashTotal !== totalValues && (
-              <p className="pt-2 text-[10px] text-text-soft">
+              <p className="pt-2 text-[12px] text-text-soft">
                 Entra a caja $ {formatMoney(cashTotal)}. El resto son retenciones o saldo a favor,
                 que cancelan factura pero no son plata.
               </p>
@@ -742,7 +742,7 @@ export function ReceiptNew() {
 
             {onAccount > 0 && (
               <div className="mt-1 space-y-2 border-t border-line pt-3">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
+                <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
                   Vuelto
                 </span>
 
@@ -831,7 +831,7 @@ export function ReceiptNew() {
                   </div>
                 )}
 
-                <p className="text-[10px] text-text-soft">
+                <p className="text-[12px] text-text-soft">
                   Lo que no se devuelve (${' '}
                   {formatMoney(Math.max(0, round2(onAccount - changesTotal)))}) queda como saldo a favor.
                 </p>

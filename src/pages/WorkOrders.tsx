@@ -170,7 +170,7 @@ export function WorkOrders() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Órdenes de Trabajo"
         subtitle="Todas las órdenes, en cualquier estado."
@@ -223,7 +223,7 @@ export function WorkOrders() {
           >
             <StateStrip color={status.color} />
             {/* Envuelve por espacios, nunca al medio de una palabra. */}
-            <span className="block pl-1.5 text-[10px] font-semibold uppercase leading-[1.15] text-text-soft">
+            <span className="block pl-1.5 text-[12px] font-semibold uppercase leading-[1.15] text-text-soft">
               {status.label}
             </span>
             <span className="block pl-1.5 font-display text-lg font-medium leading-tight text-text">
@@ -234,7 +234,7 @@ export function WorkOrders() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative sm:w-72">
+        <div className="relative sm:w-96">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
           <input
             value={search}
@@ -256,7 +256,7 @@ export function WorkOrders() {
 
         {isAdmin && selectedOrders.length > 0 && (
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               {selectedOrders.length === 1
                 ? '1 orden seleccionada'
                 : `${selectedOrders.length} órdenes seleccionadas`}
@@ -270,9 +270,9 @@ export function WorkOrders() {
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 {isAdmin && (
                   <th className="w-10 p-3">
                     <input
@@ -347,11 +347,11 @@ export function WorkOrders() {
                   <td data-label="Vehículo" className="p-3">
                     <span className="block">{order.vehicleLabel}</span>
                     {order.component && (
-                      <span className="block text-[11px] text-text-soft">{order.component}</span>
+                      <span className="block text-[13px] text-text-soft">{order.component}</span>
                     )}
                   </td>
                   <td data-label="Estado" className="p-3">
-                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                       <span
                         aria-hidden
                         className="inline-block h-2 w-2"

@@ -145,7 +145,7 @@ export function ShopCapacity() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Disponibilidad del taller"
         subtitle="Cuánto lugar queda en la playa, según las órdenes de trabajo en curso."
@@ -167,7 +167,7 @@ export function ShopCapacity() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-wrap items-end gap-8">
             <div>
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              <span className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 Entran todavía
               </span>
               <span className="font-display text-5xl font-medium text-text">
@@ -178,7 +178,7 @@ export function ShopCapacity() {
               </span>
             </div>
             <div>
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              <span className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 o bien
               </span>
               <span className="font-display text-5xl font-medium text-text">
@@ -189,7 +189,7 @@ export function ShopCapacity() {
               </span>
             </div>
             <div className="pb-1">
-              <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              <span className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 Celdas
               </span>
               <span className={cn(
@@ -202,7 +202,7 @@ export function ShopCapacity() {
               {/* Ocupado y reservado se muestran aparte: no es lo mismo tener
                   el camión que esperarlo, aunque las dos cosas tomen celda. */}
               {!loading && (
-                <span className="mt-1 block text-[11px] text-text-soft">
+                <span className="mt-1 block text-[13px] text-text-soft">
                   {celdasOcupadasHoy} ocupada{celdasOcupadasHoy === 1 ? '' : 's'}
                   {celdasReservadasHoy > 0 && (
                     <> · <span className="font-semibold text-state-open">{celdasReservadasHoy} reservada{celdasReservadasHoy === 1 ? '' : 's'}</span></>
@@ -235,7 +235,7 @@ export function ShopCapacity() {
       </Panel>
 
       <Panel className="p-5">
-        <h2 className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <h2 className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
           <CalendarClock size={14} /> Cuántos entran, día por día
         </h2>
         <p className="mb-3 text-xs text-text-soft">
@@ -253,7 +253,7 @@ export function ShopCapacity() {
                   dia.freeCells < 0 ? 'border-danger/40 bg-danger-soft' : 'border-line bg-panel-alt'
                 )}
               >
-                <span className="block text-[10px] uppercase tracking-[0.06em] text-text-soft">
+                <span className="block text-[12px] uppercase tracking-[0.06em] text-text-soft">
                   {formatDate(dia.date)}
                 </span>
                 {/* Los dos números, porque uno solo miente: puede no quedar
@@ -262,19 +262,19 @@ export function ShopCapacity() {
                   'block font-display text-lg font-medium leading-tight',
                   dia.freeCells < 0 ? 'text-danger' : 'text-text'
                 )}>
-                  {dia.grandes} <span className="text-[10px] font-normal text-text-soft">G</span>
+                  {dia.grandes} <span className="text-[12px] font-normal text-text-soft">G</span>
                 </span>
                 <span className={cn(
                   'block font-display text-lg font-medium leading-tight',
                   dia.freeCells < 0 ? 'text-danger' : 'text-text'
                 )}>
-                  {dia.medianos} <span className="text-[10px] font-normal text-text-soft">M</span>
+                  {dia.medianos} <span className="text-[12px] font-normal text-text-soft">M</span>
                 </span>
                 {/* Cuánto de lo tomado ese día es reserva y no vehículo
                     presente. En azul, el color de las reservas en toda la
                     pantalla. */}
                 {dia.reservedCells > 0 && (
-                  <span className="mt-1 block border-t border-state-open/30 pt-1 text-[10px] font-semibold text-state-open">
+                  <span className="mt-1 block border-t border-state-open/30 pt-1 text-[12px] font-semibold text-state-open">
                     {dia.reservedCells} res.
                   </span>
                 )}
@@ -319,28 +319,28 @@ export function ShopCapacity() {
                   />
                   <span className="font-mono font-semibold text-text">{r.licensePlate}</span>
                   <span className="text-text-soft">{r.customerName}</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                  <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     {SIZE_CLASS_LABELS[r.sizeClass]}
                   </span>
                   <span className="text-text-soft">
                     {formatDate(r.startsOn)} → {formatDate(r.endsOn)}
                   </span>
                   {!vigente && (
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-state-done">
+                    <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-state-done">
                       Ya ingresó · no descuenta
                     </span>
                   )}
                   {vigente && vencida && (
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                       Vencida
                     </span>
                   )}
                   {vigente && futura && (
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-state-open">
+                    <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-state-open">
                       Desde {formatDate(r.startsOn)}
                     </span>
                   )}
-                  {r.notes && <span className="text-[11px] text-text-soft">{r.notes}</span>}
+                  {r.notes && <span className="text-[13px] text-text-soft">{r.notes}</span>}
                   <div className="ml-auto flex shrink-0 items-center gap-1">
                     <button
                       type="button"
@@ -369,9 +369,9 @@ export function ShopCapacity() {
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="w-28 p-3 font-semibold">Comprobante</th>
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold">Vehículo</th>
@@ -410,7 +410,7 @@ export function ShopCapacity() {
                     </Link>
                     {row.otrosRegistros > 0 && (
                       <span
-                        className="mt-0.5 block text-[10px] font-normal text-text-soft"
+                        className="mt-0.5 block text-[12px] font-normal text-text-soft"
                         title="Este vehículo tiene más órdenes abiertas; se deduplica a un solo lugar en la playa"
                       >
                         +{row.otrosRegistros} registro{row.otrosRegistros === 1 ? '' : 's'} del mismo vehículo
@@ -422,7 +422,7 @@ export function ShopCapacity() {
                   <td data-label="Tamaño" className="p-3 text-text-soft">{SIZE_CLASS_LABELS[row.sizeClass]}</td>
                   <td data-label="Estado" className="p-3">
                     <span
-                      className="text-[10px] font-bold uppercase tracking-wider"
+                      className="text-[12px] font-bold uppercase tracking-wider"
                       style={{ color: row.statusColor }}
                     >
                       {row.statusLabel}
@@ -435,7 +435,7 @@ export function ShopCapacity() {
                         type="date"
                         value={row.estimatedDeliveryDate ?? ''}
                         onChange={(e) => handleDeliveryChange(row.id, e.target.value)}
-                        className="rounded border border-line bg-panel px-1.5 py-0.5 text-[13px] focus:border-accent-deep focus:outline-none"
+                        className="rounded border border-line bg-panel px-1.5 py-0.5 text-[15px] focus:border-accent-deep focus:outline-none"
                       />
                     ) : (
                       <span className="text-text-faint">Sin OT todavía</span>

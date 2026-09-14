@@ -336,7 +336,7 @@ export function Settings() {
                 placeholder="30-71044366-8"
               />
               {cuitInvalid && (
-                <span className="mt-1 block text-[10px] font-normal normal-case text-danger">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-danger">
                   CUIT inválido (dígito verificador incorrecto).
                 </span>
               )}
@@ -366,7 +366,7 @@ export function Settings() {
                 className={cn(inputClass, 'font-mono', salesPointInvalid && 'border-danger bg-danger-soft')}
                 placeholder="1"
               />
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 {salesPointInvalid
                   ? 'Tiene que ser un número entre 1 y 99999.'
                   : `Las facturas se numeran ${String(salesPointNumber).padStart(4, '0')}-00000001.`}
@@ -563,11 +563,11 @@ export function Settings() {
                     {AI_PROVIDER_LABELS[proveedor]}
                   </span>
                   {cargada ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-state-ok">
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-state-ok">
                       <Check size={13} /> Cargada ····{estado?.ultimos4}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                       <AlertTriangle size={13} /> Sin clave
                     </span>
                   )}
@@ -585,7 +585,7 @@ export function Settings() {
                     placeholder={proveedor === 'ANTHROPIC' ? 'sk-ant-…' : 'AIza…'}
                     autoComplete="off"
                   />
-                  <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                     Se saca de {AI_PROVIDER_CONSOLES[proveedor]}. Una vez guardada no se
                     puede volver a ver, solo reemplazar.
                   </span>
@@ -651,7 +651,7 @@ export function Settings() {
 function ComprobanteMatrix({ issuerCondition }: { issuerCondition: TaxCondition }) {
   return (
     <div className="border border-line bg-panel-alt p-3">
-      <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+      <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
         Con esta condición, a cada cliente le sale
       </span>
       <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">

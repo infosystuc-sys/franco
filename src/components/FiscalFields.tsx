@@ -13,7 +13,7 @@ export const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-
 export const inputClass =
   'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case ' +
   'focus:border-accent-deep focus:outline-none';
-export const sectionTitleClass = 'text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
+export const sectionTitleClass = 'text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
 
 /**
  * Bloques de identificación, datos fiscales, domicilio y contacto.
@@ -63,7 +63,7 @@ export function FiscalFields({
               placeholder="30-71044366-8"
             />
             {cuitInvalid && (
-              <span className="block mt-1 text-[10px] font-normal normal-case text-danger">
+              <span className="block mt-1 text-[12px] font-normal normal-case text-danger">
                 CUIT/CUIL inválido (dígito verificador incorrecto).
               </span>
             )}

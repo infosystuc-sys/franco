@@ -84,7 +84,7 @@ function DatoCliente({
 }) {
   return (
     <div>
-      <dt className="text-[10px] font-bold uppercase tracking-[0.08em] text-text-soft">{rotulo}</dt>
+      <dt className="text-[12px] font-bold uppercase tracking-[0.08em] text-text-soft">{rotulo}</dt>
       <dd className={cn('text-sm text-text', mono && 'font-mono', !valor && 'text-text-soft')}>
         {valor || '—'}
       </dd>
@@ -357,7 +357,7 @@ export function VehicleNew() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title={
           existente
@@ -414,7 +414,7 @@ export function VehicleNew() {
               <button
                 type="button"
                 onClick={() => setFichaCliente('nuevo')}
-                className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
               >
                 + Nuevo
               </button>
@@ -422,7 +422,7 @@ export function VehicleNew() {
                 type="button"
                 onClick={() => clienteElegido && setFichaCliente(clienteElegido)}
                 disabled={!clienteElegido}
-                className="whitespace-nowrap border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:cursor-not-allowed disabled:opacity-40"
+                className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Pencil size={13} className="mr-1 inline-block align-[-2px]" />Modificar
               </button>
@@ -477,7 +477,7 @@ export function VehicleNew() {
                   <option key={k} value={k}>{VEHICLE_KIND_LABELS[k]}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Una pieza no ocupa lugar en la playa.
               </span>
             </label>
@@ -520,7 +520,7 @@ export function VehicleNew() {
                   className={cn(inputClass, 'font-mono uppercase')}
                   placeholder="ABC-123"
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   Si ya está cargada, se traen sus datos y su cliente.
                 </span>
               </label>
@@ -572,9 +572,9 @@ export function VehicleNew() {
           {esPieza && (
             <div className="mt-4 border-t border-line pt-4">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[46rem] text-left text-[13px]">
+                <table className="w-full min-w-[46rem] text-left text-[15px]">
                   <thead>
-                    <tr className="border-b border-line text-[10px] font-bold uppercase tracking-[0.08em] text-text-soft">
+                    <tr className="border-b border-line text-[12px] font-bold uppercase tracking-[0.08em] text-text-soft">
                       <th className="pb-2 pr-3 font-bold">Tipo de pieza *</th>
                       <th className="pb-2 pr-3 font-bold">Marca</th>
                       <th className="pb-2 pr-3 font-bold">Modelo</th>
@@ -652,11 +652,11 @@ export function VehicleNew() {
                 <button
                   type="button"
                   onClick={agregarParte}
-                  className="inline-flex items-center gap-1.5 border border-line px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+                  className="inline-flex items-center gap-1.5 border border-line px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
                 >
                   <Plus size={14} /> Agregar pieza
                 </button>
-                <span className="text-[11px] text-text-soft">
+                <span className="text-[13px] text-text-soft">
                   Un tipo que no esté en la lista se escribe igual y queda guardado para la próxima.
                 </span>
               </div>
@@ -700,7 +700,7 @@ export function VehicleNew() {
                     onChange={(e) => setEstimatedDelivery(e.target.value)}
                     className={inputClass}
                   />
-                  <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                     Es lo que dice cuándo se libera el lugar en la playa.
                   </span>
                 </label>
@@ -718,7 +718,7 @@ export function VehicleNew() {
                     <option key={e.id} value={e.id}>{e.name}</option>
                   ))}
                 </select>
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   Viene sugerido quien está cargando la recepción. Se puede cambiar o dejar sin asignar.
                 </span>
               </label>

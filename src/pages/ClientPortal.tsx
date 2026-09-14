@@ -165,7 +165,7 @@ export function ClientPortal() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
+          <span className="hidden text-[13px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
             Seguimiento de su reparación
           </span>
           {/*
@@ -176,7 +176,7 @@ export function ClientPortal() {
           {session && (
             <Link
               to="/"
-              className="text-accent text-[11px] font-bold uppercase tracking-wider hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="text-accent text-[13px] font-bold uppercase tracking-wider hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <ArrowLeft size={14} /> Volver al panel
             </Link>
@@ -191,7 +191,7 @@ export function ClientPortal() {
           actions={
             <div className="flex items-center gap-2 border border-line bg-panel px-4 py-2">
               <Info size={17} className="text-accent-deep" />
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
+              <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text">
                 {currentStatus?.label ?? '—'}
               </span>
             </div>
@@ -247,7 +247,7 @@ export function ClientPortal() {
                     </p>
                     {priceConfirming === 'rechazar' && (
                       <label className="block">
-                        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           ¿Por qué no autoriza? *
                         </span>
                         <textarea
@@ -292,13 +292,13 @@ export function ClientPortal() {
           <div className="md:col-span-4 space-y-6">
             <div className="bg-panel p-5 border border-line space-y-4">
               <div className="flex justify-between items-center border-b border-line pb-2 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft">Orden de Trabajo</span>
+                <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft">Orden de Trabajo</span>
                 <span className="text-base font-bold text-text">#{order.number}</span>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo</span>
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo</span>
                   <div className="flex items-center gap-2">
                     <Truck size={18} className="text-text-soft" />
                     <span className="text-sm font-bold text-text">
@@ -308,14 +308,14 @@ export function ClientPortal() {
                 </div>
                 {order.licensePlate && (
                   <div>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Matrícula</span>
+                    <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Matrícula</span>
                     <div className="bg-panel-head inline-block px-3 py-1 border border-line font-mono font-bold text-text">
                       {order.licensePlate}
                     </div>
                   </div>
                 )}
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-text-soft block mb-1">Componente</span>
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Componente</span>
                   <div className="flex items-center gap-2">
                     <Settings size={18} className="text-text-soft" />
                     <span className="text-sm text-text">{order.component ?? '—'}</span>
@@ -325,7 +325,7 @@ export function ClientPortal() {
             </div>
 
             <div className="bg-panel p-5 border border-line space-y-4">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider text-text-soft border-b border-line pb-2 mb-2">Contacto de Taller</h3>
+              <h3 className="text-[13px] font-bold uppercase tracking-wider text-text-soft border-b border-line pb-2 mb-2">Contacto de Taller</h3>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 bg-panel-head flex items-center justify-center border border-line">
                   <CheckCircle2 size={24} className="text-text-soft fill-current" />
@@ -335,7 +335,7 @@ export function ClientPortal() {
                   <p className="text-xs text-text-soft">{order.employeeName ?? 'Sin asignar'}</p>
                 </div>
               </div>
-              <button className="w-full bg-panel-head hover:bg-panel-head text-text text-[11px] font-bold uppercase tracking-wider py-2 border border-line transition-colors flex items-center justify-center gap-2 mt-2">
+              <button className="w-full bg-panel-head hover:bg-panel-head text-text text-[13px] font-bold uppercase tracking-wider py-2 border border-line transition-colors flex items-center justify-center gap-2 mt-2">
                 <Mail size={16} />
                 Contactar Taller
               </button>
@@ -373,7 +373,7 @@ export function ClientPortal() {
                         <p className="text-xs text-text-soft mt-1 leading-relaxed">{status.clientDescription}</p>
                       )}
                       {fecha && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-text-soft block mt-3">
+                        <span className="text-[12px] font-bold uppercase tracking-wider text-text-soft block mt-3">
                           {new Date(fecha).toLocaleString('es-AR', {
                             day: '2-digit', month: 'short', year: 'numeric',
                             hour: '2-digit', minute: '2-digit',

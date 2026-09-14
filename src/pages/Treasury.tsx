@@ -115,7 +115,7 @@ export function Treasury() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title={canViewHistory ? 'Tesorería' : ''}
         subtitle={canViewHistory ? 'El libro de caja: gastos sin factura, ingresos y movimientos entre medios.' : undefined}
@@ -151,7 +151,7 @@ export function Treasury() {
               .map((balance) => (
                 <Panel key={balance.paymentMethodId} className="relative p-4 pl-5">
                   <StateStrip color={PAYMENT_METHOD_STRIP[balance.kind]} />
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+                  <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
                     {balance.name}
                   </span>
                   <span
@@ -162,7 +162,7 @@ export function Treasury() {
                   >
                     $ {formatMoney(balance.balance)}
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-text-faint">
+                  <span className="mt-0.5 block text-[12px] text-text-faint">
                     {PAYMENT_METHOD_KIND_LABELS[balance.kind as PaymentMethodKind]}
                     {balance.kind === 'CARTERA_CHEQUES' && ' · valores a cobrar'}
                   </span>
@@ -190,7 +190,7 @@ export function Treasury() {
         <button
           onClick={() => setTypeFilter('')}
           className={cn(
-            'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+            'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
             typeFilter === ''
               ? 'border-accent bg-accent text-accent-ink'
               : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -203,7 +203,7 @@ export function Treasury() {
             key={type}
             onClick={() => setTypeFilter(type)}
             className={cn(
-              'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
               typeFilter === type
                 ? 'border-accent bg-accent text-accent-ink'
                 : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -225,8 +225,8 @@ export function Treasury() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-32">Comprobante</th>
               <th className="px-3 py-1 w-28">Fecha</th>
@@ -268,7 +268,7 @@ export function Treasury() {
                         {mv.fullNumber}
                       </span>
                       {voided && (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulado
                         </span>
                       )}
@@ -281,7 +281,7 @@ export function Treasury() {
                     <td data-label="Detalle" className="px-3 py-1">
                       <span className={cn(voided && 'text-text-faint')}>{mv.description}</span>
                       {mv.payee && (
-                        <span className="block text-[11px] text-text-faint">a {mv.payee}</span>
+                        <span className="block text-[13px] text-text-faint">a {mv.payee}</span>
                       )}
                     </td>
 
@@ -289,7 +289,7 @@ export function Treasury() {
                       {mv.conceptName ?? '—'}
                     </td>
 
-                    <td data-label="Medios" className="px-3 py-1 text-[11px] text-text-soft">
+                    <td data-label="Medios" className="px-3 py-1 text-[13px] text-text-soft">
                       {mv.legs.map((leg, i) => (
                         <span key={i} className="block">
                           <span className={leg.amount < 0 ? 'text-danger' : 'text-state-done'}>
@@ -422,7 +422,7 @@ function MovementModal({
             <h2 className="text-base font-bold text-text">
               {type === 'EGRESO' ? 'Gasto sin factura' : MOVEMENT_TYPE_LABELS[type]}
             </h2>
-            <p className="mt-0.5 text-[11px] text-text-soft">{MOVEMENT_TYPE_HELP[type]}</p>
+            <p className="mt-0.5 text-[13px] text-text-soft">{MOVEMENT_TYPE_HELP[type]}</p>
           </div>
           <span className="font-mono text-xs text-text-faint">{MOVEMENT_TYPE_PREFIX[type]}-…</span>
         </div>
@@ -479,7 +479,7 @@ function MovementModal({
                   <option key={concept.id} value={concept.id}>{concept.name}</option>
                 ))}
               </select>
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 El mismo padrón que clasifica las facturas de compra de conceptos.
               </span>
             </label>
@@ -494,7 +494,7 @@ function MovementModal({
                 placeholder="Remisería del centro"
                 className={inputClass}
               />
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Texto libre: el gasto sin factura suele ser de alguien que no está en el padrón.
               </span>
             </label>

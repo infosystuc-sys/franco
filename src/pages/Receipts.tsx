@@ -108,7 +108,7 @@ export function Receipts() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title={canViewHistory ? 'Cobranzas' : ''}
         subtitle={canViewHistory ? 'Los recibos con que se cancelan las facturas de venta.' : undefined}
@@ -135,8 +135,8 @@ export function Receipts() {
       <section>
         <SectionHeader title="Cuenta corriente por cliente" />
         <Panel className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-4 py-1">Cliente</th>
                 <th className="px-3 py-1 w-40 text-right">Debe</th>
@@ -189,7 +189,7 @@ export function Receipts() {
       <>
       <SectionHeader title="Recibos" />
 
-      <div className="relative sm:w-72">
+      <div className="relative sm:w-96">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
         <input
           value={search}
@@ -200,8 +200,8 @@ export function Receipts() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-36">Recibo</th>
               <th className="px-3 py-1 w-28">Fecha</th>
@@ -249,7 +249,7 @@ export function Receipts() {
                         {receipt.fullNumber}
                       </Link>
                       {voided && (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulado
                         </span>
                       )}
@@ -261,7 +261,7 @@ export function Receipts() {
 
                     <td data-label="Cliente" className="px-3 py-1">{receipt.customerName}</td>
 
-                    <td data-label="Imputado a" className="px-3 py-1 text-[11px] text-text-soft">
+                    <td data-label="Imputado a" className="px-3 py-1 text-[13px] text-text-soft">
                       {receipt.allocations.length === 0 ? (
                         <span className="text-text-faint">a cuenta</span>
                       ) : (
@@ -319,7 +319,7 @@ export function Receipts() {
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span className={cn('block font-display text-2xl font-medium', danger ? 'text-danger' : 'text-text')}>

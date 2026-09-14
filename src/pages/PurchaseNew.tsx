@@ -152,7 +152,7 @@ export function PurchaseNew() {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">Cargando padrones…</div>;
+    return <div className="w-full p-8 text-center text-text-soft">Cargando padrones…</div>;
   }
 
   function patchLine(index: number, patch: Partial<PurchaseLine>) {
@@ -262,11 +262,11 @@ export function PurchaseNew() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title={isArticles ? 'Compra de artículos' : 'Compra de conceptos'}
         meta={
-          <span className="inline-flex items-center gap-1.5 rounded border border-line-strong bg-panel px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+          <span className="inline-flex items-center gap-1.5 rounded border border-line-strong bg-panel px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
             {isArticles ? <Boxes size={14} /> : <Package size={14} />}
             {isArticles ? 'Mueve stock' : 'Sin stock'}
           </span>
@@ -312,12 +312,12 @@ export function PurchaseNew() {
               ))}
             </select>
             {supplier && (
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 {TAX_CONDITION_LABELS[supplier.taxCondition]} · plazo {supplier.paymentTermsDays} días
               </span>
             )}
             {suppliers.length === 0 && (
-              <span className="mt-1 block text-[10px] font-normal normal-case text-danger">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-danger">
                 No hay proveedores activos. Cargá uno en Proveedores.
               </span>
             )}
@@ -407,7 +407,7 @@ export function PurchaseNew() {
               }}
               className={cn(inputClass, !dueDate && 'field-required')}
             />
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               {dueDateTouched
                 ? 'Cargado a mano.'
                 : supplier
@@ -459,8 +459,8 @@ export function PurchaseNew() {
         />
 
         <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-2 py-1 w-44">{isArticles ? 'Código' : 'Concepto'}</th>
                 <th className="px-2 py-1">{isArticles ? 'Descripción' : 'Detalle'}</th>
@@ -578,7 +578,7 @@ export function PurchaseNew() {
                 ))}
               </ul>
 
-              <p className="mt-3 text-[10px] text-text-soft">
+              <p className="mt-3 text-[12px] text-text-soft">
                 El importe arranca calculado y se puede corregir para que cierre
                 exacto con el papel. Las retenciones no van acá: se aplican al pagar.
               </p>

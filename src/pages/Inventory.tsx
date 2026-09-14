@@ -100,7 +100,7 @@ export function Inventory() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Inventario"
         subtitle="El precio de venta sale del precio de compra del proveedor preferido más la utilidad."
@@ -132,16 +132,16 @@ export function Inventory() {
             className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
           />
         </div>
-        <span className="text-[11px] text-text-soft">
+        <span className="text-[13px] text-text-soft">
           Utilidad por defecto: <strong className="text-accent-deep">{defaultMarkup}%</strong>
         </span>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-28">Código</th>
                 <th className="p-3 font-semibold">Descripción</th>
                 <th className="p-3 font-semibold w-44">Proveedor preferido</th>
@@ -172,19 +172,19 @@ export function Inventory() {
                   <td data-label="Descripción" className="p-3">
                     {article.description}
                     {article.brand && (
-                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-text-soft">{article.brand}</span>
+                      <span className="ml-2 text-[12px] font-semibold uppercase tracking-wide text-text-soft">{article.brand}</span>
                     )}
                     {!article.active && (
-                      <span className="ml-2 text-[9px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
+                      <span className="ml-2 text-[11px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
                     )}
                   </td>
-                  <td data-label="Proveedor" className="p-3 text-[11px]">
+                  <td data-label="Proveedor" className="p-3 text-[13px]">
                     {article.preferredSupplierName ? (
                       <>
                         <div className="text-text">{article.preferredSupplierName}</div>
                         <div className="text-text-soft font-mono">{article.preferredSupplierCode}</div>
                         {article.supplierCount > 1 && (
-                          <div className="text-[10px] text-accent-deep">
+                          <div className="text-[12px] text-accent-deep">
                             +{article.supplierCount - 1} proveedor{article.supplierCount > 2 ? 'es' : ''} más
                           </div>
                         )}
@@ -211,7 +211,7 @@ export function Inventory() {
                   <td data-label="Stock" className="p-3 text-center">
                     {article.tracksStock ? (
                       <span className={cn(
-                        "px-2 py-0.5 text-[10px] font-bold",
+                        "px-2 py-0.5 text-[12px] font-bold",
                         article.stockQuantity === 0 ? "bg-red-100 text-danger"
                           : article.stockQuantity <= 5 ? "bg-orange-100 text-orange-700"
                           : "bg-green-100 text-green-700"
@@ -219,7 +219,7 @@ export function Inventory() {
                         {article.stockQuantity}
                       </span>
                     ) : (
-                      <span className="text-text-faint text-[10px] uppercase tracking-wider">Sin control</span>
+                      <span className="text-text-faint text-[12px] uppercase tracking-wider">Sin control</span>
                     )}
                   </td>
                   <td className="p-3 text-right space-x-2">
@@ -236,7 +236,7 @@ export function Inventory() {
           </table>
         </div>
       </div>
-      <p className="text-[11px] text-text-soft">
+      <p className="text-[13px] text-text-soft">
         * Utilidad heredada del valor global. Se cambia desde Listas de precios.
       </p>
 

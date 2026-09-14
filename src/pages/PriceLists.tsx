@@ -84,7 +84,7 @@ export function PriceLists() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Listas de precios"
         subtitle="Importá la lista de compra de cada proveedor. El precio de venta se recalcula solo."
@@ -102,7 +102,7 @@ export function PriceLists() {
 
       {/* Utilidad global */}
       <section className="bg-panel border border-line p-5 space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+        <h2 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Percent size={14} /> Utilidad por defecto
         </h2>
         <p className="text-xs text-text-soft">
@@ -127,7 +127,7 @@ export function PriceLists() {
           <button
             onClick={handleSaveMarkup}
             disabled={busy || Number(markupDraft) === markup}
-            className="bg-accent-deep text-white text-[11px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-hover transition-colors disabled:opacity-50"
+            className="bg-accent-deep text-white text-[13px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             {busy ? 'Aplicando...' : 'Guardar y recalcular'}
           </button>
@@ -153,14 +153,14 @@ export function PriceLists() {
       {/* Historial */}
       <section className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="p-4 border-b border-line bg-panel-head">
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+          <h2 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
             <History size={14} /> Últimas importaciones
           </h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold w-40">Fecha</th>
                 <th className="p-3 font-semibold">Proveedor</th>
                 <th className="p-3 font-semibold">Archivo</th>
@@ -305,7 +305,7 @@ function ImportSection({
   return (
     <section className="bg-panel border border-line p-5 space-y-4">
       <div>
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+        <h2 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Upload size={14} /> Importar lista de compra
         </h2>
         <p className="text-xs text-text-soft mt-1">
@@ -328,7 +328,7 @@ function ImportSection({
             ))}
           </select>
           {supplier && !supplier.codePrefix && (
-            <span className="mt-1 block text-[11px] font-normal normal-case text-danger">
+            <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
               Este proveedor no tiene prefijo de código. Definilo en Proveedores antes de importar.
             </span>
           )}
@@ -386,7 +386,7 @@ function ImportSection({
               Editar mapeo
             </button>
           </div>
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead className="bg-panel-head text-text font-bold uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-1 w-32">Código prov.</th>
@@ -407,7 +407,7 @@ function ImportSection({
             </tbody>
           </table>
           {parsed.skipped.length > 0 && (
-            <div className="bg-orange-50 border-t border-orange-200 px-3 py-2 text-[11px] text-state-wait">
+            <div className="bg-orange-50 border-t border-orange-200 px-3 py-2 text-[13px] text-state-wait">
               <AlertTriangle size={12} className="inline mr-1" />
               Filas descartadas:{' '}
               {parsed.skipped.slice(0, 5).map((s) => `fila ${s.row} (${s.reason})`).join(', ')}
@@ -421,7 +421,7 @@ function ImportSection({
         <button
           onClick={handleImport}
           disabled={!supplierId || !parsed || !!grid || importing}
-          className="bg-accent text-accent-ink text-[11px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
+          className="bg-accent text-accent-ink text-[13px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
         >
           <Upload size={16} />
           {importing ? 'Importando...' : 'Importar precios'}

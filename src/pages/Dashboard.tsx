@@ -77,7 +77,7 @@ function WorkOrderPanel() {
       : 'No tenés órdenes asignadas. El encargado del taller te las asigna desde la orden de trabajo.';
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title="Panel de control"
         subtitle="Órdenes abiertas en el taller, por etapa."
@@ -100,7 +100,7 @@ function WorkOrderPanel() {
         {kpis.map((kpi) => (
           <Panel key={kpi.status.id} className="relative flex flex-col justify-between p-4 pl-5">
             <StateStrip color={kpi.status.color} />
-            <span className="mb-3 text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-text-soft">
+            <span className="mb-3 text-[13px] font-semibold uppercase leading-tight tracking-[0.06em] text-text-soft">
               {kpi.status.label}
             </span>
             <span className="font-display text-4xl font-medium leading-none text-text">
@@ -114,9 +114,9 @@ function WorkOrderPanel() {
 
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="w-28 p-3 font-semibold">N° OT</th>
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
@@ -155,11 +155,11 @@ function WorkOrderPanel() {
                   <td data-label="Vehículo" className="p-3">
                     <span className="block">{order.vehicleLabel}</span>
                     {order.component && (
-                      <span className="block text-[11px] text-text-soft">{order.component}</span>
+                      <span className="block text-[13px] text-text-soft">{order.component}</span>
                     )}
                   </td>
                   <td data-label="Estado" className="p-3">
-                    <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                       <span
                         aria-hidden
                         className="inline-block h-2 w-2"

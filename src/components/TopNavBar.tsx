@@ -72,7 +72,7 @@ export function TopNavBar({
         {session && (
           <div className="ml-1 hidden flex-col items-end leading-tight md:flex">
             <span className="text-xs font-medium text-white">{session.user.email}</span>
-            <span className="text-[10px] uppercase tracking-[0.12em] text-accent">{role ?? '…'}</span>
+            <span className="text-[12px] uppercase tracking-[0.12em] text-accent">{role ?? '…'}</span>
           </div>
         )}
         <button

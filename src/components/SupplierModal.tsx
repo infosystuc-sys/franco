@@ -74,7 +74,7 @@ export function SupplierModal({
       {/* Del mismo ancho que el ingreso, igual que la ficha de cliente: son
           los mismos veinte campos y en una ventana angosta había que
           scrollear para llegar a las condiciones comerciales y a los botones. */}
-      <div className="bg-panel w-full max-w-[1600px] flex flex-col max-h-[92vh]">
+      <div className="bg-panel w-full flex flex-col max-h-[92vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
             {supplier ? 'Editar proveedor' : 'Nuevo proveedor'}
@@ -104,7 +104,7 @@ export function SupplierModal({
             </div>
 
           <div className="space-y-3 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
+            <h3 className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-accent-deep">
               <CalendarClock size={14} /> Condiciones comerciales
             </h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -118,7 +118,7 @@ export function SupplierModal({
                   onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
                   className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   {form.paymentTermsDays === 0
                     ? 'Contado: la factura vence el mismo día que se emite.'
                     : `Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
@@ -133,7 +133,7 @@ export function SupplierModal({
                   className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm uppercase normal-case focus:border-accent-deep focus:outline-none"
                   placeholder="DE"
                 />
-                <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   {form.codePrefix
                     ? `Los artículos nuevos de este proveedor van a llevar el código ${form.codePrefix}-00000001, ${form.codePrefix}-00000002...`
                     : 'Sin prefijo no se puede importar el catálogo de este proveedor.'}
@@ -146,10 +146,10 @@ export function SupplierModal({
           {supplier && (
             <div className="border-t border-line pt-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
+                <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
                   <Package size={14} /> Artículos que provee
                 </h3>
-                <Link to="/listas-precios" className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline">
+                <Link to="/listas-precios" className="text-[13px] font-bold uppercase tracking-wider text-accent-deep hover:underline">
                   Importar lista →
                 </Link>
               </div>
@@ -170,7 +170,7 @@ export function SupplierModal({
                       <span className="text-xs text-text-soft whitespace-nowrap">
                         $ {article.purchasePrice.toFixed(2)}
                         {article.isPreferred && (
-                          <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-accent-deep">Preferido</span>
+                          <span className="ml-2 text-[12px] font-bold uppercase tracking-wider text-accent-deep">Preferido</span>
                         )}
                       </span>
                     </li>
@@ -185,13 +185,13 @@ export function SupplierModal({
           {/* Fuera del área que scrollea: guardar y cancelar tienen que estar
               a mano sin importar cuánto se haya bajado. */}
           <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+              className="bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : 'Guardar'}
             </button>

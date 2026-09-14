@@ -93,7 +93,7 @@ export function ReportView() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <div className="no-print">
         <PageHeader
           title={report.name}
@@ -190,15 +190,15 @@ export function ReportView() {
                 : `${filtered.length} de ${rows.length} registros`}
             </span>
             {ranWith && report.usesPeriod && (
-              <span className="font-mono text-[11px]">
+              <span className="font-mono text-[13px]">
                 {ranWith.from} — {ranWith.to}
               </span>
             )}
           </div>
 
           <Panel className="overflow-x-auto overflow-y-hidden">
-            <table className="w-full text-left text-[12px]">
-              <thead className="h-9 bg-panel-head text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <table className="w-full text-left text-[14px]">
+              <thead className="h-9 bg-panel-head text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   {report.columns.map((column) => (
                     <th

@@ -218,12 +218,12 @@ export function InvoiceNewFree() {
             ))}
           </select>
           {remito && (
-            <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
               Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
             </span>
           )}
           {customers.length === 0 && !remito && (
-            <span className="mt-1 block text-[10px] font-normal normal-case text-state-wait">
+            <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
               No hay clientes activos. Cargá uno desde la sección Clientes.
             </span>
           )}

@@ -106,7 +106,7 @@ export function Invoices() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title={canViewHistory ? 'Facturación' : ''}
         subtitle={canViewHistory ? 'Las facturas salen de una orden terminada, en cuenta corriente a 7 días.' : undefined}
@@ -141,7 +141,7 @@ export function Invoices() {
             key={option}
             onClick={() => setFilter(option)}
             className={cn(
-              'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
               filter === option
                 ? 'border-accent bg-accent text-accent-ink'
                 : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -163,8 +163,8 @@ export function Invoices() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1">Comprobante</th>
               <th className="px-3 py-1">Cliente</th>
@@ -219,7 +219,7 @@ export function Invoices() {
                       >
                         {invoice.fullNumber}
                       </Link>
-                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+                      <span className="ml-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
                         {INVOICE_TYPE_LABELS[invoice.invoiceType]}
                       </span>
                     </td>
@@ -229,13 +229,13 @@ export function Invoices() {
                         {invoice.customerName}
                       </span>
                       {voided ? (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulada
                         </span>
                       ) : (
                         <span
                           className={cn(
-                            'ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]',
+                            'ml-2 rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em]',
                             PAYMENT_STATE_BADGE[paymentStateOf(invoice)]
                           )}
                         >
@@ -244,7 +244,7 @@ export function Invoices() {
                       )}
                     </td>
 
-                    <td data-label="Orden" className="px-3 py-1 font-mono text-[12px] text-text-soft">
+                    <td data-label="Orden" className="px-3 py-1 font-mono text-[14px] text-text-soft">
                       {invoice.workOrderNumber ? (
                         <Link to={`/orden/${invoice.workOrderNumber}`} className="hover:underline">
                           {invoice.workOrderNumber}
@@ -263,7 +263,7 @@ export function Invoices() {
                         {formatDate(invoice.dueDate)}
                       </span>
                       {overdue && (
-                        <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-danger">
+                        <span className="ml-1.5 inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-danger">
                           <AlertTriangle size={11} /> {Math.abs(days)} d.
                         </span>
                       )}
@@ -323,8 +323,8 @@ function PendingToInvoiceList({
       />
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-28">Orden</th>
               <th className="px-3 py-1">Cliente</th>
@@ -366,7 +366,7 @@ function PendingToInvoiceList({
                   <td data-label="Vehículo" className="px-3 py-1 text-text-soft">
                     <span className="block">{order.vehicleLabel}</span>
                     {order.component && (
-                      <span className="block text-[11px] text-text-faint">{order.component}</span>
+                      <span className="block text-[13px] text-text-faint">{order.component}</span>
                     )}
                   </td>
                   <td className="px-3 py-1 text-right">
@@ -388,7 +388,7 @@ function PendingToInvoiceList({
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span

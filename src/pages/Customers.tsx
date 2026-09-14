@@ -79,7 +79,7 @@ export function Customers() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Clientes"
         subtitle="Datos fiscales y vehículos de cada cliente del taller."
@@ -106,9 +106,9 @@ export function Customers() {
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Cliente</th>
                 <th className="p-3 font-semibold w-36">CUIT / CUIL</th>
                 <th className="p-3 font-semibold w-44">Cond. IVA</th>
@@ -134,16 +134,16 @@ export function Customers() {
                   <td data-primary className="p-3">
                     <div className="font-bold text-text">{customer.name}</div>
                     {customer.legalName && customer.legalName !== customer.name && (
-                      <div className="text-[11px] text-text-soft">{customer.legalName}</div>
+                      <div className="text-[13px] text-text-soft">{customer.legalName}</div>
                     )}
                   </td>
                   <td data-label="CUIT" className="p-3 font-mono">{formatCuit(customer.taxId) || <span className="text-text-faint">—</span>}</td>
                   <td data-label="Cond. IVA" className="p-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-accent-deep">
+                    <span className="text-[12px] font-bold uppercase tracking-wider text-accent-deep">
                       {TAX_CONDITION_LABELS[customer.taxCondition]}
                     </span>
                   </td>
-                  <td data-label="Contacto" className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Contacto" className="p-3 text-[13px] text-text-soft">
                     {customer.email && <div>{customer.email}</div>}
                     {customer.phone && <div>{customer.phone}</div>}
                     {!customer.email && !customer.phone && <span className="text-text-faint">—</span>}
@@ -156,7 +156,7 @@ export function Customers() {
                   </td>
                   <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-wider",
+                      "text-[12px] font-bold uppercase tracking-wider",
                       customer.active ? "text-state-done" : "text-text-faint"
                     )}>
                       {customer.active ? 'Activo' : 'Inactivo'}

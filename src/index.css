@@ -51,6 +51,26 @@
   --font-sans: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
 
+  /*
+    Escala de texto propia, corrida hacia arriba respecto de la de fábrica.
+    La pantalla del taller se mira parado, de costado y a un metro; lo que en
+    un escritorio es "chico pero legible" acá directamente no se lee.
+
+    Los tamaños chicos suben 2px —que es donde se nota— y los grandes crecen
+    en proporción. Se cambia la escala y no el tamaño de raíz a propósito: la
+    raíz también manda sobre los espaciados, y agrandar todo junto no daría
+    letras más grandes sino la misma pantalla más lejos.
+  */
+  --text-xs: 0.875rem;     /* 14px */
+  --text-sm: 1rem;         /* 16px — el tamaño de la mayoría de las tablas */
+  --text-base: 1.125rem;   /* 18px */
+  --text-lg: 1.25rem;      /* 20px */
+  --text-xl: 1.375rem;     /* 22px */
+  --text-2xl: 1.625rem;    /* 26px */
+  --text-3xl: 2rem;        /* 32px */
+  --text-4xl: 2.375rem;    /* 38px */
+  --text-5xl: 3.125rem;    /* 50px */
+
   /* Sin redondeos: la estética es de chapa y cartel, no de tarjeta */
   --radius-none: 0px;
 }
@@ -63,7 +83,7 @@
     -webkit-font-smoothing: antialiased;
     /* Base más grande: se carga de pie, con la pantalla lejos y a veces con
        las manos sucias. 14px era cómodo de diseñar y incómodo de leer. */
-    font-size: 15px;
+    font-size: 17px;
   }
 
   /* Foco visible en todo lo operable: el taller se maneja mucho con teclado. */
@@ -174,7 +194,7 @@
     content: attr(data-label);
     flex-shrink: 0;
     text-align: left;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -261,6 +281,16 @@
     border: 0 !important;
     padding: 0 !important;
     max-width: none !important;
+  }
+
+  /*
+    La hoja A4 sigue midiendo lo mismo. El documento se imprime a la escala
+    de antes de agrandar la letra para que un presupuesto largo siga entrando
+    donde entraba: en pantalla la letra grande se agradece, en papel empuja
+    los renglones a una segunda hoja.
+  */
+  .print-document {
+    zoom: 0.87;
   }
 
   /* Que no se parta un renglón ni el bloque de totales entre dos hojas. */

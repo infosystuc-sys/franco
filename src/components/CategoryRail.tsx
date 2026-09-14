@@ -64,7 +64,7 @@ export function CategoryRail({
               onClick={onClose}
               aria-current={location.pathname.startsWith('/informe') ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors',
+                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                 location.pathname.startsWith('/informe')
                   ? 'border-accent bg-ink-hover text-accent'
                   : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
@@ -109,7 +109,7 @@ export function CategoryRail({
               onClick={onClose}
               aria-current={activeKey === 'favoritos' ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors',
+                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                 activeKey === 'favoritos'
                   ? 'border-accent bg-ink-hover text-accent'
                   : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
@@ -131,7 +131,7 @@ export function CategoryRail({
                   onClick={onClose}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors',
+                    'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                     isActive
                       ? 'border-accent bg-ink-hover text-accent'
                       : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
@@ -156,7 +156,7 @@ export function CategoryRail({
                     onClick={onClose}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors',
+                      'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                       isActive
                         ? 'border-accent bg-ink-hover text-accent'
                         : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'

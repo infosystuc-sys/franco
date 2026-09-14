@@ -107,7 +107,7 @@ export function EndorseCheck() {
         </div>
       )}
 
-      <div className="relative w-full sm:w-72">
+      <div className="relative w-full sm:w-96">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
         <input
           value={search}
@@ -118,8 +118,8 @@ export function EndorseCheck() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-32">Número</th>
               <th className="px-3 py-1">Banco / Librador</th>
@@ -152,7 +152,7 @@ export function EndorseCheck() {
                   <td data-label="Banco" className="px-3 py-1">
                     <span className="block">{check.bankName}</span>
                     {check.drawer && (
-                      <span className="block text-[11px] text-text-faint">{check.drawer}</span>
+                      <span className="block text-[13px] text-text-faint">{check.drawer}</span>
                     )}
                   </td>
                   <td data-label="Cobro" className="px-3 py-1 text-text-soft">{formatDate(check.dueDate)}</td>

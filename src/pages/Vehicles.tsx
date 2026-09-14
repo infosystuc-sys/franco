@@ -85,7 +85,7 @@ export function Vehicles() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Vehículos y equipos"
         subtitle="Ficha técnica de cada unidad: motor, sistema de inyección y uso."
@@ -128,9 +128,9 @@ export function Vehicles() {
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Vehículo / Equipo</th>
                 <th className="p-3 font-semibold w-32">Patente</th>
                 <th className="p-3 font-semibold w-44">Cliente</th>
@@ -162,17 +162,17 @@ export function Vehicles() {
                     <div className="font-bold text-text">
                       {[vehicle.brand, vehicle.model].filter(Boolean).join(' ')}
                       {!vehicle.active && (
-                        <span className="ml-2 text-[9px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
+                        <span className="ml-2 text-[11px] font-bold uppercase tracking-wider text-text-faint">Inactivo</span>
                       )}
                     </div>
-                    <div className="text-[11px] text-text-soft">
+                    <div className="text-[13px] text-text-soft">
                       {VEHICLE_TYPE_LABELS[vehicle.vehicleType]}
                       {vehicle.year ? ` · ${vehicle.year}` : ''}
                     </div>
                   </td>
                   <td data-label="Patente" className="p-3">
                     {vehicle.licensePlate ? (
-                      <span className="bg-panel-head px-2 py-0.5 border border-line font-mono font-bold text-[11px]">
+                      <span className="bg-panel-head px-2 py-0.5 border border-line font-mono font-bold text-[13px]">
                         {vehicle.licensePlate}
                       </span>
                     ) : (
@@ -180,13 +180,13 @@ export function Vehicles() {
                     )}
                   </td>
                   <td data-label="Cliente" className="p-3">{vehicle.customerName}</td>
-                  <td data-label="Motor" className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Motor" className="p-3 text-[13px] text-text-soft">
                     {[vehicle.engineBrand, vehicle.engineModel].filter(Boolean).join(' ') || <span className="text-text-faint">—</span>}
                   </td>
-                  <td data-label="Inyección" className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Inyección" className="p-3 text-[13px] text-text-soft">
                     {vehicle.injectionSystem || <span className="text-text-faint">—</span>}
                   </td>
-                  <td data-label="Uso" className="p-3 text-right text-[11px] text-text-soft">
+                  <td data-label="Uso" className="p-3 text-right text-[13px] text-text-soft">
                     {vehicle.odometer === null
                       ? <span className="text-text-faint">—</span>
                       : `${vehicle.odometer.toLocaleString('es-AR')} ${vehicle.odometerUnit === 'KM' ? 'km' : 'hs'}`}

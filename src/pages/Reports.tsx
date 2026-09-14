@@ -48,7 +48,7 @@ export function Reports() {
                         />
                       </span>
                       <span className="mt-1 block text-xs text-text-soft">{report.description}</span>
-                      <span className="mt-1.5 block text-[10px] uppercase tracking-[0.08em] text-text-faint">
+                      <span className="mt-1.5 block text-[12px] uppercase tracking-[0.08em] text-text-faint">
                         {report.usesPeriod ? 'Por período' : 'A la fecha'}
                       </span>
                     </span>

@@ -93,8 +93,8 @@ export function Banks() {
 
       {!loading && (
         <Panel className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="w-24 px-4 py-1">Código</th>
                 <th className="px-3 py-1">Nombre</th>
@@ -121,7 +121,7 @@ export function Banks() {
                   <td data-label="Nombre" className="px-3 py-1">
                     {bank.name}
                     {!bank.active && (
-                      <span className="ml-2 rounded bg-panel-head px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      <span className="ml-2 rounded bg-panel-head px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                         Inactivo
                       </span>
                     )}

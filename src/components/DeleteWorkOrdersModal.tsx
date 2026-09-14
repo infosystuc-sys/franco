@@ -107,7 +107,7 @@ export function DeleteWorkOrdersModal({
                       <span className="font-mono font-semibold">{order.number}</span>
                       <span className="text-text-soft"> — {order.customerName}</span>
                       {cotizacion && (
-                        <span className="block text-[11px] text-state-wait">
+                        <span className="block text-[13px] text-state-wait">
                           se borra también la cotización {cotizacion}
                         </span>
                       )}
@@ -120,7 +120,7 @@ export function DeleteWorkOrdersModal({
 
           {impact && retenidas.length > 0 && (
             <div className="space-y-2 border border-line bg-panel-alt p-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              <p className="flex items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <AlertTriangle size={13} /> No se pueden eliminar
               </p>
               <ul className="space-y-1">
@@ -131,14 +131,14 @@ export function DeleteWorkOrdersModal({
                   </li>
                 ))}
               </ul>
-              <p className="text-[11px] text-text-soft">
+              <p className="text-[13px] text-text-soft">
                 Una factura es un comprobante fiscal: mientras exista, su orden queda.
               </p>
             </div>
           )}
 
           {impact && borrables.length > 0 && (
-            <p className="text-[11px] text-text-soft">
+            <p className="text-[13px] text-text-soft">
               Se van sus renglones, historial, etapas, piezas recibidas y fotos. El stock que hayan
               descontado vuelve al inventario. No se puede deshacer.
             </p>

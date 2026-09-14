@@ -96,7 +96,7 @@ export function Purchases() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title={canViewHistory ? 'Compras' : ''}
         subtitle={canViewHistory ? 'Comprobantes recibidos de proveedores y lo que se les debe.' : undefined}
@@ -128,8 +128,8 @@ export function Purchases() {
       <section>
         <SectionHeader title="Cuenta corriente por proveedor" />
         <Panel className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-4 py-1">Proveedor</th>
                 <th className="px-3 py-1 w-28 text-right">Comprobantes</th>
@@ -183,7 +183,7 @@ export function Purchases() {
             key={option}
             onClick={() => setFilter(option)}
             className={cn(
-              'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
               filter === option
                 ? 'border-accent bg-accent text-accent-ink'
                 : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -205,8 +205,8 @@ export function Purchases() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-40">Comprobante</th>
               <th className="px-3 py-1">Proveedor</th>
@@ -259,17 +259,17 @@ export function Purchases() {
                     <td data-label="Proveedor" className="px-3 py-1">
                       <span className={cn(voided && 'text-text-faint line-through')}>{doc.supplierName}</span>
                       {voided && (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulado
                         </span>
                       )}
                     </td>
 
                     <td data-label="Tipo" className="px-3 py-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                      <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                         {PURCHASE_DOC_TYPE_SHORT[doc.docType]}
                       </span>
-                      <span className="ml-1.5 text-[10px] text-text-faint">
+                      <span className="ml-1.5 text-[12px] text-text-faint">
                         {PURCHASE_KIND_LABELS[doc.kind]}
                       </span>
                     </td>
@@ -334,7 +334,7 @@ export function Purchases() {
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span className={cn('block font-display text-2xl font-medium', danger ? 'text-danger' : 'text-text')}>

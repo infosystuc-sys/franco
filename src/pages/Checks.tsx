@@ -148,7 +148,7 @@ export function Checks() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Cheques de terceros"
         subtitle="Los valores recibidos, desde que entran a la cartera hasta que se acreditan o se endosan."
@@ -183,7 +183,7 @@ export function Checks() {
         <button
           onClick={() => setStatusFilter('')}
           className={cn(
-            'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+            'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
             statusFilter === ''
               ? 'border-accent bg-accent text-accent-ink'
               : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -196,7 +196,7 @@ export function Checks() {
             key={status}
             onClick={() => setStatusFilter(status)}
             className={cn(
-              'rounded border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
               statusFilter === status
                 ? 'border-accent bg-accent text-accent-ink'
                 : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
@@ -218,8 +218,8 @@ export function Checks() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-32">Número</th>
               <th className="px-3 py-1">Banco / Librador</th>
@@ -257,7 +257,7 @@ export function Checks() {
                     <td data-label="Banco" className="px-3 py-1">
                       <span className="block">{check.bankName}</span>
                       {check.drawer && (
-                        <span className="block text-[11px] text-text-faint">{check.drawer}</span>
+                        <span className="block text-[13px] text-text-faint">{check.drawer}</span>
                       )}
                     </td>
 
@@ -274,23 +274,23 @@ export function Checks() {
                     <td data-label="Estado" className="px-3 py-1">
                       <span
                         className={cn(
-                          'rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]',
+                          'rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em]',
                           CHECK_STATUS_BADGE[check.status]
                         )}
                       >
                         {CHECK_STATUS_LABELS[check.status]}
                       </span>
                       {check.status === 'DEPOSITADO' && check.depositedToName && (
-                        <span className="block text-[10px] text-text-faint">en {check.depositedToName}</span>
+                        <span className="block text-[12px] text-text-faint">en {check.depositedToName}</span>
                       )}
                       {check.status === 'ENDOSADO' && (check.endorsedToSupplierName || check.endorsedToCustomerName) && (
-                        <span className="block text-[10px] text-text-faint">
+                        <span className="block text-[12px] text-text-faint">
                           a {check.endorsedToSupplierName ?? check.endorsedToCustomerName}
                           {check.endorsedToCustomerName && ' (vuelto)'}
                         </span>
                       )}
                       {check.status === 'RECHAZADO' && check.rejectedReason && (
-                        <span className="block text-[10px] text-danger">{check.rejectedReason}</span>
+                        <span className="block text-[12px] text-danger">{check.rejectedReason}</span>
                       )}
                     </td>
 
@@ -354,7 +354,7 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'inline-flex items-center gap-1 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:opacity-40',
+        'inline-flex items-center gap-1 border px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:opacity-40',
         danger
           ? 'border-danger/40 text-danger hover:bg-danger-soft'
           : 'border-line-strong text-text-soft hover:bg-panel-alt hover:text-text'
@@ -379,13 +379,13 @@ function Kpi({
 }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span className={cn('block font-display text-2xl font-medium', danger ? 'text-danger' : 'text-text')}>
         {value}
       </span>
-      {hint && <span className="mt-0.5 block text-[10px] text-text-faint">{hint}</span>}
+      {hint && <span className="mt-0.5 block text-[12px] text-text-faint">{hint}</span>}
     </Panel>
   );
 }

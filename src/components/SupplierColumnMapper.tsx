@@ -86,7 +86,7 @@ export function SupplierColumnMapper({
       </div>
 
       <div className="overflow-x-auto max-h-64">
-        <table className="w-full text-left text-[12px] font-mono">
+        <table className="w-full text-left text-[14px] font-mono">
           <thead className="bg-panel-head sticky top-0">
             <tr>
               {Array.from({ length: grid.columnCount }, (_, i) => (
@@ -124,7 +124,7 @@ export function SupplierColumnMapper({
       </div>
 
       {hasDuplicates && (
-        <div className="px-3 pb-2 text-[11px] text-danger">
+        <div className="px-3 pb-2 text-[13px] text-danger">
           Cada campo tiene que apuntar a una columna distinta.
         </div>
       )}
@@ -133,7 +133,7 @@ export function SupplierColumnMapper({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
+          className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
         >
           Cancelar
         </button>
@@ -144,7 +144,7 @@ export function SupplierColumnMapper({
             canSave &&
             onSave({ codeColumn: codeColumn!, priceColumn: priceColumn!, descriptionColumn, brandColumn })
           }
-          className="bg-accent text-accent-ink text-[11px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+          className="bg-accent text-accent-ink text-[13px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
         >
           {saving ? 'Guardando...' : 'Guardar mapeo y continuar'}
         </button>

@@ -96,7 +96,7 @@ export function PaymentOrders() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title={canViewHistory ? 'Pagos' : ''}
         subtitle={canViewHistory ? 'Las órdenes con que se cancelan los comprobantes de compra.' : undefined}
@@ -122,8 +122,8 @@ export function PaymentOrders() {
       <section>
         <SectionHeader title="Cuenta corriente por proveedor" />
         <Panel className="overflow-x-auto overflow-y-hidden">
-          <table className="table-stack w-full text-left text-[13px]">
-            <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <table className="table-stack w-full text-left text-[15px]">
+            <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
               <tr>
                 <th className="px-4 py-1">Proveedor</th>
                 <th className="px-3 py-1 w-40 text-right">Se le debe</th>
@@ -175,7 +175,7 @@ export function PaymentOrders() {
       <>
       <SectionHeader title="Órdenes de pago" />
 
-      <div className="relative sm:w-72">
+      <div className="relative sm:w-96">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
         <input
           value={search}
@@ -186,8 +186,8 @@ export function PaymentOrders() {
       </div>
 
       <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[13px]">
-          <thead className="h-9 bg-panel-head text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="table-stack w-full text-left text-[15px]">
+          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-36">Orden</th>
               <th className="px-3 py-1 w-28">Fecha</th>
@@ -235,7 +235,7 @@ export function PaymentOrders() {
                         {order.fullNumber}
                       </Link>
                       {voided && (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulada
                         </span>
                       )}
@@ -247,7 +247,7 @@ export function PaymentOrders() {
 
                     <td data-label="Proveedor" className="px-3 py-1">{order.supplierName}</td>
 
-                    <td data-label="Imputado a" className="px-3 py-1 text-[11px] text-text-soft">
+                    <td data-label="Imputado a" className="px-3 py-1 text-[13px] text-text-soft">
                       {order.allocations.length === 0 ? (
                         <span className="text-text-faint">a cuenta</span>
                       ) : (
@@ -299,7 +299,7 @@ export function PaymentOrders() {
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
     <Panel className="p-4">
-      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
         {label}
       </span>
       <span className={cn('block font-display text-2xl font-medium', danger ? 'text-danger' : 'text-text')}>

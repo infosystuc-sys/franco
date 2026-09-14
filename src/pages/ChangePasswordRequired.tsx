@@ -73,7 +73,7 @@ export function ChangePasswordRequired() {
                 {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
-            {tooCorta && <span className="mt-1 block text-[10px] font-normal normal-case text-danger">Mínimo 6 caracteres.</span>}
+            {tooCorta && <span className="mt-1 block text-[12px] font-normal normal-case text-danger">Mínimo 6 caracteres.</span>}
           </label>
 
           <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
@@ -84,13 +84,13 @@ export function ChangePasswordRequired() {
               onChange={(e) => setConfirm(e.target.value)}
               className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
             />
-            {noCoinciden && <span className="mt-1 block text-[10px] font-normal normal-case text-danger">No coincide.</span>}
+            {noCoinciden && <span className="mt-1 block text-[12px] font-normal normal-case text-danger">No coincide.</span>}
           </label>
 
           <button
             type="submit"
             disabled={!puedeGuardar}
-            className="w-full bg-accent text-accent-ink font-semibold text-[11px] uppercase tracking-wider px-4 py-2.5 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
+            className="w-full bg-accent text-accent-ink font-semibold text-[13px] uppercase tracking-wider px-4 py-2.5 hover:bg-accent-deep hover:text-white transition-colors disabled:opacity-50"
           >
             {saving ? 'Guardando...' : 'Guardar y continuar'}
           </button>
@@ -99,7 +99,7 @@ export function ChangePasswordRequired() {
         <button
           type="button"
           onClick={() => signOut()}
-          className="w-full text-center text-[11px] font-semibold uppercase tracking-wider text-text-soft hover:text-text"
+          className="w-full text-center text-[13px] font-semibold uppercase tracking-wider text-text-soft hover:text-text"
         >
           Cerrar sesión
         </button>

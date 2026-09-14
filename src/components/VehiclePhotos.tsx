@@ -87,7 +87,7 @@ export function VehiclePhotos({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line-strong bg-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft transition-colors hover:bg-panel-alt">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line-strong bg-panel px-3 py-2 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft transition-colors hover:bg-panel-alt">
           <Upload size={15} /> Subir archivo
           <input
             ref={inputArchivo}
@@ -116,7 +116,7 @@ export function VehiclePhotos({
               {urls[foto.id] ? (
                 <img src={urls[foto.id]} alt="" className="h-28 w-full object-cover" />
               ) : (
-                <div className="flex h-28 w-full items-center justify-center text-[11px] text-text-soft">Cargando…</div>
+                <div className="flex h-28 w-full items-center justify-center text-[13px] text-text-soft">Cargando…</div>
               )}
               <button
                 type="button"
@@ -132,7 +132,7 @@ export function VehiclePhotos({
           {previas.map((p, i) => (
             <div key={i} className="group relative overflow-hidden rounded-md border border-dashed border-accent-deep">
               <img src={p.url} alt="" className="h-28 w-full object-cover" />
-              <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
+              <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center text-[12px] text-white">
                 Se sube al guardar
               </span>
               <button

@@ -84,7 +84,7 @@ export function Suppliers() {
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <PageHeader
         title="Proveedores"
         subtitle="Datos fiscales y artículos que provee cada uno."
@@ -111,9 +111,9 @@ export function Suppliers() {
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Proveedor</th>
                 <th className="p-3 font-semibold w-36">CUIT / CUIL</th>
                 <th className="p-3 font-semibold w-44">Cond. IVA</th>
@@ -142,18 +142,18 @@ export function Suppliers() {
                   <td data-primary className="p-3">
                     <div className="font-bold text-text">{supplier.name}</div>
                     {supplier.legalName && supplier.legalName !== supplier.name && (
-                      <div className="text-[11px] text-text-soft">{supplier.legalName}</div>
+                      <div className="text-[13px] text-text-soft">{supplier.legalName}</div>
                     )}
                   </td>
                   <td data-label="CUIT" className="p-3 font-mono">
                     {formatCuit(supplier.taxId) || <span className="text-text-faint">—</span>}
                   </td>
                   <td data-label="Cond. IVA" className="p-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-accent-deep">
+                    <span className="text-[12px] font-bold uppercase tracking-wider text-accent-deep">
                       {TAX_CONDITION_LABELS[supplier.taxCondition]}
                     </span>
                   </td>
-                  <td data-label="Contacto" className="p-3 text-[11px] text-text-soft">
+                  <td data-label="Contacto" className="p-3 text-[13px] text-text-soft">
                     {supplier.email && <div>{supplier.email}</div>}
                     {supplier.phone && <div>{supplier.phone}</div>}
                     {!supplier.email && !supplier.phone && <span className="text-text-faint">—</span>}
@@ -166,7 +166,7 @@ export function Suppliers() {
                   </td>
                   <td data-label="Estado" className="p-3 text-center">
                     <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-wider",
+                      "text-[12px] font-bold uppercase tracking-wider",
                       supplier.active ? "text-state-done" : "text-text-faint"
                     )}>
                       {supplier.active ? 'Activo' : 'Inactivo'}

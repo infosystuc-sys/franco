@@ -101,11 +101,11 @@ export function ReceiptDetails() {
           }
           meta={
             voided ? (
-              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulado
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 Recibo de cobranza
               </span>
             )
@@ -157,7 +157,7 @@ export function ReceiptDetails() {
       <div className="print-document border border-line bg-panel p-6 md:p-8">
         <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
           <div>
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
               Recibimos de
             </span>
             <h2 className="font-display text-xl font-medium uppercase leading-tight text-text">
@@ -169,23 +169,23 @@ export function ReceiptDetails() {
               Recibo de cobranza
             </h3>
             <p className="mt-1 font-mono text-lg font-semibold text-text">{receipt.fullNumber}</p>
-            <p className="mt-1 text-[11px] text-text-soft">Fecha: {formatDate(receipt.receiptDate)}</p>
+            <p className="mt-1 text-[13px] text-text-soft">Fecha: {formatDate(receipt.receiptDate)}</p>
           </div>
         </div>
 
         {/* Imputaciones */}
         <div className="py-4">
-          <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+          <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
             En cancelación de
           </span>
 
           {receipt.allocations.length === 0 ? (
-            <p className="text-[12px] text-text-soft">
+            <p className="text-[14px] text-text-soft">
               Sin imputar: el importe queda a cuenta del cliente.
             </p>
           ) : (
-            <table className="w-full text-left text-[12px]">
-              <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <table className="w-full text-left text-[14px]">
+              <thead className="border-b border-line text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   <th className="py-1.5">Comprobante</th>
                   <th className="w-32 py-1.5 text-right">Importe</th>
@@ -205,10 +205,10 @@ export function ReceiptDetails() {
 
         {/* Valores */}
         <div className="border-t border-line py-4">
-          <span className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-faint">
+          <span className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
             Recibido en
           </span>
-          <table className="w-full text-left text-[12px]">
+          <table className="w-full text-left text-[14px]">
             <tbody>
               {receipt.values.map((value, idx) => (
                 <tr key={idx} className="border-b border-line">
@@ -224,7 +224,7 @@ export function ReceiptDetails() {
 
         {/* Totales */}
         <div className="flex justify-end border-t-2 border-ink pt-4">
-          <dl className="w-full space-y-1 text-[12px] sm:w-72">
+          <dl className="w-full space-y-1 text-[14px] sm:w-72">
             <div className="flex justify-between">
               <dt className="text-text-soft">Imputado</dt>
               <dd className="font-mono text-text">$ {formatMoney(receipt.appliedAmount)}</dd>
@@ -261,7 +261,7 @@ export function ReceiptDetails() {
               ) : null;
             })()}
             <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+              <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 Total recibido
               </dt>
               <dd className="font-display text-2xl font-medium text-text">
@@ -273,15 +273,15 @@ export function ReceiptDetails() {
 
         {receipt.notes && (
           <div className="mt-5 border-t border-line pt-3">
-            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
               Observaciones
             </span>
-            <p className="whitespace-pre-line text-[12px] text-text-soft">{receipt.notes}</p>
+            <p className="whitespace-pre-line text-[14px] text-text-soft">{receipt.notes}</p>
           </div>
         )}
 
         <div className="mt-10 flex justify-end">
-          <div className="w-56 border-t border-line pt-2 text-center text-[10px] uppercase tracking-[0.08em] text-text-faint">
+          <div className="w-56 border-t border-line pt-2 text-center text-[12px] uppercase tracking-[0.08em] text-text-faint">
             Firma y sello
           </div>
         </div>

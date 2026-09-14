@@ -119,7 +119,7 @@ export function PublicQuotation() {
             <Button type="button" variant="ghost" disabled={bajando} onClick={handleDescargarPdf}>
               <Download size={16} /> {bajando ? 'Armando PDF…' : 'Descargar PDF'}
             </Button>
-            <span className="border border-line bg-panel px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
+            <span className="border border-line bg-panel px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-text">
               {QUOTATION_STATUS_LABELS[quotation.status]}
             </span>
           </div>
@@ -154,7 +154,7 @@ export function PublicQuotation() {
       <div ref={documentoRef}>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Vehículo / Equipo
           </span>
           <span className="flex items-center gap-2 text-sm font-semibold text-text">
@@ -169,7 +169,7 @@ export function PublicQuotation() {
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Trabajo a realizar
           </span>
           <span className="flex items-center gap-2 text-sm font-semibold text-text">
@@ -187,9 +187,9 @@ export function PublicQuotation() {
 
       <Panel className="mb-6 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[13px]">
+          <table className="table-stack w-full text-left text-[15px]">
             <thead>
-              <tr className="border-b border-line bg-panel-head text-[11px] uppercase tracking-[0.06em] text-text-soft">
+              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <th className="p-3 font-semibold">Detalle</th>
                 <th className="w-24 p-3 text-right font-semibold">Cant.</th>
                 <th className="w-32 p-3 text-right font-semibold">Precio</th>
@@ -230,7 +230,7 @@ export function PublicQuotation() {
             <span className="text-text">$ {iva.toFixed(2)}</span>
           </div>
           <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
               Total
             </span>
             <span className="font-display text-3xl font-medium text-text">
@@ -242,7 +242,7 @@ export function PublicQuotation() {
 
       {quotation.notes && (
         <Panel className="mb-6 p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Observaciones
           </span>
           <p className="whitespace-pre-line text-sm text-text">{quotation.notes}</p>
@@ -285,7 +285,7 @@ export function PublicQuotation() {
                   enseña nada. */}
               {confirming === 'rechazar' && (
                 <label className="mb-4 block">
-                  <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                  <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                     ¿Por qué lo rechazás? *
                   </span>
                   <textarea
@@ -300,7 +300,7 @@ export function PublicQuotation() {
                       reason.trim() === '' && 'field-required'
                     )}
                   />
-                  <span className="mt-1 block text-[11px] text-text-soft">
+                  <span className="mt-1 block text-[13px] text-text-soft">
                     Nos sirve para mejorar la próxima cotización.
                   </span>
                 </label>
@@ -357,7 +357,7 @@ function Marco({ children }: { children: React.ReactNode }) {
             Taller
           </span>
         </div>
-        <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
+        <span className="hidden text-[13px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
           Presupuesto
         </span>
       </header>

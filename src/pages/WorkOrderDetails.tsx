@@ -414,12 +414,12 @@ export function WorkOrderDetails() {
   }
 
   if (loading) {
-    return <div className="max-w-[1600px] mx-auto p-8 text-center text-text-soft">Cargando orden...</div>;
+    return <div className="w-full p-8 text-center text-text-soft">Cargando orden...</div>;
   }
 
   if (!order) {
     return (
-      <div className="mx-auto max-w-[1600px] p-8 text-center text-text-soft">
+      <div className="w-full p-8 text-center text-text-soft">
         No se encontró la orden {id}.{' '}
         <Link to="/" className="text-accent-deep underline">Volver al panel</Link>
       </div>
@@ -489,7 +489,7 @@ export function WorkOrderDetails() {
     Math.abs(order.priceAuth.requestedTotal - currentTotal) < 0.005;
 
   return (
-    <div className="mx-auto max-w-[1600px]">
+    <div className="w-full">
       <PageHeader
         title={<span className="font-mono text-3xl font-medium tracking-normal text-text">{order.number}</span>}
         meta={
@@ -623,7 +623,7 @@ export function WorkOrderDetails() {
 
       <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-5">
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Cliente
           </span>
           <span className="block text-sm font-semibold text-text">{order.customer?.name ?? '—'}</span>
@@ -641,7 +641,7 @@ export function WorkOrderDetails() {
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Vehículo / Equipo
           </span>
           <span className="block text-sm font-semibold text-text">
@@ -667,14 +667,14 @@ export function WorkOrderDetails() {
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Componente
           </span>
           <span className="text-sm font-semibold text-text">{order.component ?? '—'}</span>
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Empleado
           </span>
           {isAdmin && !locked ? (
@@ -708,7 +708,7 @@ export function WorkOrderDetails() {
         </Panel>
 
         <Panel className="p-4">
-          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Entrega estimada
           </span>
           {isAdmin && !locked ? (
@@ -746,7 +746,7 @@ export function WorkOrderDetails() {
                 // La clave lleva la posición además del id: un estado puede
                 // repetirse en el recorrido, y con solo el id React vería dos
                 // nodos iguales.
-                <div key={`${status.id}-${idx}`} className="relative z-10 flex w-24 shrink-0 flex-col items-center gap-2">
+                <div key={`${status.id}-${idx}`} className="relative z-10 flex w-32 shrink-0 flex-col items-center gap-2">
                   {/* El tramo de línea va de este casillero al siguiente, en
                       vez de una línea única de punta a punta: así termina
                       donde termina el recorrido. */}
@@ -764,7 +764,7 @@ export function WorkOrderDetails() {
                   )}
                   <span
                     className={cn(
-                      'text-center text-[11px] font-semibold uppercase leading-tight tracking-[0.05em]',
+                      'text-center text-[13px] font-semibold uppercase leading-tight tracking-[0.05em]',
                       esActual ? 'text-text' : 'text-text-faint'
                     )}
                   >
@@ -873,24 +873,24 @@ export function WorkOrderDetails() {
               </ul>
             )}
             {isAdmin && !locked && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <input
                   value={partName}
                   onChange={(e) => setPartName(e.target.value)}
                   placeholder="Bomba inyectora"
-                  className="mt-0 flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+                  className="mt-0 min-w-[12rem] flex-1 rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
                 />
                 <input
                   value={partSerial}
                   onChange={(e) => setPartSerial(e.target.value)}
                   placeholder="N° de serie"
-                  className="mt-0 w-40 rounded-md border border-line bg-panel px-3 py-2 font-mono text-sm focus:border-accent-deep focus:outline-none"
+                  className="mt-0 w-40 flex-1 rounded-md border border-line bg-panel px-3 py-2 font-mono text-sm focus:border-accent-deep focus:outline-none sm:flex-none"
                 />
                 <button
                   type="button"
                   disabled={!partName.trim() || !partSerial.trim()}
                   onClick={handleAddPart}
-                  className="border border-line px-3 text-[11px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
+                  className="border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-50"
                 >
                   Agregar
                 </button>
@@ -964,7 +964,7 @@ function PhotosSection({
               disabled={uploading}
               className="hidden"
             />
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-accent-ink hover:bg-accent-deep hover:text-white transition-colors">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-[13px] font-bold uppercase tracking-wider text-accent-ink hover:bg-accent-deep hover:text-white transition-colors">
               <Camera size={15} /> {uploading ? 'Subiendo...' : 'Agregar foto'}
             </span>
           </label>
@@ -1141,7 +1141,7 @@ function StatusControls({
   return (
     <div className="mt-7 border-t border-line pt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
           Estado
         </span>
         <select
@@ -1155,7 +1155,7 @@ function StatusControls({
           ))}
         </select>
         {busy && (
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             Actualizando…
           </span>
         )}
@@ -1190,7 +1190,7 @@ function StatusHistory({ history }: { history: StatusChange[] }) {
         {[...history].reverse().map((change) => (
           <li
             key={change.id}
-            className="relative flex flex-wrap items-center justify-between gap-3 py-2.5 pl-5 pr-5 text-[13px]"
+            className="relative flex flex-wrap items-center justify-between gap-3 py-2.5 pl-5 pr-5 text-[15px]"
           >
             <StateStrip color={change.toStatus.color} />
             <span className="flex items-center gap-2">
@@ -1202,10 +1202,10 @@ function StatusHistory({ history }: { history: StatusChange[] }) {
               )}
               <span className="font-semibold text-text">{change.toStatus.label}</span>
               {!change.fromStatus && (
-                <span className="text-[10px] uppercase tracking-[0.08em] text-text-faint">apertura</span>
+                <span className="text-[12px] uppercase tracking-[0.08em] text-text-faint">apertura</span>
               )}
             </span>
-            <span className="font-mono text-[11px] text-text-soft">
+            <span className="font-mono text-[13px] text-text-soft">
               {new Date(change.changedAt).toLocaleString('es-AR')}
               {change.changedByEmail && ` · ${change.changedByEmail}`}
             </span>

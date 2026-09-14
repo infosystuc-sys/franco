@@ -143,7 +143,7 @@ export function CheckNew() {
                 placeholder="Transportes G&M"
                 className={inputClass}
               />
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Quién firmó el cheque. No siempre es quien te lo entregó.
               </span>
             </label>
@@ -166,7 +166,7 @@ export function CheckNew() {
                 onChange={(e) => patch({ dueDate: e.target.value })}
                 className={cn(inputClass, form.dueDate === '' && 'field-required')}
               />
-              <span className="mt-1 block text-[10px] font-normal normal-case text-text-soft">
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 Un cheque diferido no se puede depositar antes.
               </span>
             </label>
