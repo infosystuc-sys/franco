@@ -242,9 +242,20 @@ export function QuotationDetails() {
           </span>
         }
         subtitle={
-          <Link to="/cotizaciones" className="inline-flex items-center gap-1.5 text-text-soft hover:text-accent-deep">
+          // Antes era un Link directo a /cotizaciones: salir por acá tiraba
+          // sin avisar lo que se hubiera editado (componente, observaciones,
+          // renglones), porque lo único que persistía esos cambios era el
+          // botón Guardar. Ahora es la misma acción que Guardar —guarda y
+          // recién ahí vuelve, respetando a dónde corresponda volver— así
+          // que salir por acá nunca pierde nada.
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 text-text-soft hover:text-accent-deep disabled:opacity-60"
+          >
             <ArrowLeft size={14} /> Volver a cotizaciones
-          </Link>
+          </button>
         }
         actions={
           isAdmin && (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { XCircle, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer } from 'lucide-react';
+import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -95,9 +95,9 @@ export function WorkOrderDetails() {
   const itemsBaselineRef = React.useRef<string>('[]');
   const itemsDirty = JSON.stringify(items) !== itemsBaselineRef.current;
 
-  // El botón Volver ya pregunta (ver handleVolver); esto cubre la otra
-  // forma de perder lo mismo sin darse cuenta: cerrar la pestaña, recargar,
-  // o escribir otra URL con renglones sin guardar.
+  // Volver ya guarda antes de irse (ver handleVolver); esto cubre la otra
+  // forma de perder lo mismo sin pasar por ningún botón: cerrar la pestaña,
+  // recargar, o escribir otra URL con renglones sin guardar.
   React.useEffect(() => {
     if (!itemsDirty) return;
     function avisar(e: BeforeUnloadEvent) {
@@ -437,22 +437,19 @@ export function WorkOrderDetails() {
   }
 
   /**
-   * "Volver" salía directo al listado sin avisar, y los renglones cargados
-   * y no guardados se perdían en silencio — el borrador vive solo en este
-   * componente (ver el comentario de itemsBaselineRef), así que salir sin
-   * pasar por Guardar los tira. Ahora se pregunta antes de irse; el resto de
-   * la OT (estado, empleado, fechas, piezas, fotos) ya se guarda solo al
-   * tocarlo, así que no hace falta la misma pregunta para eso.
+   * Volver ya no sale sin más: guarda primero, en todos los casos donde hay
+   * algo que se pudiera perder — el mismo criterio que ya usa el botón
+   * Guardar (isAdmin && !locked). Para quien no puede editar renglones
+   * —operario, o una OT ya facturada— no hay nada que guardar, así que
+   * vuelve directo en vez de intentar un guardado que el servidor rechazaría
+   * por permisos.
    */
-  function handleVolver() {
-    if (itemsDirty) {
-      const salirIgual = window.confirm(
-        'Hay artículos cargados en esta orden que todavía no se guardaron.\n\n' +
-          '¿Salir igual? Se pierden.'
-      );
-      if (!salirIgual) return;
+  async function handleVolver() {
+    if (!isAdmin || locked) {
+      navigate('/ordenes');
+      return;
     }
-    navigate('/ordenes');
+    await handleSave();
   }
 
   if (loading) {
@@ -558,8 +555,8 @@ export function WorkOrderDetails() {
         }
         actions={
           <>
-            <Button variant="ghost" type="button" onClick={handleVolver}>
-              <XCircle size={16} /> Volver
+            <Button variant="ghost" type="button" onClick={handleVolver} disabled={saving}>
+              <ArrowLeft size={16} /> {saving ? 'Guardando…' : 'Volver'}
             </Button>
             {isAdmin && !order.quotationNumber && candidatas.length > 0 && (
               <select
