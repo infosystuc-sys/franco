@@ -75,6 +75,36 @@ export async function fetchCompanySettings(): Promise<CompanySettings | null> {
   return data ? mapCompanySettings(data) : null;
 }
 
+/**
+ * Los mismos datos, pero los que van impresos en la cabecera de un
+ * comprobante y sin pasar por la tabla: company_settings solo la lee un admin,
+ * y el encabezado lo necesitan también el cliente que abre el link del
+ * presupuesto —sin sesión— y el operario que lo imprime desde la orden.
+ */
+export type TallerHeader = Omit<CompanySettings, 'salesPoint'>;
+
+export async function fetchTallerHeader(): Promise<TallerHeader | null> {
+  const { data, error } = await supabase.rpc('datos_del_taller');
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) return null;
+
+  return {
+    legalName: row.legal_name ?? '',
+    tradeName: row.trade_name,
+    taxId: row.tax_id,
+    taxCondition: row.tax_condition,
+    grossIncome: row.gross_income,
+    activityStartDate: row.activity_start_date,
+    addressStreet: row.address_street,
+    addressCity: row.address_city,
+    addressState: row.address_state,
+    addressZip: row.address_zip,
+    phone: row.phone,
+    email: row.email,
+  };
+}
+
 export async function updateCompanySettings(
   input: CompanySettingsInput
 ): Promise<CompanySettings> {

@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import type { TaxCondition } from '@/src/lib/fiscal';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 
 export type QuotationStatus = 'EMITIDA' | 'ENVIADA' | 'ACEPTADA' | 'RECHAZADA';
@@ -75,6 +76,11 @@ export interface QuotationDetail {
     name: string;
     legal_name: string | null;
     tax_id: string | null;
+    tax_condition: TaxCondition | null;
+    address_street: string | null;
+    address_city: string | null;
+    address_state: string | null;
+    address_zip: string | null;
     email: string | null;
     phone: string | null;
   } | null;
@@ -160,7 +166,7 @@ export async function fetchUnlinkedQuotations(customerId: string): Promise<Quota
 const DETAIL_SELECT = `
   id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
   decided_at, rejection_reason,
-  customer:customers(name, legal_name, tax_id, email, phone),
+  customer:customers(name, legal_name, tax_id, tax_condition, address_street, address_city, address_state, address_zip, email, phone),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
   items:quotation_items(id, article_id, code, description, quantity, unit_price)

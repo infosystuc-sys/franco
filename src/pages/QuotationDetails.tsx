@@ -19,7 +19,9 @@ import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { fetchArticles, type Article } from '@/src/lib/articles';
+import { QuotationDocument } from '@/src/components/QuotationDocument';
 import { formatCuit } from '@/src/lib/fiscal';
+import { fetchTallerHeader, formatAddress, type TallerHeader } from '@/src/lib/companySettings';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import {
   describirEnvioCotizacion,
@@ -45,6 +47,7 @@ export function QuotationDetails() {
   const { number } = useParams();
 
   const [quotation, setQuotation] = React.useState<QuotationDetail | null>(null);
+  const [taller, setTaller] = React.useState<TallerHeader | null>(null);
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [component, setComponent] = React.useState('');
   const [notes, setNotes] = React.useState('');
@@ -75,7 +78,14 @@ export function QuotationDetails() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchQuotationByNumber(number);
+      // El membrete se carga junto con la cotización, no aparte: llegar acá
+      // con ?imprimir=1 dispara la impresión apenas termina esta carga, y un
+      // encabezado que llega después sale en pantalla pero no en el papel.
+      const [data, datosTaller] = await Promise.all([
+        fetchQuotationByNumber(number),
+        fetchTallerHeader().catch(() => null),
+      ]);
+      setTaller(datosTaller);
       setQuotation(data);
       setItems(data?.items ?? []);
       setComponent(data?.component ?? '');
@@ -409,85 +419,39 @@ export function QuotationDetails() {
       </div>
 
       {/* Vista imprimible: lo que se imprime y lo que se manda por mail o
-          WhatsApp son siempre este mismo bloque, no el formulario de arriba. */}
-      <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
-        <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
-          <div>
-            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
-              Presupuesto para
-            </span>
-            <h2 className="font-display text-xl font-medium uppercase leading-tight text-text">
-              {quotation.customer?.name ?? '—'}
-            </h2>
-            {quotation.customer?.tax_id && (
-              <p className="mt-1 font-mono text-[13px] text-text-soft">{formatCuit(quotation.customer.tax_id)}</p>
-            )}
-          </div>
-          <div className="sm:text-right">
-            <h3 className="font-display text-lg uppercase tracking-[0.08em] text-text-faint">Presupuesto</h3>
-            <p className="mt-1 font-mono text-lg font-semibold text-text">{quotation.number}</p>
-            {quotation.validUntil && (
-              <p className="mt-1 text-[13px] text-text-soft">
-                Válido hasta {new Date(`${quotation.validUntil}T00:00:00`).toLocaleDateString('es-AR')}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="py-4 text-[14px] text-text-soft">
-          {[quotation.vehicle?.brand, quotation.vehicle?.model].filter(Boolean).join(' ') || '—'}
-          {quotation.vehicle?.license_plate ? ` · ${quotation.vehicle.license_plate}` : ''}
-          {quotation.component ? ` · ${quotation.component}` : ''}
-        </div>
-
-        <table className="w-full text-left text-[14px]">
-          <thead className="border-b border-line text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-            <tr>
-              <th className="py-1.5">Detalle</th>
-              <th className="w-20 py-1.5 text-right">Cant.</th>
-              <th className="w-28 py-1.5 text-right">Precio</th>
-              <th className="w-28 py-1.5 text-right">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => (
-              <tr key={idx} className="border-b border-line">
-                <td className="py-1.5">{item.description}</td>
-                <td className="py-1.5 text-right">{item.quantity.toFixed(2)}</td>
-                <td className="py-1.5 text-right">$ {formatMoney(item.unitPrice)}</td>
-                <td className="py-1.5 text-right font-semibold">$ {formatMoney(item.quantity * item.unitPrice)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="flex justify-end border-t-2 border-ink pt-4">
-          <dl className="w-full space-y-1 text-[14px] sm:w-72">
-            <div className="flex justify-between">
-              <dt className="text-text-soft">Subtotal</dt>
-              <dd className="font-mono text-text">$ {formatMoney(itemsTotal)}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-text-soft">IVA 21%</dt>
-              <dd className="font-mono text-text">$ {formatMoney(itemsIva)}</dd>
-            </div>
-            <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-              <dt className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">Total</dt>
-              <dd className="font-display text-2xl font-medium text-text">
-                $ {formatMoney(itemsTotal + itemsIva)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        {quotation.notes && (
-          <div className="mt-5 border-t border-line pt-3">
-            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-              Observaciones
-            </span>
-            <p className="whitespace-pre-line text-[14px] text-text-soft">{quotation.notes}</p>
-          </div>
-        )}
+          WhatsApp son siempre este mismo bloque, no el formulario de arriba.
+          Los renglones salen de items —lo que está editado en pantalla— y no
+          de quotation.items, para que lo impreso sea lo que se está viendo. */}
+      <div ref={documentRef}>
+        <QuotationDocument
+          taller={taller}
+          quotation={{
+            number: quotation.number,
+            issueDate: quotation.createdAt,
+            validUntil: quotation.validUntil,
+            component: quotation.component,
+            notes: quotation.notes,
+            customerName: quotation.customer?.legal_name || quotation.customer?.name || '—',
+            customerTaxId: quotation.customer?.tax_id ?? null,
+            customerAddress: quotation.customer ? formatAddress({
+              addressStreet: quotation.customer.address_street,
+              addressCity: quotation.customer.address_city,
+              addressState: quotation.customer.address_state,
+              addressZip: quotation.customer.address_zip,
+            }) : null,
+            customerTaxCondition: quotation.customer?.tax_condition ?? null,
+            vehicleBrand: quotation.vehicle?.brand ?? null,
+            vehicleModel: quotation.vehicle?.model ?? null,
+            licensePlate: quotation.vehicle?.license_plate ?? null,
+            workOrderNumber: quotation.workOrderNumber,
+            items: items.map((item) => ({
+              code: item.code || null,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+            })),
+          }}
+        />
       </div>
 
       {sendModal && (

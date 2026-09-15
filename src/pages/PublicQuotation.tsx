@@ -1,10 +1,12 @@
 import React from 'react';
-import { Check, X, AlertTriangle, Truck, Settings, CheckCircle2, Download } from 'lucide-react';
+import { Check, X, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { PageHeader, Panel, Button } from '@/src/components/ui';
 import { QUOTATION_STATUS_LABELS } from '@/src/lib/quotations';
 import { downloadElementAsPdf } from '@/src/lib/pdf';
+import { QuotationDocument } from '@/src/components/QuotationDocument';
+import { fetchTallerHeader, type TallerHeader } from '@/src/lib/companySettings';
 import {
   decideQuotation,
   DECISION_MESSAGES,
@@ -15,8 +17,6 @@ import {
   type PublicQuotationItem,
 } from '@/src/lib/publicQuotation';
 import logo from '@/src/assets/logo-luciano-diesel.png';
-
-const IVA_RATE = 0.21;
 
 /**
  * Presupuesto que ve el cliente por el link. Es la única pantalla pública
@@ -29,6 +29,7 @@ export function PublicQuotation() {
   const { token } = useParams();
   const [quotation, setQuotation] = React.useState<Quotation | null>(null);
   const [items, setItems] = React.useState<PublicQuotationItem[]>([]);
+  const [taller, setTaller] = React.useState<TallerHeader | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [deciding, setDeciding] = React.useState(false);
   const [confirming, setConfirming] = React.useState<'aceptar' | 'rechazar' | null>(null);
@@ -43,7 +44,14 @@ export function PublicQuotation() {
     try {
       const data = await fetchPublicQuotation(token);
       setQuotation(data);
-      if (data) setItems(await fetchPublicQuotationItems(token));
+      if (data) {
+        const [renglones, datosTaller] = await Promise.all([
+          fetchPublicQuotationItems(token),
+          fetchTallerHeader().catch(() => null),
+        ]);
+        setItems(renglones);
+        setTaller(datosTaller);
+      }
     } catch {
       setQuotation(null);
     } finally {
@@ -88,8 +96,6 @@ export function PublicQuotation() {
     );
   }
 
-  const total = items.reduce((sum, i) => sum + i.subtotal, 0);
-  const iva = total * IVA_RATE;
   const vencido =
     quotation.validUntil !== null &&
     quotation.validUntil < new Date().toISOString().slice(0, 10);
@@ -152,103 +158,35 @@ export function PublicQuotation() {
       {/* Todo lo que es el presupuesto en sí va adentro de este bloque: es lo
           que se convierte en PDF. Los botones de aceptar y rechazar quedan
           afuera a propósito —en un papel guardado no significan nada—. */}
-      <div ref={documentoRef}>
-      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Panel className="p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Vehículo / Equipo
-          </span>
-          <span className="flex items-center gap-2 text-sm font-semibold text-text">
-            <Truck size={17} className="text-text-soft" />
-            {[quotation.vehicleBrand, quotation.vehicleModel].filter(Boolean).join(' ') || '—'}
-          </span>
-          {quotation.licensePlate && (
-            <span className="mt-2 inline-block border border-line bg-panel-alt px-2 py-0.5 font-mono text-xs font-semibold">
-              {quotation.licensePlate}
-            </span>
-          )}
-        </Panel>
-
-        <Panel className="p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Trabajo a realizar
-          </span>
-          <span className="flex items-center gap-2 text-sm font-semibold text-text">
-            <Settings size={17} className="text-text-soft" />
-            {quotation.component ?? '—'}
-          </span>
-          {quotation.validUntil && (
-            <span className="mt-2 block text-xs text-text-soft">
-              Válido hasta{' '}
-              {new Date(`${quotation.validUntil}T00:00:00`).toLocaleDateString('es-AR')}
-            </span>
-          )}
-        </Panel>
-      </div>
-
-      <Panel className="mb-6 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[15px]">
-            <thead>
-              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="p-3 font-semibold">Detalle</th>
-                <th className="w-24 p-3 text-right font-semibold">Cant.</th>
-                <th className="w-32 p-3 text-right font-semibold">Precio</th>
-                <th className="w-32 p-3 text-right font-semibold">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="p-6 text-center text-text-soft">
-                    Este presupuesto todavía no tiene detalle cargado.
-                  </td>
-                </tr>
-              )}
-              {items.map((item, idx) => (
-                <tr key={idx} className="border-b border-line last:border-b-0">
-                  <td data-primary className="p-3">{item.description}</td>
-                  <td data-label="Cant." className="p-3 text-right">{item.quantity.toFixed(2)}</td>
-                  <td data-label="Precio" className="p-3 text-right">$ {item.unitPrice.toFixed(2)}</td>
-                  <td data-label="Subtotal" className="p-3 text-right font-semibold">
-                    $ {item.subtotal.toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
-
-      <div className="mb-6 flex justify-end">
-        <div className="w-full space-y-2 border border-line bg-panel p-4 sm:w-80">
-          <div className="flex justify-between text-xs text-text-soft">
-            <span>Subtotal</span>
-            <span className="text-text">$ {total.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-xs text-text-soft">
-            <span>IVA 21%</span>
-            <span className="text-text">$ {iva.toFixed(2)}</span>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between border-t-2 border-accent pt-2">
-            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
-              Total
-            </span>
-            <span className="font-display text-3xl font-medium text-text">
-              $ {(total + iva).toFixed(2)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {quotation.notes && (
-        <Panel className="mb-6 p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Observaciones
-          </span>
-          <p className="whitespace-pre-line text-sm text-text">{quotation.notes}</p>
-        </Panel>
-      )}
+      {/* El mismo papel que imprime el taller: el cliente ve y se baja el
+          presupuesto tal cual, con membrete, no una versión de pantalla. */}
+      <div ref={documentoRef} className="mb-6">
+        <QuotationDocument
+          taller={taller}
+          quotation={{
+            number: quotation.number,
+            issueDate: quotation.createdAt,
+            validUntil: quotation.validUntil,
+            component: quotation.component,
+            notes: quotation.notes,
+            customerName: quotation.customerName ?? '—',
+            // El link es público: el CUIT y el domicilio del cliente no viajan
+            // en él, como en el resto de la vista pública.
+            customerTaxId: null,
+            customerAddress: null,
+            customerTaxCondition: null,
+            vehicleBrand: quotation.vehicleBrand,
+            vehicleModel: quotation.vehicleModel,
+            licensePlate: quotation.licensePlate,
+            workOrderNumber: null,
+            items: items.map((item) => ({
+              code: item.code,
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+            })),
+          }}
+        />
       </div>
 
       {puedeDecidir && !result && (
