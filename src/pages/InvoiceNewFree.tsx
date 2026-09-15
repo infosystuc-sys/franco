@@ -1,28 +1,32 @@
 import React from 'react';
-import { XCircle, Receipt, AlertTriangle, ArrowRight, Truck } from 'lucide-react';
+import { Receipt, AlertTriangle, ArrowRight, Truck, CalendarClock } from 'lucide-react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { Button, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
+import { TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import {
   fetchCompanySettings,
+  formatAddress,
   isReadyToInvoice,
   type CompanySettings,
 } from '@/src/lib/companySettings';
 import {
   computeTotals,
   describeInvoiceError,
+  formatDate,
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
+  PAYMENT_TERMS_DAYS,
   toDateString,
 } from '@/src/lib/invoices';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
-import { Blocked, CashCheckoutFields, InvoiceTotals, InvoiceTypeBadge } from '@/src/pages/InvoiceNew';
+import { Blocked, CashCheckoutFields, FieldBox, InvoiceTopBar, InvoiceTotals } from '@/src/pages/InvoiceNew';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
@@ -128,6 +132,10 @@ export function InvoiceNewFree() {
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
     (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
+  const issueDate = new Date();
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
+
   async function handleIssue() {
     if (!customer || !canIssue) return;
     const confirmed = window.confirm(
@@ -173,42 +181,36 @@ export function InvoiceNewFree() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader
-        title="Facturar"
-        meta={<InvoiceTypeBadge type={invoiceType} />}
+      <InvoiceTopBar
+        title="Factura de venta"
+        type={invoiceType}
         subtitle={
           remito ? (
             <span className="inline-flex items-center gap-1.5">
-              <Truck size={14} className="text-accent-deep" /> Facturando el remito {remito.fullNumber}
+              <Truck size={13} className="text-accent-deep" /> Facturando el remito {remito.fullNumber}
             </span>
           ) : (
             'Sin orden de trabajo ni cotización — se carga el cliente y los renglones a mano.'
           )
         }
-        actions={
-          <>
-            <Link to="/facturas">
-              <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
-            </Link>
-            <Button onClick={handleIssue} disabled={!canIssue}>
-              <Receipt size={16} /> {issuing ? 'Emitiendo…' : 'Emitir factura'}
-            </Button>
-          </>
-        }
+        total={totals.total}
+        cancelHref="/facturas"
+        onIssue={handleIssue}
+        issuing={issuing}
+        canIssue={canIssue}
       />
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <Panel className="mb-6 p-5">
-        <SectionHeader title="Cliente" />
-        <label className="block text-xs font-bold uppercase tracking-wider text-text-soft sm:max-w-sm">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <FieldBox label="Cliente" className="col-span-2 sm:col-span-2">
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={!!remito}
-            className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none disabled:opacity-60"
+            className="w-full border border-line bg-panel-alt px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-60"
           >
             <option value="">Elegí un cliente...</option>
             {customers.map((c) => (
@@ -218,25 +220,57 @@ export function InvoiceNewFree() {
             ))}
           </select>
           {remito && (
-            <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+            <span className="mt-1 block text-[11px] normal-case text-text-soft">
               Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
             </span>
           )}
           {customers.length === 0 && !remito && (
-            <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
+            <span className="mt-1 block text-[11px] normal-case text-state-wait">
               No hay clientes activos. Cargá uno desde la sección Clientes.
             </span>
           )}
-        </label>
-      </Panel>
+        </FieldBox>
 
-      <Panel className="mb-6 p-5">
+        <FieldBox label="Condición del cliente">
+          {customer?.taxId && <span className="block font-mono text-[13px]">{formatCuit(customer.taxId)}</span>}
+          <span className="block text-text-soft">{TAX_CONDITION_LABELS[customerCondition]}</span>
+        </FieldBox>
+
+        <FieldBox label="Domicilio">
+          <span className="block truncate text-text-soft">
+            {customer ? formatAddress(customer) || 'Sin domicilio cargado' : '—'}
+          </span>
+        </FieldBox>
+
+        <FieldBox label="Emisor">
+          <span className="block truncate font-semibold text-text">{settings.legalName}</span>
+          {settings.taxId && <span className="block font-mono text-[12px] text-text-soft">{formatCuit(settings.taxId)}</span>}
+        </FieldBox>
+
+        <FieldBox label="Punto de venta">
+          <span className="font-mono">{String(settings.salesPoint).padStart(4, '0')}</span>
+        </FieldBox>
+
+        <FieldBox label="Condición de venta">
+          <span className="flex items-center gap-1.5">
+            <CalendarClock size={14} className="text-accent-deep" /> Cuenta corriente
+          </span>
+        </FieldBox>
+
+        <FieldBox label="Emisión / Vencimiento">
+          <span className="block">{formatDate(toDateString(issueDate))}</span>
+          <span className="block text-text-soft">
+            Vence {formatDate(toDateString(dueDate))} ({PAYMENT_TERMS_DAYS} días)
+          </span>
+        </FieldBox>
+      </div>
+
+      <Panel className="mb-4 p-4">
         <ItemsEditor
           items={items}
           onChange={setItems}
           articles={articles}
           editable
-          title="Renglones a facturar"
           totals={<InvoiceTotals type={invoiceType} totals={totals} />}
         />
 
@@ -250,39 +284,44 @@ export function InvoiceNewFree() {
         )}
       </Panel>
 
-      <Panel className="mb-10 p-5">
-        <SectionHeader title="Observaciones" />
-        {!remito && (
-          <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-            <input
-              type="checkbox"
-              checked={emitRemito}
-              onChange={(e) => setEmitRemito(e.target.checked)}
-              className="w-4 h-4 accent-accent-deep"
-            />
-            Emitir remito junto con la factura
-          </label>
-        )}
+      <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
+        <Panel className="p-4">
+          <SectionHeader title="Cómo se emite" className="mb-3" />
+          {!remito && (
+            <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+              <input
+                type="checkbox"
+                checked={emitRemito}
+                onChange={(e) => setEmitRemito(e.target.checked)}
+                className="w-4 h-4 accent-accent-deep"
+              />
+              Emitir remito junto con la factura
+            </label>
+          )}
 
-        <CashCheckoutFields
-          isCash={isCash}
-          onIsCashChange={setIsCash}
-          paymentMethods={paymentMethods}
-          paymentMethodId={paymentMethodId}
-          onPaymentMethodIdChange={setPaymentMethodId}
-          checkDrafts={checkDrafts}
-          onOpenCheckModal={() => setCheckModalOpen(true)}
-          onClearChecks={() => setCheckDrafts(null)}
-        />
+          <CashCheckoutFields
+            isCash={isCash}
+            onIsCashChange={setIsCash}
+            paymentMethods={paymentMethods}
+            paymentMethodId={paymentMethodId}
+            onPaymentMethodIdChange={setPaymentMethodId}
+            checkDrafts={checkDrafts}
+            onOpenCheckModal={() => setCheckModalOpen(true)}
+            onClearChecks={() => setCheckDrafts(null)}
+          />
+        </Panel>
 
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Texto que sale impreso en el comprobante. Opcional."
-          className="mt-4 w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
-        />
-      </Panel>
+        <Panel className="p-4">
+          <SectionHeader title="Observaciones" className="mb-3" />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="Texto que sale impreso en el comprobante. Opcional."
+            className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+          />
+        </Panel>
+      </div>
 
       {checkModalOpen && (
         <CheckDraftModal

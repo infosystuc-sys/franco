@@ -42,6 +42,91 @@ import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 
 /**
+ * Una celda de la ficha de cabecera del comprobante: rótulo chico arriba,
+ * valor abajo, con su propio borde. Así se arma una grilla densa —varios
+ * datos por vistazo, sin desplazarse— en vez de paneles grandes con mucho
+ * aire entre uno y otro dato, que es como se ve un sistema de facturación
+ * de escritorio (Tango y similares) y como pidió que se viera este módulo.
+ */
+export function FieldBox({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('border border-line bg-panel px-3 py-2', className)}>
+      <span className="block text-[11px] font-bold uppercase tracking-wider text-text-faint">
+        {label}
+      </span>
+      <div className="mt-1 text-sm text-text">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * La barra del comprobante: título y letra a la izquierda, el total bien
+ * grande y las acciones a la derecha, todo en una sola línea. Queda fija
+ * arriba mientras se scrollea la ficha, como la barra de un sistema de
+ * facturación de escritorio — ahí es donde se mira antes de confirmar, no
+ * tiene sentido que se pierda de vista con renglones largos.
+ */
+export function InvoiceTopBar({
+  title,
+  type,
+  subtitle,
+  total,
+  cancelHref,
+  onIssue,
+  issuing,
+  canIssue,
+}: {
+  title: string;
+  type: InvoiceType;
+  subtitle?: React.ReactNode;
+  total: number;
+  cancelHref: string;
+  onIssue: () => void;
+  issuing: boolean;
+  canIssue: boolean;
+}) {
+  return (
+    <div
+      className="sticky z-20 mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-[3px] border-accent bg-panel px-4 py-3 sm:px-5"
+      style={{ top: 'calc(3.5rem + var(--safe-top))' }}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h1 className="font-display text-xl uppercase tracking-[0.04em] text-text leading-none">{title}</h1>
+          <InvoiceTypeBadge type={type} />
+        </div>
+        {subtitle && <div className="mt-1 text-xs text-text-soft">{subtitle}</div>}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="text-right">
+          <span className="block text-[11px] font-bold uppercase tracking-wider text-text-faint">Total</span>
+          <span className="font-display text-2xl font-medium leading-none text-text">
+            $ {formatMoney(total)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to={cancelHref}>
+            <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
+          </Link>
+          <Button onClick={onIssue} disabled={!canIssue}>
+            <Receipt size={16} /> {issuing ? 'Emitiendo…' : 'Emitir factura'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * El proceso de facturación de una orden.
  *
  * El borrador vive en memoria: hasta que se confirma no existe ninguna fila.
@@ -269,57 +354,34 @@ export function InvoiceNew() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <PageHeader
-        title="Facturar"
-        meta={<InvoiceTypeBadge type={invoiceType} />}
+      <InvoiceTopBar
+        title={`Factura de venta · OT ${order.number}`}
+        type={invoiceType}
         subtitle={
-          <Link
-            to={`/orden/${order.number}`}
-            className="inline-flex items-center gap-1.5 text-accent-deep hover:underline"
-          >
-            <XCircle size={14} /> Desde la orden {order.number}
+          <Link to={`/orden/${order.number}`} className="inline-flex items-center gap-1.5 hover:text-accent-deep hover:underline">
+            <XCircle size={13} /> Desde la orden {order.number}
             {order.component ? ` · ${order.component}` : ''}
           </Link>
         }
-        actions={
-          <>
-            <Link to={`/orden/${order.number}`}>
-              <Button variant="ghost" type="button">Cancelar</Button>
-            </Link>
-            <Button onClick={handleIssue} disabled={!canIssue}>
-              <Receipt size={16} /> {issuing ? 'Emitiendo…' : 'Emitir factura'}
-            </Button>
-          </>
-        }
+        total={totals.total}
+        cancelHref={`/orden/${order.number}`}
+        onIssue={handleIssue}
+        issuing={issuing}
+        canIssue={canIssue}
       />
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Panel className="p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Emisor
-          </span>
-          <span className="block text-sm font-semibold text-text">{settings.legalName}</span>
-          <span className="mt-1.5 block text-xs text-text-soft">
-            {settings.taxId && <span className="font-mono">{formatCuit(settings.taxId)} · </span>}
-            {TAX_CONDITION_LABELS[settings.taxCondition]}
-          </span>
-          <span className="mt-1 block font-mono text-[13px] text-text-faint">
-            Punto de venta {String(settings.salesPoint).padStart(4, '0')}
-          </span>
-        </Panel>
-
-        <Panel className="p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Cliente
-          </span>
-          <span className="block text-sm font-semibold text-text">
+      {/* La ficha del comprobante: un dato por celda, sin el aire de un panel
+          grande — de un vistazo se lee a quién, con qué letra y cuándo vence,
+          igual que la cabecera de un talonario electrónico. */}
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <FieldBox label="Cliente" className="col-span-2 sm:col-span-2">
+          <span className="block truncate font-semibold text-text">
             {order.customer?.legal_name || order.customer?.name || '—'}
           </span>
-
           {/* A quién se le factura puede no ser quien trajo el vehículo: la
               empresa del titular, el seguro, la contratista. Se cambia acá,
               antes de emitir, porque después la factura ya salió con un
@@ -328,7 +390,7 @@ export function InvoiceNew() {
             value={order.customer?.id ?? ''}
             disabled={cambiandoCliente || customers.length === 0}
             onChange={(e) => handleCambiarCliente(e.target.value)}
-            className="mt-2 w-full rounded-md border border-line bg-panel px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-50"
+            className="mt-1.5 w-full border border-line bg-panel-alt px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-50"
           >
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -336,78 +398,60 @@ export function InvoiceNew() {
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-[12px] text-text-soft">
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
             {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
           </span>
-          <span className="mt-1.5 block text-xs text-text-soft">
-            {order.customer?.tax_id && (
-              <span className="font-mono">{formatCuit(order.customer.tax_id)} · </span>
-            )}
-            {TAX_CONDITION_LABELS[customerCondition]}
-          </span>
-          {order.customer && (
-            <span className="mt-1 block text-[13px] text-text-faint">
-              {formatAddress({
-                addressStreet: order.customer.address_street,
-                addressCity: order.customer.address_city,
-                addressState: order.customer.address_state,
-                addressZip: order.customer.address_zip,
-              }) || 'Sin domicilio cargado'}
-            </span>
-          )}
-        </Panel>
+        </FieldBox>
 
-        <Panel className="p-4">
-          <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Condición de pago
+        <FieldBox label="Condición del cliente">
+          {order.customer?.tax_id && (
+            <span className="block font-mono text-[13px]">{formatCuit(order.customer.tax_id)}</span>
+          )}
+          <span className="block text-text-soft">{TAX_CONDITION_LABELS[customerCondition]}</span>
+        </FieldBox>
+
+        <FieldBox label="Domicilio">
+          <span className="block truncate text-text-soft">
+            {order.customer
+              ? formatAddress({
+                  addressStreet: order.customer.address_street,
+                  addressCity: order.customer.address_city,
+                  addressState: order.customer.address_state,
+                  addressZip: order.customer.address_zip,
+                }) || 'Sin domicilio cargado'
+              : '—'}
           </span>
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-text">
-            <CalendarClock size={15} className="text-accent-deep" /> Cuenta corriente
+        </FieldBox>
+
+        <FieldBox label="Emisor">
+          <span className="block truncate font-semibold text-text">{settings.legalName}</span>
+          {settings.taxId && <span className="block font-mono text-[12px] text-text-soft">{formatCuit(settings.taxId)}</span>}
+        </FieldBox>
+
+        <FieldBox label="Punto de venta">
+          <span className="font-mono">{String(settings.salesPoint).padStart(4, '0')}</span>
+        </FieldBox>
+
+        <FieldBox label="Condición de venta">
+          <span className="flex items-center gap-1.5">
+            <CalendarClock size={14} className="text-accent-deep" /> Cuenta corriente
           </span>
-          <span className="mt-1.5 block text-xs text-text-soft">
-            Emisión {formatDate(toDateString(issueDate))}
-          </span>
-          <span className="block text-xs text-text-soft">
+        </FieldBox>
+
+        <FieldBox label="Emisión / Vencimiento">
+          <span className="block">{formatDate(toDateString(issueDate))}</span>
+          <span className="block text-text-soft">
             Vence {formatDate(toDateString(dueDate))} ({PAYMENT_TERMS_DAYS} días)
           </span>
-        </Panel>
+        </FieldBox>
       </div>
 
-      {/* Cómo se cobra va junto a quién y cuándo, no al final entre las
-          observaciones: son decisiones del encabezado del comprobante, y
-          tomarlas después de cargar los renglones llevaba a emitir de cuenta
-          corriente una factura que se estaba cobrando en el mostrador. */}
-      <Panel className="mb-6 p-5">
-        <SectionHeader title="Cómo se emite" />
-        <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-          <input
-            type="checkbox"
-            checked={emitRemito}
-            onChange={(e) => setEmitRemito(e.target.checked)}
-            className="w-4 h-4 accent-accent-deep"
-          />
-          Emitir remito junto con la factura
-        </label>
-
-        <CashCheckoutFields
-          isCash={isCash}
-          onIsCashChange={setIsCash}
-          paymentMethods={paymentMethods}
-          paymentMethodId={paymentMethodId}
-          onPaymentMethodIdChange={setPaymentMethodId}
-          checkDrafts={checkDrafts}
-          onOpenCheckModal={() => setCheckModalOpen(true)}
-          onClearChecks={() => setCheckDrafts(null)}
-        />
-      </Panel>
-
-      <Panel className="mb-6 p-5">
+      <Panel className="mb-4 p-4">
         <ItemsEditor
           items={items}
           onChange={setItems}
           articles={articles}
           editable
-          title="Renglones a facturar"
           totals={<InvoiceTotals type={invoiceType} totals={totals} />}
         />
 
@@ -421,26 +465,44 @@ export function InvoiceNew() {
         )}
       </Panel>
 
-      <Panel className="mb-6 p-5">
-        <SectionHeader title="Observaciones" />
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          placeholder="Texto que sale impreso en el comprobante. Opcional."
-          className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
-        />
-      </Panel>
+      {/* Cómo se cobra y las observaciones, en la misma franja: son las dos
+          últimas decisiones antes de emitir, y ninguna de las dos necesita
+          el espacio de un panel entero. */}
+      <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
+        <Panel className="p-4">
+          <SectionHeader title="Cómo se emite" className="mb-3" />
+          <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+            <input
+              type="checkbox"
+              checked={emitRemito}
+              onChange={(e) => setEmitRemito(e.target.checked)}
+              className="w-4 h-4 accent-accent-deep"
+            />
+            Emitir remito junto con la factura
+          </label>
 
-      <div className="mb-10 flex flex-wrap items-center justify-between gap-3 border border-line bg-panel-alt px-5 py-4">
-        <p className="max-w-xl text-xs text-text-soft">
-          Los renglones vienen de la orden y se pueden ajustar acá. Al emitir, la
-          factura queda congelada: para corregirla hay que anularla y volver a
-          facturar la orden.
-        </p>
-        <Button onClick={handleIssue} disabled={!canIssue}>
-          <Receipt size={16} /> {issuing ? 'Emitiendo…' : 'Emitir factura'}
-        </Button>
+          <CashCheckoutFields
+            isCash={isCash}
+            onIsCashChange={setIsCash}
+            paymentMethods={paymentMethods}
+            paymentMethodId={paymentMethodId}
+            onPaymentMethodIdChange={setPaymentMethodId}
+            checkDrafts={checkDrafts}
+            onOpenCheckModal={() => setCheckModalOpen(true)}
+            onClearChecks={() => setCheckDrafts(null)}
+          />
+        </Panel>
+
+        <Panel className="p-4">
+          <SectionHeader title="Observaciones" className="mb-3" />
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="Texto que sale impreso en el comprobante. Opcional."
+            className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+          />
+        </Panel>
       </div>
 
       {checkModalOpen && (
