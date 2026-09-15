@@ -235,6 +235,30 @@ export function WorkOrderDetails() {
 
   async function handleStatusChange(statusId: string) {
     if (!order) return;
+
+    const statusElegido = statuses.find((s) => s.id === statusId);
+
+    // Pasar a Cotizado desde el desplegable es lo mismo que tocar "Cotizar":
+    // si la orden todavía no tiene presupuesto, dejarla en ese estado sin
+    // que exista ningún COT-XX detrás la haría mentir su propio estado. Se
+    // avisa y, si sigue, se arma el presupuesto exactamente como con el
+    // botón —mismos renglones, misma pregunta de si se manda a autorizar—.
+    // Si ya tiene presupuesto (se está volviendo a este estado desde otro),
+    // no hay nada que crear: es un cambio de estado común.
+    if (statusElegido?.systemKey === 'COTIZADO' && !order.quotationNumber) {
+      const seguir = window.confirm(
+        `Pasar a "${statusElegido.label}" desde acá arma el presupuesto de esta orden con los renglones cargados — lo mismo que hace el botón Cotizar.\n\n¿Continuar?`
+      );
+      if (!seguir) return;
+      setChangingStatus(true);
+      try {
+        await handleCotizar();
+      } finally {
+        setChangingStatus(false);
+      }
+      return;
+    }
+
     setChangingStatus(true);
     setError(null);
     try {
