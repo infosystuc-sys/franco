@@ -88,6 +88,25 @@ export function WorkOrderDetails() {
   // cambia `id`, no remonta).
   const itemsLoadedForRef = React.useRef<string | null>(null);
 
+  // Contra qué se compara `items` para saber si hay algo sin guardar. Se
+  // pisa cada vez que los renglones se sincronizan desde la base (carga
+  // inicial) y después de un guardado exitoso — nunca con cada tecleo, para
+  // no comparar contra un blanco que se mueve solo.
+  const itemsBaselineRef = React.useRef<string>('[]');
+  const itemsDirty = JSON.stringify(items) !== itemsBaselineRef.current;
+
+  // El botón Volver ya pregunta (ver handleVolver); esto cubre la otra
+  // forma de perder lo mismo sin darse cuenta: cerrar la pestaña, recargar,
+  // o escribir otra URL con renglones sin guardar.
+  React.useEffect(() => {
+    if (!itemsDirty) return;
+    function avisar(e: BeforeUnloadEvent) {
+      e.preventDefault();
+    }
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [itemsDirty]);
+
   function mapItems(data: WorkOrderDetail | null): WorkOrderItemInput[] {
     return (
       data?.items.map((i) => ({
@@ -114,7 +133,9 @@ export function WorkOrderDetails() {
       // OT — después de un guardado exitoso, handleSave los actualiza por
       // su cuenta con la respuesta fresca.
       if (itemsLoadedForRef.current !== id) {
-        setItems(mapItems(data));
+        const cargados = mapItems(data);
+        setItems(cargados);
+        itemsBaselineRef.current = JSON.stringify(cargados);
         itemsLoadedForRef.current = id;
       }
       setHistory(data ? await fetchStatusHistory(data.id) : []);
@@ -327,6 +348,7 @@ export function WorkOrderDetails() {
     setAviso(null);
     try {
       await saveWorkOrderItems(order.id, items);
+      itemsBaselineRef.current = JSON.stringify(items);
       const creada = await quoteFromWorkOrder(order.id, defaultValidUntil());
 
       // Se pregunta después de crearla, no antes: si el alta falla no hay nada
@@ -399,6 +421,7 @@ export function WorkOrderDetails() {
     setError(null);
     try {
       await saveWorkOrderItems(order.id, items);
+      itemsBaselineRef.current = JSON.stringify(items);
       // Guardar cierra la edición y vuelve al listado, como el resto de los
       // módulos. Ya no se recarga la orden ni el catálogo: esta pantalla se
       // va, y el listado trae sus propios datos frescos.
@@ -411,6 +434,25 @@ export function WorkOrderDetails() {
       setError(getErrorMessage(err));
       setSaving(false);
     }
+  }
+
+  /**
+   * "Volver" salía directo al listado sin avisar, y los renglones cargados
+   * y no guardados se perdían en silencio — el borrador vive solo en este
+   * componente (ver el comentario de itemsBaselineRef), así que salir sin
+   * pasar por Guardar los tira. Ahora se pregunta antes de irse; el resto de
+   * la OT (estado, empleado, fechas, piezas, fotos) ya se guarda solo al
+   * tocarlo, así que no hace falta la misma pregunta para eso.
+   */
+  function handleVolver() {
+    if (itemsDirty) {
+      const salirIgual = window.confirm(
+        'Hay artículos cargados en esta orden que todavía no se guardaron.\n\n' +
+          '¿Salir igual? Se pierden.'
+      );
+      if (!salirIgual) return;
+    }
+    navigate('/ordenes');
   }
 
   if (loading) {
@@ -516,11 +558,9 @@ export function WorkOrderDetails() {
         }
         actions={
           <>
-            <Link to="/ordenes">
-              <Button variant="ghost" type="button">
-                <XCircle size={16} /> Volver
-              </Button>
-            </Link>
+            <Button variant="ghost" type="button" onClick={handleVolver}>
+              <XCircle size={16} /> Volver
+            </Button>
             {isAdmin && !order.quotationNumber && candidatas.length > 0 && (
               <select
                 value=""
