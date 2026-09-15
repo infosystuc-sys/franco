@@ -1,8 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
+  // El identificador del paquete se deja como está: cambiarlo publica la app
+  // como una app nueva en Play Store y rompe las instalaciones existentes.
+  // El nombre visible sí se actualiza — es lo que se ve bajo el ícono.
   appId: 'ar.com.dieselpro.erp',
-  appName: 'DieselPro ERP',
+  appName: 'Luciano Diesel',
   // Vite compila acá; Capacitor copia estos archivos dentro del APK.
   webDir: 'dist',
   android: {

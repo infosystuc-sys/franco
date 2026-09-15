@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { CategoryRail } from './CategoryRail';
 import { TopNavBar } from './TopNavBar';
+import logo from '@/src/assets/logo-luciano-diesel.png';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -94,11 +95,9 @@ export function MainLayout({ children }: MainLayoutProps) {
         style={{ paddingBottom: 'calc(0.75rem + var(--safe-bottom))' }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-text-soft">
-          <span>
-            <span className="font-display font-semibold uppercase tracking-[0.1em] text-accent-deep">
-              DieselPro
-            </span>
-            <span className="ml-2">Sistema de gestión de taller</span>
+          <span className="flex items-center gap-2">
+            <img src={logo} alt="Luciano Diesel" className="h-5 w-auto" />
+            <span>Sistema de gestión de taller</span>
           </span>
           <span className="font-mono text-[12px] text-text-faint">
             Inyección diesel · Bosch · Delphi · Denso · CAT

@@ -14,6 +14,7 @@ import {
   type PublicQuotation as Quotation,
   type PublicQuotationItem,
 } from '@/src/lib/publicQuotation';
+import logo from '@/src/assets/logo-luciano-diesel.png';
 
 const IVA_RATE = 0.21;
 
@@ -349,13 +350,8 @@ function Marco({ children }: { children: React.ReactNode }) {
         className="fixed top-0 z-50 flex w-full items-center justify-between border-b border-ink-line bg-ink px-5"
         style={{ height: 'calc(3.5rem + var(--safe-top))', paddingTop: 'var(--safe-top)' }}
       >
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-accent">
-            DieselPro
-          </span>
-          <span className="font-display text-sm font-light uppercase leading-none tracking-[0.2em] text-white/60">
-            Taller
-          </span>
+        <div className="flex items-center">
+          <img src={logo} alt="Luciano Diesel" className="h-8 w-auto" />
         </div>
         <span className="hidden text-[13px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
           Presupuesto

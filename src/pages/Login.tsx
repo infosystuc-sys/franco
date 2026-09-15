@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/lib/auth';
 import { Button, Label, fieldClass } from '@/src/components/ui';
+import logo from '@/src/assets/logo-luciano-diesel.png';
 
 /**
  * El login de la mayoría de los usuarios no es un email real: gestionar-empleado
@@ -48,14 +49,7 @@ export function Login() {
 
         <div className="px-7 pb-7 pt-6">
           <div className="mb-7">
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-display text-3xl font-semibold uppercase leading-none tracking-[0.02em] text-text">
-                DieselPro
-              </span>
-              <span className="font-display text-base font-light uppercase leading-none tracking-[0.2em] text-text-faint">
-                ERP
-              </span>
-            </div>
+            <img src={logo} alt="Luciano Diesel" className="h-14 w-auto" />
             <p className="mt-2 text-sm text-text-soft">Gestión de taller de inyección diesel</p>
           </div>
 

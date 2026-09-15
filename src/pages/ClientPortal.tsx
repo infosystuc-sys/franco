@@ -15,6 +15,7 @@ import { cn, formatMoney } from '@/src/lib/utils';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader } from '@/src/components/ui';
+import logo from '@/src/assets/logo-luciano-diesel.png';
 import {
   decidePriceAuthorization,
   fetchPublicStatusHistory,
@@ -156,13 +157,8 @@ export function ClientPortal() {
         className="fixed top-0 z-50 flex w-full items-center justify-between border-b border-ink-line bg-ink px-5"
         style={{ height: 'calc(3.5rem + var(--safe-top))', paddingTop: 'var(--safe-top)' }}
       >
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-accent">
-            DieselPro
-          </span>
-          <span className="font-display text-sm font-light uppercase leading-none tracking-[0.2em] text-white/60">
-            Taller
-          </span>
+        <div className="flex items-center">
+          <img src={logo} alt="Luciano Diesel" className="h-8 w-auto" />
         </div>
         <div className="flex items-center gap-4">
           <span className="hidden text-[13px] font-semibold uppercase tracking-[0.12em] text-white/60 md:block">
@@ -390,8 +386,9 @@ export function ClientPortal() {
       </main>
 
       <footer className="w-full py-4 bg-panel border-t border-line flex flex-col md:flex-row justify-between items-center px-5 mt-auto gap-4">
-        <div className="text-xs text-text-soft">
-          © 2024 DieselPro ERP - Sistema de Gestión de Taller
+        <div className="flex items-center gap-2 text-xs text-text-soft">
+          <img src={logo} alt="Luciano Diesel" className="h-4 w-auto" />
+          <span>© 2024 - Sistema de Gestión de Taller</span>
         </div>
         <div className="flex gap-6">
           <a className="text-xs text-text-soft hover:text-accent-deep transition-colors cursor-pointer">Soporte Técnico</a>

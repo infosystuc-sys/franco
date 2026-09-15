@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Bell, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
+import logo from '@/src/assets/logo-luciano-diesel.png';
 
 export function TopNavBar({
   onMenuClick,
@@ -41,13 +42,8 @@ export function TopNavBar({
         >
           {railCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
-        <Link to="/" className="flex items-baseline gap-1.5 transition-opacity hover:opacity-80">
-          <span className="font-display text-2xl font-semibold uppercase leading-none tracking-[0.02em] text-accent">
-            DieselPro
-          </span>
-          <span className="font-display text-sm font-light uppercase leading-none tracking-[0.2em] text-white/60">
-            ERP
-          </span>
+        <Link to="/" className="flex shrink-0 items-center transition-opacity hover:opacity-80">
+          <img src={logo} alt="Luciano Diesel" className="h-8 w-auto" />
         </Link>
       </div>
 

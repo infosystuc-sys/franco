@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/src/lib/utils';
 
 /**
- * Primitivos visuales de DieselPro.
+ * Primitivos visuales de Luciano Diesel.
  *
  * El elemento que da identidad es la REGLA AMARILLA: cada pantalla y cada
  * sección arrancan con un título en mayúscula condensada sobre una línea
