@@ -26,6 +26,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mustChangePassword, setMustChangePassword] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
+  // A quién pertenece la sesión actual, para distinguir "cambió la persona"
+  // de "se renovó el token de la misma persona". RequireAuth reemplaza TODA
+  // la app por "Cargando..." mientras loading es true, así que ese flag solo
+  // se toca cuando de verdad hay alguien entrando o saliendo — nunca en una
+  // renovación, o cualquier modal abierto (y lo que se hubiera tipeado ahí)
+  // se perdía cada vez que Supabase revalida el token al volver de otra
+  // pestaña.
+  const usuarioActualRef = React.useRef<string | undefined>(undefined);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -43,13 +52,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
+      usuarioActualRef.current = data.session?.user.id;
       setSession(data.session);
       if (data.session) loadRole(data.session.user.id).finally(() => !cancelled && setLoading(false));
       else setLoading(false);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const cambioDePersona = usuarioActualRef.current !== newSession?.user.id;
+      usuarioActualRef.current = newSession?.user.id;
       setSession(newSession);
+      if (!cambioDePersona) return; // solo se renovó el token: nada más que hacer
+
       if (newSession) {
         setLoading(true);
         loadRole(newSession.user.id).finally(() => !cancelled && setLoading(false));
