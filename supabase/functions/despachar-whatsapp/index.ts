@@ -11,6 +11,11 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
   Se protege con un secreto propio (CRON_SECRET) en vez de JWT, porque quien lo
   llama es el cron de la base, que no tiene sesión de usuario.
+
+  OJO al redesplegar: hay que hacerlo con verify_jwt = false. Con la
+  verificación activada, la puerta de Supabase rechaza al cron con 401 antes de
+  que este código corra, y la cola se para en silencio — nadie se entera hasta
+  que un cliente avisa que no le llegó el presupuesto.
 */
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
