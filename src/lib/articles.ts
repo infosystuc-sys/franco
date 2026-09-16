@@ -6,6 +6,11 @@ export interface Article {
   description: string;
   /** Marca del fabricante (DENSO, BOSCH...). No es el proveedor: es de quién es la pieza. */
   brand: string | null;
+  /**
+   * Número del fabricante, normalizado. Es lo que une a los proveedores que
+   * venden la misma pieza con códigos distintos.
+   */
+  factoryCode: string | null;
   /** Precio de VENTA neto. Lo calcula la base: compra del preferido + utilidad. */
   unitPrice: number;
   tracksStock: boolean;
@@ -25,6 +30,7 @@ export interface ArticleInput {
   code: string;
   description: string;
   brand: string | null;
+  factoryCode: string | null;
   tracksStock: boolean;
   stockQuantity: number;
   active: boolean;
@@ -46,6 +52,7 @@ function mapArticle(row: any): Article {
     code: row.code,
     description: row.description,
     brand: row.brand ?? null,
+    factoryCode: row.factory_code ?? null,
     unitPrice: Number(row.unit_price),
     tracksStock: row.tracks_stock,
     stockQuantity: Number(row.stock_quantity),
@@ -75,6 +82,7 @@ function toRow(input: ArticleInput) {
     code: input.code,
     description: input.description,
     brand: input.brand,
+    factory_code: input.factoryCode,
     tracks_stock: input.tracksStock,
     stock_quantity: input.tracksStock ? input.stockQuantity : 0,
     active: input.active,

@@ -37,8 +37,15 @@ export function SupplierModal({
           ...fiscalEntityToForm(supplier),
           paymentTermsDays: supplier.paymentTermsDays,
           codePrefix: supplier.codePrefix,
+          factoryCodePrefix: supplier.factoryCodePrefix,
         }
-      : { ...EMPTY_FISCAL_FORM, taxCondition: 'RESPONSABLE_INSCRIPTO', paymentTermsDays: 30, codePrefix: null }
+      : {
+          ...EMPTY_FISCAL_FORM,
+          taxCondition: 'RESPONSABLE_INSCRIPTO',
+          paymentTermsDays: 30,
+          codePrefix: null,
+          factoryCodePrefix: null,
+        }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -137,6 +144,26 @@ export function SupplierModal({
                   {form.codePrefix
                     ? `Los artículos nuevos de este proveedor van a llevar el código ${form.codePrefix}-00000001, ${form.codePrefix}-00000002...`
                     : 'Sin prefijo no se puede importar el catálogo de este proveedor.'}
+                </span>
+              </label>
+              {/* Otro prefijo, y otra cosa: el de arriba arma NUESTROS códigos;
+                  este describe los del proveedor, para reconocer que su pieza y
+                  la de otro proveedor son la misma. */}
+              <label className="block text-xs font-bold uppercase tracking-wider text-text-soft sm:col-span-2">
+                Prefijo del código de fábrica
+                <input
+                  value={form.factoryCodePrefix ?? ''}
+                  onChange={(e) =>
+                    patch({ factoryCodePrefix: e.target.value.toUpperCase().trim() || null })
+                  }
+                  maxLength={10}
+                  className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm uppercase normal-case focus:border-accent-deep focus:outline-none"
+                  placeholder="BOS"
+                />
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                  {form.factoryCodePrefix
+                    ? `Este proveedor lista la pieza 0445120123 como ${form.factoryCodePrefix}0445120123. Se le saca el prefijo para reconocerla.`
+                    : 'Vacío = usa el número del fabricante tal cual (0445120123). Si le antepone algo, ponelo acá para que su lista no duplique artículos.'}
                 </span>
               </label>
             </div>

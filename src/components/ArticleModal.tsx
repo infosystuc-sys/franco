@@ -30,10 +30,17 @@ import {
   type ArticleSupplier,
 } from '@/src/lib/priceLists';
 
+/** Mayúsculas y sin separadores, igual que lo guarda la base. */
+function normalizarCodigo(valor: string): string | null {
+  const limpio = valor.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return limpio === '' ? null : limpio;
+}
+
 export const EMPTY_ARTICLE_FORM: ArticleInput = {
   code: '',
   description: '',
   brand: null,
+  factoryCode: null,
   tracksStock: false,
   stockQuantity: 0,
   active: true,
@@ -76,6 +83,7 @@ export function ArticleModal({
           code: article.code,
           description: article.description,
           brand: article.brand,
+          factoryCode: article.factoryCode,
           tracksStock: article.tracksStock,
           stockQuantity: article.stockQuantity,
           active: article.active,
@@ -242,6 +250,21 @@ export function ArticleModal({
                 className={inputClass}
                 placeholder="DENSO"
               />
+            </label>
+            {/* El número del fabricante: es lo que hace que dos proveedores que
+                lo listan con códigos distintos caigan en este mismo artículo en
+                vez de crear uno cada uno. */}
+            <label className={cn(labelClass, 'col-span-3')}>
+              Código de fábrica
+              <input
+                value={form.factoryCode ?? ''}
+                onChange={(e) => patch({ factoryCode: normalizarCodigo(e.target.value) })}
+                className={cn(inputClass, 'font-mono')}
+                placeholder="0445120123"
+              />
+              <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
+                El número de Bosch, Denso o quien la fabrique. Une a los proveedores que venden esta misma pieza.
+              </span>
             </label>
           </div>
 

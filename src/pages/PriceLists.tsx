@@ -138,11 +138,19 @@ export function PriceLists() {
       <ImportSection
         suppliers={suppliers}
         onImported={async (result, supplierName) => {
+          // Los vinculados se nombran aparte porque son los que antes se
+          // duplicaban: la misma pieza entrando por un segundo proveedor.
           setNotice(
-            `Lista de ${supplierName} importada: ${result.matchedRows} precio(s) actualizado(s)` +
-            (result.createdRows > 0
-              ? ` y ${result.createdRows} artículo(s) nuevo(s) dado(s) de alta.`
-              : '. Todos los códigos ya eran conocidos.')
+            [
+              `Lista de ${supplierName} importada:`,
+              `${result.matchedRows} precio(s) actualizado(s)`,
+              result.linkedRows > 0
+                ? `, ${result.linkedRows} reconocido(s) por código de fábrica y sumado(s) a un artículo que ya existía`
+                : '',
+              result.createdRows > 0
+                ? ` y ${result.createdRows} artículo(s) nuevo(s) dado(s) de alta.`
+                : '.',
+            ].join('')
           );
           setError(null);
           await loadAll();

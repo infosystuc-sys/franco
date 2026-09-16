@@ -501,21 +501,19 @@ Deno.serve(async (req: Request) => {
         extraccion.renglones.map(async (renglon) => {
           const codigo = String(renglon.codigo ?? '').trim();
           if (!codigo) return { ...renglon, article_id: null };
-          // El código va escapado: en ilike, "_" y "%" son comodines, y un
-          // código impreso "AB_1023" matchearía "AB-1023" o "AB11023". Con el
-          // escape la comparación queda exacta salvo por mayúsculas, que es
-          // justo cómo está definido el unique (supplier_id, upper(supplier_code)).
-          const patron = codigo.replace(/([\\%_])/g, '\\$1');
-          const { data: matches } = await db
-            .from('article_suppliers')
-            .select('article_id')
-            .eq('supplier_id', supplierId)
-            .ilike('supplier_code', patron)
-            .limit(2);
-          // Más de un candidato = ambiguo: se deja sin matchear para que lo
-          // elija el usuario, en vez de atar el renglón al artículo equivocado.
-          const articleId = matches?.length === 1 ? matches[0].article_id : null;
-          return { ...renglon, article_id: articleId ?? null };
+          // Resolver vive en la base y lo usa también la importación de listas.
+          // Antes esta consulta era una copia de la de allá, y dos copias de la
+          // misma regla se desincronizan: reconoce primero el código que este
+          // proveedor ya tiene atado y después el número de fábrica, así que la
+          // pieza que cargó otro proveedor con otro código cae en su artículo
+          // en vez de quedar sin matchear.
+          const { data: resuelto } = await db
+            .rpc('resolver_articulo_de_proveedor', {
+              p_supplier_id: supplierId,
+              p_codigo: codigo,
+            })
+            .maybeSingle();
+          return { ...renglon, article_id: resuelto?.article_id ?? null };
         })
       );
     } else if (kind === 'ARTICULOS') {

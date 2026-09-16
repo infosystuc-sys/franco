@@ -35,7 +35,13 @@ export interface ImportRow {
 
 export interface ImportResult {
   totalRows: number;
+  /** Ya estaban vinculados a este proveedor: solo se les actualizó el precio. */
   matchedRows: number;
+  /**
+   * Se reconocieron por el código de fábrica como una pieza que ya existía y se
+   * le sumó este proveedor. Son los artículos que antes se duplicaban.
+   */
+  linkedRows: number;
   /** Artículos nuevos dados de alta en esta importación. */
   createdRows: number;
   importId: string;
@@ -196,6 +202,7 @@ export async function importSupplierPrices(
   return {
     totalRows: Number(result.total_rows),
     matchedRows: Number(result.matched_rows),
+    linkedRows: Number(result.linked_rows ?? 0),
     createdRows: Number(result.unmatched_rows),
     importId: result.import_id,
   };
