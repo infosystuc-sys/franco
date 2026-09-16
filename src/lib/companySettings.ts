@@ -14,8 +14,10 @@ export interface CompanySettings {
   tradeName: string | null;
   taxId: string | null;
   taxCondition: TaxCondition;
-  /** Punto de venta habilitado. Con ARCA tiene que ser uno dado de alta en AFIP. */
+  /** Punto de venta de la factura electrónica. Con ARCA, uno dado de alta en AFIP. */
   salesPoint: number;
+  /** Punto de venta de la factura interna (letra X), sin validez fiscal. */
+  salesPointInternal: number;
   grossIncome: string | null;
   activityStartDate: string | null;
   addressStreet: string | null;
@@ -32,6 +34,7 @@ export interface CompanySettingsInput {
   taxId: string;
   taxCondition: TaxCondition;
   salesPoint: string;
+  salesPointInternal: string;
   grossIncome: string;
   activityStartDate: string;
   addressStreet: string;
@@ -43,7 +46,7 @@ export interface CompanySettingsInput {
 }
 
 const SELECT =
-  'legal_name, trade_name, tax_id, tax_condition, sales_point, gross_income, ' +
+  'legal_name, trade_name, tax_id, tax_condition, sales_point, sales_point_internal, gross_income, ' +
   'activity_start_date, address_street, address_city, address_state, address_zip, phone, email';
 
 function mapCompanySettings(row: any): CompanySettings {
@@ -53,6 +56,7 @@ function mapCompanySettings(row: any): CompanySettings {
     taxId: row.tax_id,
     taxCondition: row.tax_condition,
     salesPoint: Number(row.sales_point),
+    salesPointInternal: Number(row.sales_point_internal),
     grossIncome: row.gross_income,
     activityStartDate: row.activity_start_date,
     addressStreet: row.address_street,
@@ -81,7 +85,7 @@ export async function fetchCompanySettings(): Promise<CompanySettings | null> {
  * y el encabezado lo necesitan también el cliente que abre el link del
  * presupuesto —sin sesión— y el operario que lo imprime desde la orden.
  */
-export type TallerHeader = Omit<CompanySettings, 'salesPoint'>;
+export type TallerHeader = Omit<CompanySettings, 'salesPoint' | 'salesPointInternal'>;
 
 export async function fetchTallerHeader(): Promise<TallerHeader | null> {
   const { data, error } = await supabase.rpc('datos_del_taller');
@@ -116,6 +120,7 @@ export async function updateCompanySettings(
       tax_id: input.taxId.replace(/\D/g, '') || null,
       tax_condition: input.taxCondition,
       sales_point: Number(input.salesPoint) || 1,
+      sales_point_internal: Number(input.salesPointInternal) || 90000,
       gross_income: nullIfBlank(input.grossIncome),
       activity_start_date: nullIfBlank(input.activityStartDate),
       address_street: nullIfBlank(input.addressStreet),
@@ -140,6 +145,7 @@ export function companySettingsToForm(settings: CompanySettings): CompanySetting
     taxId: settings.taxId ?? '',
     taxCondition: settings.taxCondition,
     salesPoint: String(settings.salesPoint),
+    salesPointInternal: String(settings.salesPointInternal),
     grossIncome: settings.grossIncome ?? '',
     activityStartDate: settings.activityStartDate ?? '',
     addressStreet: settings.addressStreet ?? '',

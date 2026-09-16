@@ -7,7 +7,14 @@ import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass, sectionTitleClass } from '@/src/components/FiscalFields';
 import { isValidCuit, TAX_CONDITION_LABELS, TAX_CONDITIONS, type TaxCondition } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
-import { describeInvoiceError, invoiceTypeFor, INVOICE_TYPE_LABELS } from '@/src/lib/invoices';
+import {
+  describeInvoiceError,
+  fetchNumeracion,
+  fijarProximoNumero,
+  invoiceTypeFor,
+  INVOICE_TYPE_LABELS,
+  type SerieNumeracion,
+} from '@/src/lib/invoices';
 import { hasGmailCredential, setGmailCredential } from '@/src/lib/invoiceSending';
 import {
   companySettingsToForm,
@@ -45,6 +52,7 @@ const EMPTY_FORM: CompanySettingsInput = {
   taxId: '',
   taxCondition: 'RESPONSABLE_INSCRIPTO',
   salesPoint: '1',
+  salesPointInternal: '90000',
   grossIncome: '',
   activityStartDate: '',
   addressStreet: '',
@@ -248,7 +256,15 @@ export function Settings() {
   const salesPointNumber = Number(form.salesPoint);
   const salesPointInvalid =
     !Number.isInteger(salesPointNumber) || salesPointNumber < 1 || salesPointNumber > 99999;
-  const canSave = form.legalName.trim() !== '' && !cuitInvalid && !salesPointInvalid;
+  const internalPointNumber = Number(form.salesPointInternal);
+  const internalPointInvalid =
+    !Number.isInteger(internalPointNumber) || internalPointNumber < 1 || internalPointNumber > 99999;
+  // Compartir punto de venta haría convivir dos comprobantes distintos con el
+  // mismo número, que es lo que después nadie puede desenredar.
+  const pointsCollide = !salesPointInvalid && !internalPointInvalid && salesPointNumber === internalPointNumber;
+  const canSave =
+    form.legalName.trim() !== '' && !cuitInvalid && !salesPointInvalid &&
+    !internalPointInvalid && !pointsCollide;
 
   async function handleSave() {
     if (!canSave) return;
@@ -366,7 +382,7 @@ export function Settings() {
             </label>
 
             <label className={labelClass}>
-              Punto de venta
+              Punto de venta — electrónica
               <input
                 type="number"
                 min="1"
@@ -379,7 +395,31 @@ export function Settings() {
               <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 {salesPointInvalid
                   ? 'Tiene que ser un número entre 1 y 99999.'
-                  : `Las facturas se numeran ${String(salesPointNumber).padStart(4, '0')}-00000001.`}
+                  : `El habilitado en ARCA. Numera ${String(salesPointNumber).padStart(4, '0')}-00000001.`}
+              </span>
+            </label>
+
+            <label className={labelClass}>
+              Punto de venta — interna (X)
+              <input
+                type="number"
+                min="1"
+                max="99999"
+                value={form.salesPointInternal}
+                onChange={(e) => patch({ salesPointInternal: e.target.value })}
+                className={cn(
+                  inputClass,
+                  'font-mono',
+                  (internalPointInvalid || pointsCollide) && 'border-danger bg-danger-soft'
+                )}
+                placeholder="90000"
+              />
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                {internalPointInvalid
+                  ? 'Tiene que ser un número entre 1 y 99999.'
+                  : pointsCollide
+                    ? 'Tiene que ser distinto del de la electrónica: si no, dos comprobantes llevarían el mismo número.'
+                    : `Sin validez fiscal. Numera ${String(internalPointNumber).padStart(4, '0')}-00000001.`}
               </span>
             </label>
 
@@ -479,6 +519,8 @@ export function Settings() {
         Estos datos se copian dentro de cada factura al emitirla. Cambiarlos acá
         no altera los comprobantes ya emitidos.
       </p>
+
+      <NumeracionFacturas />
 
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Mail size={14} /> Envío de facturas por mail</h3>
@@ -691,6 +733,154 @@ function ComprobanteMatrix({ issuerCondition }: { issuerCondition: TaxCondition 
  * Son dos y hacen cosas distintas: uno consulta datos de terceros y puede ser
  * de cualquier CUIT, el otro factura y tiene que ser del CUIT que emite.
  */
+/**
+ * Desde qué número sigue cada serie.
+ *
+ * Hace falta al migrar desde otro sistema, o cuando ARCA ya tiene consumidos
+ * números que acá no están. Solo aparecen las series que ya emitieron algo: la
+ * primera factura de una serie nueva arranca en 1 sola, sin configurar nada.
+ */
+function NumeracionFacturas() {
+  const [series, setSeries] = React.useState<SerieNumeracion[]>([]);
+  const [cargando, setCargando] = React.useState(true);
+  const [editando, setEditando] = React.useState<string | null>(null);
+  const [valor, setValor] = React.useState('');
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    try {
+      setSeries(await fetchNumeracion());
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  React.useEffect(() => { cargar(); }, [cargar]);
+
+  const claveDe = (s: SerieNumeracion) => `${s.invoiceType}-${s.salesPoint}`;
+
+  async function guardar(s: SerieNumeracion) {
+    const numero = Number(valor);
+    if (!Number.isInteger(numero) || numero < 1) {
+      setError('El próximo número tiene que ser un entero de 1 o más.');
+      return;
+    }
+    setGuardando(true);
+    setError(null);
+    try {
+      await fijarProximoNumero(s.invoiceType, s.salesPoint, numero);
+      setEditando(null);
+      await cargar();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Panel className="space-y-4 p-5">
+      <h3 className={sectionTitleClass}><Receipt size={14} /> Numeración de facturas</h3>
+      <p className="text-xs text-text-soft">
+        El número que va a salir en la próxima factura de cada serie. Se toca
+        para retomar una numeración existente; no se puede volver atrás por
+        debajo de lo ya emitido.
+      </p>
+
+      {error && (
+        <p className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>
+      )}
+
+      {cargando ? (
+        <p className="text-xs text-text-soft">Leyendo…</p>
+      ) : series.length === 0 ? (
+        <p className="text-xs text-text-soft">
+          Todavía no se emitió ninguna factura: cada serie va a arrancar en 00000001.
+        </p>
+      ) : (
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-line text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            <tr>
+              <th className="py-1.5">Comprobante</th>
+              <th className="py-1.5">Pto. vta.</th>
+              <th className="py-1.5 text-right">Emitidas</th>
+              <th className="py-1.5 text-right">Próximo número</th>
+              <th className="w-24 py-1.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {series.map((s) => {
+              const clave = claveDe(s);
+              const enEdicion = editando === clave;
+              return (
+                <tr key={clave} className="border-b border-line">
+                  <td className="py-1.5">{INVOICE_TYPE_LABELS[s.invoiceType]}</td>
+                  <td className="py-1.5 font-mono">
+                    {String(s.salesPoint).padStart(4, '0')}
+                  </td>
+                  <td className="py-1.5 text-right">{s.emitidas}</td>
+                  <td className="py-1.5 text-right font-mono">
+                    {enEdicion ? (
+                      <input
+                        type="number"
+                        min="1"
+                        autoFocus
+                        value={valor}
+                        onChange={(e) => setValor(e.target.value)}
+                        className="w-32 border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none"
+                      />
+                    ) : (
+                      String(s.nextNumber).padStart(8, '0')
+                    )}
+                  </td>
+                  <td className="py-1.5 text-right">
+                    {enEdicion ? (
+                      <span className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={guardando}
+                          onClick={() => guardar(s)}
+                          className="text-[12px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-60"
+                        >
+                          {guardando ? '…' : 'Guardar'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={guardando}
+                          onClick={() => { setEditando(null); setError(null); }}
+                          className="text-[12px] font-semibold uppercase tracking-wider text-text-soft hover:underline"
+                        >
+                          Cancelar
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditando(clave);
+                          setValor(String(s.nextNumber));
+                          setError(null);
+                        }}
+                        className="text-[12px] font-semibold uppercase tracking-wider text-text-soft hover:text-accent-deep"
+                      >
+                        Cambiar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  );
+}
+
 function CertificadosArca() {
   const [estados, setEstados] = React.useState<EstadoCertificado[]>([]);
   const [cargando, setCargando] = React.useState(true);

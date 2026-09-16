@@ -387,13 +387,16 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
           </dl>
         </div>
 
-        {/* El recuadro de la letra, como en el comprobante impreso argentino. */}
+        {/* El recuadro de la letra, como en el comprobante impreso argentino.
+            La X no lleva código de comprobante: no es un tipo de ARCA. */}
         <div className="flex flex-col items-center justify-start self-start border-2 border-ink px-5 py-2">
           <span className="font-display text-4xl font-medium leading-none text-text">
             {invoice.invoiceType}
           </span>
           <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-            Cód. {invoice.invoiceType === 'A' ? '01' : invoice.invoiceType === 'B' ? '06' : '11'}
+            {invoice.invoiceType === 'X'
+              ? 'Interna'
+              : `Cód. ${invoice.invoiceType === 'A' ? '01' : invoice.invoiceType === 'B' ? '06' : '11'}`}
           </span>
         </div>
 
@@ -422,9 +425,15 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
           label="Condición frente al IVA"
           value={TAX_CONDITION_LABELS[invoice.customerTaxCondition]}
         />
+        {/* La condición no se guarda como tal: un plazo de cero días ES una
+            factura de contado, cobrada en el mismo acto de emitirla. */}
         <Field
           label="Condición de venta"
-          value={`Cuenta corriente · ${invoice.paymentTermsDays} días`}
+          value={
+            invoice.paymentTermsDays === 0
+              ? 'Contado'
+              : `Cuenta corriente · ${invoice.paymentTermsDays} días`
+          }
         />
         {invoice.workOrderNumber && (
           <Field label="Orden de trabajo" value={invoice.workOrderNumber} mono />
@@ -488,9 +497,31 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
         </div>
       )}
 
-      <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
-        Comprobante no válido como factura: pendiente de autorización de ARCA.
-      </p>
+      {/* El pie dice qué es este papel. Son tres cosas distintas: la interna
+          nunca fue fiscal, la electrónica con CAE simulado TODAVÍA no lo es
+          —y eso hay que decirlo fuerte, porque se parece a una de verdad—, y
+          la que algún día traiga un CAE real de ARCA sí lo es. */}
+      {invoice.invoiceType === 'X' ? (
+        <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
+          Documento no fiscal: no reemplaza a la factura.
+        </p>
+      ) : invoice.cae ? (
+        <div className="mt-6 border-t border-line pt-3 text-center">
+          <p className="text-[12px] text-text-faint">
+            CAE <span className="font-mono text-text-soft">{invoice.cae}</span>
+            {invoice.caeDueDate && <> · Vence {formatDate(invoice.caeDueDate)}</>}
+          </p>
+          {invoice.caeSimulated && (
+            <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-danger">
+              CAE simulado — sin autorización de ARCA
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
+          Comprobante no válido como factura: pendiente de autorización de ARCA.
+        </p>
+      )}
     </div>
   );
 }

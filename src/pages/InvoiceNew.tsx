@@ -16,6 +16,7 @@ import {
 } from '@/src/lib/companySettings';
 import {
   computeTotals,
+  CONDICION_VENTA_LABELS,
   describeInvoiceError,
   discriminatesVat,
   fetchInvoiceForWorkOrder,
@@ -25,7 +26,10 @@ import {
   invoiceTypeFor,
   issueInvoice,
   PAYMENT_TERMS_DAYS,
+  SERIE_LABELS,
   toDateString,
+  type CondicionVenta,
+  type InvoiceSerie,
   type InvoiceType,
   type WorkOrderInvoiceRef,
   reasignarClienteDeOrden,
@@ -144,8 +148,9 @@ export function InvoiceNew() {
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
+  const [serie, setSerie] = React.useState<InvoiceSerie>('INTERNA');
+  const [condicion, setCondicion] = React.useState<CondicionVenta>('CUENTA_CORRIENTE');
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
-  const [isCash, setIsCash] = React.useState(false);
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
@@ -272,12 +277,22 @@ export function InvoiceNew() {
 
   const settings = company!;
   const customerCondition = order.customer?.tax_condition ?? 'CONSUMIDOR_FINAL';
-  const invoiceType = invoiceTypeFor(settings.taxCondition, customerCondition);
-  const totals = computeTotals(items, invoiceType);
+  // Dos letras distintas y las dos hacen falta. La fiscal es la que le
+  // corresponde al cliente y la que manda para el IVA —también en la interna,
+  // para que el total dé lo mismo en las dos series—. La emitida es la que sale
+  // impresa: X cuando la serie es interna.
+  const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
+  const invoiceType = serie === 'INTERNA' ? 'X' : letraFiscal;
+  const totals = computeTotals(items, letraFiscal);
+
+  // Contado es exactamente lo que antes era el check de "factura de contado":
+  // se cobra en el mismo acto de emitir.
+  const isCash = condicion === 'CONTADO';
+  const puntoDeVenta = serie === 'INTERNA' ? settings.salesPointInternal : settings.salesPoint;
 
   const issueDate = new Date();
   const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
+  if (!isCash) dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
@@ -321,7 +336,7 @@ export function InvoiceNew() {
     setIssuing(true);
     setError(null);
     try {
-      const issued = await issueInvoice(order.id, items, notes, emitRemito);
+      const issued = await issueInvoice(order.id, items, notes, emitRemito, serie, condicion);
       if (isCash) {
         try {
           const values = checkDrafts?.length
@@ -423,26 +438,53 @@ export function InvoiceNew() {
           </span>
         </FieldBox>
 
-        <FieldBox label="Emisor">
-          <span className="block truncate font-semibold text-text">{settings.legalName}</span>
-          {settings.taxId && <span className="block font-mono text-[12px] text-text-soft">{formatCuit(settings.taxId)}</span>}
-        </FieldBox>
-
-        <FieldBox label="Punto de venta">
-          <span className="font-mono">{String(settings.salesPoint).padStart(4, '0')}</span>
+        <FieldBox label="Serie">
+          <select
+            value={serie}
+            onChange={(e) => setSerie(e.target.value as InvoiceSerie)}
+            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+          >
+            <option value="INTERNA">{SERIE_LABELS.INTERNA}</option>
+            <option value="ELECTRONICA">{SERIE_LABELS.ELECTRONICA}</option>
+          </select>
+          <span className="mt-1 block font-mono text-[11px] normal-case text-text-soft">
+            Pto. vta. {String(puntoDeVenta).padStart(4, '0')}
+          </span>
         </FieldBox>
 
         <FieldBox label="Condición de venta">
-          <span className="flex items-center gap-1.5">
-            <CalendarClock size={14} className="text-accent-deep" /> Cuenta corriente
+          <select
+            value={condicion}
+            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
+            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+          >
+            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
+            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
+          </select>
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
+            {isCash ? 'Se cobra al emitir' : `Vence a ${PAYMENT_TERMS_DAYS} días`}
           </span>
         </FieldBox>
 
         <FieldBox label="Emisión / Vencimiento">
           <span className="block">{formatDate(toDateString(issueDate))}</span>
           <span className="block text-text-soft">
-            Vence {formatDate(toDateString(dueDate))} ({PAYMENT_TERMS_DAYS} días)
+            {isCash
+              ? 'Contado: vence el mismo día'
+              : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
           </span>
+        </FieldBox>
+
+        <FieldBox label="Remito">
+          <label className="flex cursor-pointer items-center gap-2 text-[13px] normal-case text-text">
+            <input
+              type="checkbox"
+              checked={emitRemito}
+              onChange={(e) => setEmitRemito(e.target.checked)}
+              className="h-4 w-4 accent-accent-deep"
+            />
+            Emitir junto con la factura
+          </label>
         </FieldBox>
       </div>
 
@@ -470,20 +512,9 @@ export function InvoiceNew() {
           el espacio de un panel entero. */}
       <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
         <Panel className="p-4">
-          <SectionHeader title="Cómo se emite" className="mb-3" />
-          <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-            <input
-              type="checkbox"
-              checked={emitRemito}
-              onChange={(e) => setEmitRemito(e.target.checked)}
-              className="w-4 h-4 accent-accent-deep"
-            />
-            Emitir remito junto con la factura
-          </label>
-
+          <SectionHeader title="Cómo se cobra" className="mb-3" />
           <CashCheckoutFields
             isCash={isCash}
-            onIsCashChange={setIsCash}
             paymentMethods={paymentMethods}
             paymentMethodId={paymentMethodId}
             onPaymentMethodIdChange={setPaymentMethodId}
@@ -581,17 +612,19 @@ export function InvoiceTotals({
 }
 
 /**
- * Check de "factura de contado": genera y aplica el recibo en el mismo paso
- * que la emisión, para no tener que ir después a Cobranzas a buscar la
- * factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
+ * Con qué se cobra una factura de contado: genera y aplica el recibo en el
+ * mismo paso que la emisión, para no tener que ir después a Cobranzas a buscar
+ * la factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
  * InvoiceNewFree — mismo comportamiento, con o sin OT de por medio.
+ *
+ * Que la factura sea de contado ya no se decide acá: lo dice la condición de
+ * venta del encabezado, y este bloque solo aparece cuando es contado.
  */
 /** Valor centinela del select: elegirlo abre el modal de carga en vez de fijar un medio. */
 const CHEQUE_OPTION_VALUE = '__cheque__';
 
 export function CashCheckoutFields({
   isCash,
-  onIsCashChange,
   paymentMethods,
   paymentMethodId,
   onPaymentMethodIdChange,
@@ -600,7 +633,6 @@ export function CashCheckoutFields({
   onClearChecks,
 }: {
   isCash: boolean;
-  onIsCashChange: (value: boolean) => void;
   paymentMethods: PaymentMethod[];
   paymentMethodId: string;
   onPaymentMethodIdChange: (value: string) => void;
@@ -615,20 +647,18 @@ export function CashCheckoutFields({
   const selectableMethods = paymentMethods.filter((m) => m.kind !== 'CARTERA_CHEQUES');
   const payingWithChecks = checkDrafts !== null;
 
-  return (
-    <div className="mt-3">
-      <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-        <input
-          type="checkbox"
-          checked={isCash}
-          onChange={(e) => onIsCashChange(e.target.checked)}
-          className="w-4 h-4 accent-accent-deep"
-        />
-        Factura de contado — cobrarla al emitir
-      </label>
+  if (!isCash) {
+    return (
+      <p className="mt-1 text-sm text-text-soft">
+        Cuenta corriente: queda impaga y se cobra después desde Cobranzas.
+      </p>
+    );
+  }
 
-      {isCash && (
-        <div className="mt-2 max-w-xs">
+  return (
+    <div className="mt-1">
+      {(
+        <div className="max-w-xs">
           <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-soft">
             <Banknote size={13} className="text-accent-deep" /> Cobrado con
           </span>

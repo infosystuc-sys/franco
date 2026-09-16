@@ -16,13 +16,17 @@ import {
 } from '@/src/lib/companySettings';
 import {
   computeTotals,
+  CONDICION_VENTA_LABELS,
   describeInvoiceError,
   formatDate,
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
   PAYMENT_TERMS_DAYS,
+  SERIE_LABELS,
   toDateString,
+  type CondicionVenta,
+  type InvoiceSerie,
 } from '@/src/lib/invoices';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
@@ -55,7 +59,8 @@ export function InvoiceNewFree() {
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
-  const [isCash, setIsCash] = React.useState(false);
+  const [serie, setSerie] = React.useState<InvoiceSerie>('INTERNA');
+  const [condicion, setCondicion] = React.useState<CondicionVenta>('CUENTA_CORRIENTE');
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
@@ -124,8 +129,14 @@ export function InvoiceNewFree() {
   const settings = company!;
   const customer = customers.find((c) => c.id === customerId) ?? null;
   const customerCondition = customer?.taxCondition ?? 'CONSUMIDOR_FINAL';
-  const invoiceType = invoiceTypeFor(settings.taxCondition, customerCondition);
-  const totals = computeTotals(items, invoiceType);
+  // La letra fiscal manda para el IVA —también en la interna, para que el
+  // total dé lo mismo en las dos series—; la emitida es la que sale impresa.
+  const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
+  const invoiceType = serie === 'INTERNA' ? 'X' : letraFiscal;
+  const totals = computeTotals(items, letraFiscal);
+
+  const isCash = condicion === 'CONTADO';
+  const puntoDeVenta = serie === 'INTERNA' ? settings.salesPointInternal : settings.salesPoint;
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
@@ -134,7 +145,7 @@ export function InvoiceNewFree() {
 
   const issueDate = new Date();
   const dueDate = new Date();
-  dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
+  if (!isCash) dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
 
   async function handleIssue() {
     if (!customer || !canIssue) return;
@@ -148,7 +159,9 @@ export function InvoiceNewFree() {
     setIssuing(true);
     setError(null);
     try {
-      const issued = await issueFreeInvoice(customer.id, items, notes, emitRemito, remitoId);
+      const issued = await issueFreeInvoice(
+        customer.id, items, notes, emitRemito, serie, condicion, remitoId
+      );
       if (isCash) {
         try {
           const values = checkDrafts?.length
@@ -242,27 +255,57 @@ export function InvoiceNewFree() {
           </span>
         </FieldBox>
 
-        <FieldBox label="Emisor">
-          <span className="block truncate font-semibold text-text">{settings.legalName}</span>
-          {settings.taxId && <span className="block font-mono text-[12px] text-text-soft">{formatCuit(settings.taxId)}</span>}
-        </FieldBox>
-
-        <FieldBox label="Punto de venta">
-          <span className="font-mono">{String(settings.salesPoint).padStart(4, '0')}</span>
+        <FieldBox label="Serie">
+          <select
+            value={serie}
+            onChange={(e) => setSerie(e.target.value as InvoiceSerie)}
+            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+          >
+            <option value="INTERNA">{SERIE_LABELS.INTERNA}</option>
+            <option value="ELECTRONICA">{SERIE_LABELS.ELECTRONICA}</option>
+          </select>
+          <span className="mt-1 block font-mono text-[11px] normal-case text-text-soft">
+            Pto. vta. {String(puntoDeVenta).padStart(4, '0')}
+          </span>
         </FieldBox>
 
         <FieldBox label="Condición de venta">
-          <span className="flex items-center gap-1.5">
-            <CalendarClock size={14} className="text-accent-deep" /> Cuenta corriente
+          <select
+            value={condicion}
+            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
+            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+          >
+            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
+            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
+          </select>
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
+            {isCash ? 'Se cobra al emitir' : `Vence a ${PAYMENT_TERMS_DAYS} días`}
           </span>
         </FieldBox>
 
         <FieldBox label="Emisión / Vencimiento">
           <span className="block">{formatDate(toDateString(issueDate))}</span>
           <span className="block text-text-soft">
-            Vence {formatDate(toDateString(dueDate))} ({PAYMENT_TERMS_DAYS} días)
+            {isCash
+              ? 'Contado: vence el mismo día'
+              : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
           </span>
         </FieldBox>
+
+        {/* Con remito de origen no hay nada que elegir: ya existe y se vincula. */}
+        {!remito && (
+          <FieldBox label="Remito">
+            <label className="flex cursor-pointer items-center gap-2 text-[13px] normal-case text-text">
+              <input
+                type="checkbox"
+                checked={emitRemito}
+                onChange={(e) => setEmitRemito(e.target.checked)}
+                className="h-4 w-4 accent-accent-deep"
+              />
+              Emitir junto con la factura
+            </label>
+          </FieldBox>
+        )}
       </div>
 
       <Panel className="mb-4 p-4">
@@ -286,22 +329,9 @@ export function InvoiceNewFree() {
 
       <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
         <Panel className="p-4">
-          <SectionHeader title="Cómo se emite" className="mb-3" />
-          {!remito && (
-            <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
-              <input
-                type="checkbox"
-                checked={emitRemito}
-                onChange={(e) => setEmitRemito(e.target.checked)}
-                className="w-4 h-4 accent-accent-deep"
-              />
-              Emitir remito junto con la factura
-            </label>
-          )}
-
+          <SectionHeader title="Cómo se cobra" className="mb-3" />
           <CashCheckoutFields
             isCash={isCash}
-            onIsCashChange={setIsCash}
             paymentMethods={paymentMethods}
             paymentMethodId={paymentMethodId}
             onPaymentMethodIdChange={setPaymentMethodId}

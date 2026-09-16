@@ -21,8 +21,31 @@ import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 // lugar lo que necesitan del modulo.
 export { formatDate, todayLocal, toDateString };
 
-export type InvoiceType = 'A' | 'B' | 'C';
+export type InvoiceType = 'A' | 'B' | 'C' | 'X';
 export type InvoiceStatus = 'EMITIDA' | 'ANULADA';
+
+/**
+ * Las dos numeraciones que emite el taller.
+ *
+ * ELECTRONICA es la que en su momento va a pedirle el CAE a ARCA; hasta
+ * entonces el CAE se simula para poder probar el circuito entero. INTERNA es
+ * la letra X: sin validez fiscal, pero numera, imprime, va a la cuenta
+ * corriente y se cobra igual que cualquier otra.
+ */
+export type InvoiceSerie = 'ELECTRONICA' | 'INTERNA';
+
+export const SERIE_LABELS: Record<InvoiceSerie, string> = {
+  ELECTRONICA: 'Factura electrónica',
+  INTERNA: 'Factura interna (X)',
+};
+
+/** Contado se cobra al emitir; cuenta corriente vence a los 7 días. */
+export type CondicionVenta = 'CONTADO' | 'CUENTA_CORRIENTE';
+
+export const CONDICION_VENTA_LABELS: Record<CondicionVenta, string> = {
+  CONTADO: 'Contado',
+  CUENTA_CORRIENTE: 'Cuenta corriente',
+};
 
 /** El IVA general. Cuando haya alícuotas por artículo, este es el lugar a tocar. */
 export const VAT_RATE = 0.21;
@@ -34,6 +57,7 @@ export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
   A: 'Factura A',
   B: 'Factura B',
   C: 'Factura C',
+  X: 'Factura X',
 };
 
 /**
@@ -44,6 +68,7 @@ export const INVOICE_TYPE_REASON: Record<InvoiceType, string> = {
   A: 'El cliente es Responsable Inscripto: el IVA se discrimina.',
   B: 'El cliente no discrimina IVA: el importe va con el IVA incluido.',
   C: 'El taller no es Responsable Inscripto: el comprobante va sin IVA.',
+  X: 'Comprobante interno, sin validez fiscal: el importe va con el IVA incluido.',
 };
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
@@ -217,6 +242,11 @@ export interface InvoiceDetail extends InvoiceListRow {
   issuerGrossIncome: string | null;
   issuerActivityStartDate: string | null;
 
+  /** CAE de ARCA. Mientras la integración no exista viene simulado. */
+  cae: string | null;
+  caeDueDate: string | null;
+  caeSimulated: boolean;
+
   items: InvoiceItem[];
 }
 
@@ -260,6 +290,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
        net_amount, vat_amount, total_amount, paid_amount,
+       cae, cae_due_date, cae_simulated,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
@@ -300,6 +331,10 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     issuerAddress: row.issuer_address,
     issuerGrossIncome: row.issuer_gross_income,
     issuerActivityStartDate: row.issuer_activity_start_date,
+
+    cae: row.cae,
+    caeDueDate: row.cae_due_date,
+    caeSimulated: row.cae_simulated ?? false,
 
     items: ((row.items ?? []) as any[])
       .sort((a, b) => a.line_number - b.line_number)
@@ -431,7 +466,9 @@ export async function issueInvoice(
   workOrderId: string,
   items: WorkOrderItemInput[],
   notes: string,
-  emitRemito: boolean
+  emitRemito: boolean,
+  serie: InvoiceSerie,
+  condicion: CondicionVenta
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_invoice', {
     p_work_order_id: workOrderId,
@@ -444,6 +481,8 @@ export async function issueInvoice(
     })),
     p_notes: notes.trim() || null,
     p_emit_remito: emitRemito,
+    p_serie: serie,
+    p_condicion: condicion,
   });
 
   if (error) throw error;
@@ -471,6 +510,8 @@ export async function issueFreeInvoice(
   items: WorkOrderItemInput[],
   notes: string,
   emitRemito: boolean,
+  serie: InvoiceSerie,
+  condicion: CondicionVenta,
   remitoId: string | null = null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_free_invoice', {
@@ -485,6 +526,8 @@ export async function issueFreeInvoice(
     p_notes: notes.trim() || null,
     p_emit_remito: emitRemito,
     p_remito_id: remitoId,
+    p_serie: serie,
+    p_condicion: condicion,
   });
 
   if (error) throw error;
@@ -498,6 +541,42 @@ export async function issueFreeInvoice(
     invoiceType: row.invoice_letter,
     remitoFullNumber: row.remito_full_number,
   };
+}
+
+export interface SerieNumeracion {
+  invoiceType: InvoiceType;
+  salesPoint: number;
+  nextNumber: number;
+  emitidas: number;
+}
+
+/** Cada serie con el número que va a salir en la próxima factura. */
+export async function fetchNumeracion(): Promise<SerieNumeracion[]> {
+  const { data, error } = await supabase.rpc('numeracion_facturas');
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((row) => ({
+    invoiceType: row.invoice_type,
+    salesPoint: Number(row.sales_point),
+    nextNumber: Number(row.next_number),
+    emitidas: Number(row.emitidas),
+  }));
+}
+
+/**
+ * Mueve desde dónde sigue la numeración de una serie. La base se niega a
+ * retroceder por debajo de lo ya emitido.
+ */
+export async function fijarProximoNumero(
+  invoiceType: InvoiceType,
+  salesPoint: number,
+  nextNumber: number
+): Promise<void> {
+  const { error } = await supabase.rpc('fijar_proximo_numero', {
+    p_invoice_type: invoiceType,
+    p_sales_point: salesPoint,
+    p_next_number: nextNumber,
+  });
+  if (error) throw error;
 }
 
 export async function voidInvoice(invoiceId: string, reason: string): Promise<void> {
