@@ -1247,15 +1247,16 @@ function StatusControls({
   // facturada con el trabajo todavía en curso. Ahí el estado tiene que seguir
   // moviéndose: falta armarla, calibrarla y recién después entregarla.
   //
-  // Lo que no se admite es retroceder al tramo previo al trabajo —ingresar,
-  // cotizar, autorizar—: eso ya pasó, y la factura emitida lo da por cerrado.
-  const previosAlTrabajo = ['INGRESADO', 'COTIZADO', 'AUTORIZADA'];
+  // Lo que no se admite es el tramo previo al trabajo —ingresar, cotizar,
+  // autorizar—, que ya pasó y la factura da por cerrado, ni rechazarla: una
+  // orden con factura emitida no es una orden que el cliente no aceptó.
+  const vedadosConFactura = ['INGRESADO', 'COTIZADO', 'AUTORIZADA', 'RECHAZADA'];
   const facturadaEnCurso = !!invoice && !isDone;
 
   // Se resuelven a ids acá porque la lista del desplegable puede incluir el
   // estado actual de la orden, que no viene con la clave del sistema.
-  const idsPreviosAlTrabajo = new Set(
-    statuses.filter((s) => previosAlTrabajo.includes(s.systemKey ?? '')).map((s) => s.id)
+  const idsVedados = new Set(
+    statuses.filter((s) => vedadosConFactura.includes(s.systemKey ?? '')).map((s) => s.id)
   );
 
   // Facturada y terminada es el circuito de siempre: lo único que queda es
@@ -1264,7 +1265,7 @@ function StatusControls({
   const options = !invoice
     ? todos
     : facturadaEnCurso
-      ? todos.filter((s) => s.id === order.status.id || !idsPreviosAlTrabajo.has(s.id))
+      ? todos.filter((s) => s.id === order.status.id || !idsVedados.has(s.id))
       : todos.filter((s) => s.id === order.status.id || s.id === retirado?.id);
 
   // El desplegable sirve solo si hay algún destino además del estado actual:
@@ -1300,9 +1301,9 @@ function StatusControls({
           {facturadaEnCurso ? (
             <>
               , pero el trabajo sigue en curso: el estado se puede seguir moviendo hasta
-              entregarla. Lo que no admite es volverla atrás a{' '}
+              entregarla. Lo que no admite es pasarla a{' '}
               {statuses
-                .filter((s) => previosAlTrabajo.includes(s.systemKey ?? ''))
+                .filter((s) => vedadosConFactura.includes(s.systemKey ?? ''))
                 .map((s) => s.label)
                 .join(', ')}
               . Los renglones sí quedan congelados; para corregirlos, anulá esa factura primero.
