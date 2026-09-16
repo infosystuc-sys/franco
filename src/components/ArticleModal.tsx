@@ -88,6 +88,16 @@ export function ArticleModal({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Ser combo no es una columna del artículo: lo es el que tiene partes
+  // cargadas. El check existe igual porque al crear uno todavía no hay lista
+  // que mirar, y hace falta decir de entrada qué se está dando de alta.
+  const [esCombo, setEsCombo] = React.useState(false);
+  // La lista se edita en memoria y se graba junto con el artículo, como el
+  // resto del formulario. Antes se escribía en el acto, así que cerrar sin
+  // guardar dejaba los componentes cambiados y el precio no.
+  const [componentes, setComponentes] = React.useState<ComponenteBorrador[]>([]);
+  const [componentesOriginales, setComponentesOriginales] = React.useState<ComponenteBorrador[]>([]);
+
   const loadLinks = React.useCallback(async () => {
     if (!article) return;
     try {
@@ -98,6 +108,28 @@ export function ArticleModal({
   }, [article]);
 
   React.useEffect(() => { loadLinks(); }, [loadLinks]);
+
+  React.useEffect(() => {
+    if (!article) return;
+    let cancelado = false;
+    fetchArticleComponents(article.id)
+      .then((partes) => {
+        if (cancelado) return;
+        const borrador = partes.map((c) => ({
+          filaId: c.id,
+          componentArticleId: c.componentArticleId,
+          code: c.code,
+          description: c.description,
+          quantity: c.quantity,
+          unitPrice: c.unitPrice,
+        }));
+        setComponentes(borrador);
+        setComponentesOriginales(borrador);
+        setEsCombo(borrador.length > 0);
+      })
+      .catch((err) => !cancelado && setError(getErrorMessage(err)));
+    return () => { cancelado = true; };
+  }, [article]);
 
   const preferred = links.find((l) => l.isPreferred) ?? null;
   const effectiveMarkup = form.markupPercent ?? defaultMarkup;
@@ -115,15 +147,62 @@ export function ArticleModal({
       setError('Código y descripción son obligatorios.');
       return;
     }
+    if (esCombo && componentes.length === 0) {
+      setError('Un combo tiene que traer al menos un artículo: agregale las partes o destildá el combo.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const guardado = article ? await updateArticle(article.id, form) : await createArticle(form);
+
+      // Las partes van después del artículo y no antes: hasta que no existe no
+      // hay id al que colgarlas. Si esto falla, el artículo YA quedó guardado,
+      // así que el aviso lo dice en vez de hacer creer que no se guardó nada
+      // (reintentar crearía un duplicado del artículo).
+      try {
+        await guardarComponentes(guardado.id);
+      } catch (comboErr) {
+        setError(
+          `El artículo ${guardado.code} se guardó, pero las partes del combo no: ` +
+            describeComboError(getErrorMessage(comboErr))
+        );
+        setSaving(false);
+        return;
+      }
+
       onSaved(guardado);
     } catch (err) {
       setError(describePriceError(getErrorMessage(err)));
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Lleva la lista de la pantalla a la base: saca las que se quitaron, agrega
+   * las nuevas y corrige las cantidades que cambiaron. Destildar el combo las
+   * borra todas: dejar de ser combo ES no tener partes.
+   */
+  async function guardarComponentes(articleId: string) {
+    const deseadas = esCombo ? componentes : [];
+    const quedan = new Set(deseadas.map((c) => c.filaId).filter(Boolean));
+
+    for (const original of componentesOriginales) {
+      if (original.filaId && !quedan.has(original.filaId)) {
+        await removeArticleComponent(original.filaId);
+      }
+    }
+
+    for (const parte of deseadas) {
+      if (!parte.filaId) {
+        await addArticleComponent(articleId, parte.componentArticleId, parte.quantity);
+        continue;
+      }
+      const antes = componentesOriginales.find((o) => o.filaId === parte.filaId);
+      if (antes && antes.quantity !== parte.quantity) {
+        await updateArticleComponent(parte.filaId, parte.quantity);
+      }
     }
   }
 
@@ -258,9 +337,36 @@ export function ArticleModal({
             />
           )}
 
-          {/* Combo: también solo al editar, por lo mismo. Un artículo que
-              todavía no existe no puede contener a otros. */}
-          {article && <ComboSection articleId={article.id} catalogo={catalogo} />}
+          {/* El combo se puede armar también al crear: las partes se juntan
+              acá y se graban apenas el artículo tiene id. */}
+          <div className="border-t border-line pt-4 space-y-3">
+            <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+              <input
+                type="checkbox"
+                checked={esCombo}
+                onChange={(e) => {
+                  const marcado = e.target.checked;
+                  if (!marcado && componentes.length > 0 &&
+                      !window.confirm('¿Sacarle las partes a este artículo? Deja de ser un combo.')) {
+                    return;
+                  }
+                  setEsCombo(marcado);
+                  if (!marcado) setComponentes([]);
+                }}
+                className="w-4 h-4 accent-accent-deep"
+              />
+              Es un combo (trae otros artículos adentro)
+            </label>
+
+            {esCombo && (
+              <ComboSection
+                articleId={article?.id ?? null}
+                catalogo={catalogo}
+                componentes={componentes}
+                onChange={setComponentes}
+              />
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-line">
             <button type="button" onClick={onClose} className="px-4 py-2 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt">
@@ -445,46 +551,48 @@ function SuppliersSection({
   );
 }
 
+/** Una parte del combo mientras se la edita, antes de que exista en la base. */
+export interface ComponenteBorrador {
+  /** Id de la fila en article_components. Null si todavía no se grabó. */
+  filaId: string | null;
+  componentArticleId: string;
+  code: string;
+  description: string;
+  quantity: number;
+  /** Precio de venta del componente suelto, para comparar contra el del combo. */
+  unitPrice: number;
+}
+
 /**
  * Qué artículos trae adentro este combo.
  *
  * Vive en la misma ficha que todo lo demás del artículo para no inventar una
  * pantalla aparte: un combo ES un artículo, con su código, su descripción y su
  * precio; lo único distinto es que tiene una lista de partes.
+ *
+ * No toca la base: edita la lista que le pasan y el modal la graba al guardar,
+ * junto con el resto del formulario. Así se puede armar un combo mientras se
+ * crea el artículo —que todavía no tiene id al que colgar las partes— y cerrar
+ * sin guardar no deja nada a medio aplicar.
  */
-function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Article[] }) {
-  const [componentes, setComponentes] = React.useState<ArticleComponent[]>([]);
+function ComboSection({
+  articleId,
+  catalogo,
+  componentes,
+  onChange,
+}: {
+  /** Null mientras el artículo se está creando. */
+  articleId: string | null;
+  catalogo: Article[];
+  componentes: ComponenteBorrador[];
+  onChange: (componentes: ComponenteBorrador[]) => void;
+}) {
   const [elegido, setElegido] = React.useState('');
   const [cantidad, setCantidad] = React.useState('1');
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
-  const cargar = React.useCallback(async () => {
-    try {
-      setComponentes(await fetchArticleComponents(articleId));
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  }, [articleId]);
-
-  React.useEffect(() => { cargar(); }, [cargar]);
-
-  async function correr(accion: () => Promise<void>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await accion();
-      await cargar();
-    } catch (err) {
-      setError(describeComboError(getErrorMessage(err)));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // El propio artículo no puede ser parte de sí mismo, y los que ya están no
-  // se ofrecen de nuevo: agregarlos daría un error de duplicado en vez de
-  // cambiar la cantidad, que es lo que se quería hacer.
+  // El propio artículo no puede ser parte de sí mismo, y los que ya están no se
+  // ofrecen de nuevo: agregarlos daría un duplicado en vez de cambiar la
+  // cantidad, que es lo que se quería hacer.
   const yaEstan = new Set(componentes.map((c) => c.componentArticleId));
   const disponibles = catalogo.filter((a) => a.id !== articleId && !yaEstan.has(a.id) && a.active);
 
@@ -492,8 +600,40 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
   // del combo sin tener que sacar la cuenta a mano.
   const sueltos = componentes.reduce((sum, c) => sum + c.quantity * c.unitPrice, 0);
 
+  function agregar() {
+    const elegidoArticulo = catalogo.find((a) => a.id === elegido);
+    if (!elegidoArticulo) return;
+    onChange([
+      ...componentes,
+      {
+        filaId: null,
+        componentArticleId: elegidoArticulo.id,
+        code: elegidoArticulo.code,
+        description: elegidoArticulo.description,
+        quantity: Math.max(1, Math.trunc(Number(cantidad) || 1)),
+        unitPrice: elegidoArticulo.unitPrice,
+      },
+    ]);
+    setElegido('');
+    setCantidad('1');
+  }
+
+  function cambiarCantidad(componentArticleId: string, valor: number) {
+    onChange(
+      componentes.map((c) =>
+        c.componentArticleId === componentArticleId
+          ? { ...c, quantity: Math.max(1, Math.trunc(valor) || 1) }
+          : c
+      )
+    );
+  }
+
+  function sacar(componentArticleId: string) {
+    onChange(componentes.filter((c) => c.componentArticleId !== componentArticleId));
+  }
+
   return (
-    <div className="border-t border-line pt-4 space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5">
           <Boxes size={14} /> Artículos que trae el combo
@@ -505,18 +645,18 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
         )}
       </div>
 
-      {error && <p className="text-xs text-danger">{error}</p>}
-
       {componentes.length === 0 ? (
         <p className="text-xs text-text-soft">
-          Este artículo no es un combo. Agregale abajo los artículos que trae y pasa a serlo:
-          en la orden entra como un solo renglón con el precio de arriba, y el stock
-          se descuenta de las partes.
+          Todavía no tiene partes. Agregá abajo los artículos que trae: en la orden entra
+          como un solo renglón con el precio de arriba, y el stock se descuenta de las partes.
         </p>
       ) : (
         <ul className="space-y-1">
           {componentes.map((c) => (
-            <li key={c.id} className="grid grid-cols-1 gap-2 border border-line bg-panel-alt px-3 py-2 sm:grid-cols-12 sm:items-center">
+            <li
+              key={c.componentArticleId}
+              className="grid grid-cols-1 gap-2 border border-line bg-panel-alt px-3 py-2 sm:grid-cols-12 sm:items-center"
+            >
               <span className="col-span-3 font-mono text-xs font-bold text-accent-deep">{c.code}</span>
               <span className="col-span-5 text-sm">{c.description}</span>
               <label className="col-span-3 flex items-center gap-2 text-[13px] uppercase tracking-wider text-text-soft">
@@ -525,19 +665,14 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
                   type="number"
                   min="1"
                   step="1"
-                  defaultValue={c.quantity}
-                  disabled={busy}
-                  onBlur={(e) => {
-                    const valor = Math.max(1, Math.trunc(Number(e.target.value) || 1));
-                    if (valor !== c.quantity) correr(() => updateArticleComponent(c.id, valor));
-                  }}
+                  value={c.quantity}
+                  onChange={(e) => cambiarCantidad(c.componentArticleId, Number(e.target.value))}
                   className="w-16 border border-line bg-panel px-2 py-1 text-right text-sm"
                 />
               </label>
               <button
                 type="button"
-                onClick={() => correr(() => removeArticleComponent(c.id))}
-                disabled={busy}
+                onClick={() => sacar(c.componentArticleId)}
                 title="Sacar del combo"
                 className="col-span-1 flex justify-center text-text-soft hover:text-danger"
               >
@@ -571,12 +706,8 @@ function ComboSection({ articleId, catalogo }: { articleId: string; catalogo: Ar
           />
           <button
             type="button"
-            disabled={busy || !elegido}
-            onClick={() => correr(async () => {
-              await addArticleComponent(articleId, elegido, Number(cantidad));
-              setElegido('');
-              setCantidad('1');
-            })}
+            disabled={!elegido}
+            onClick={agregar}
             title="Agregar al combo"
             className="col-span-1 flex h-[38px] items-center justify-center bg-accent text-accent-ink transition-colors hover:bg-accent-deep hover:text-white disabled:opacity-50"
           >
