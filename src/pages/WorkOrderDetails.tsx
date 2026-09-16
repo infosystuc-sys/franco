@@ -33,12 +33,14 @@ import {
   assignEmployee,
   deleteReceivedPart,
   deleteWorkOrderPhoto,
+  describirReenvioLink,
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   fetchWorkOrderStatuses,
   getErrorMessage,
   getWorkOrderPhotoUrl,
   RECEPTION_KIND_LABELS,
+  reenviarLinkSeguimiento,
   requestPriceAuthorization,
   saveWorkOrderItems,
   setEstimatedDeliveryDate,
@@ -76,6 +78,7 @@ export function WorkOrderDetails() {
   const [partSerial, setPartSerial] = useState('');
   const [cotizando, setCotizando] = useState(false);
   const [enviandoCotizacion, setEnviandoCotizacion] = useState(false);
+  const [reenviandoLink, setReenviandoLink] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   // Cotizaciones del cliente de esta OT que todavía no están enganchadas a
   // ninguna orden: el presupuesto hecho por teléfono, antes de que llegara
@@ -439,6 +442,27 @@ export function WorkOrderDetails() {
     }
   }
 
+  /**
+   * Repite el aviso con el link de seguimiento. El resultado se muestra tal
+   * cual lo contesta la base: si el cliente no tiene teléfono o pidió no
+   * recibir mensajes, decirlo importa más que decir "listo" — reintentar no lo
+   * va a arreglar.
+   */
+  async function handleReenviarLink() {
+    if (!order) return;
+    setReenviandoLink(true);
+    setError(null);
+    setAviso(null);
+    try {
+      const resultado = await reenviarLinkSeguimiento(order.id);
+      setAviso(describirReenvioLink(resultado));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setReenviandoLink(false);
+    }
+  }
+
   async function handleSave() {
     if (!order) return;
     setSaving(true);
@@ -698,6 +722,22 @@ export function WorkOrderDetails() {
               )}
               {TAX_CONDITION_LABELS[order.customer.tax_condition]}
             </span>
+          )}
+          {/* El link de seguimiento sale solo al dar de alta la orden. Si ese
+              mensaje no llegó —teléfono mal cargado, cola parada, el cliente lo
+              borró— hasta acá no había forma de repetirlo desde la app. Va en
+              la ficha del cliente y no en la barra de arriba porque es sobre a
+              quién se le avisa, no sobre la orden. */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleReenviarLink}
+              disabled={reenviandoLink}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-accent-deep disabled:opacity-60"
+            >
+              <Send size={13} />
+              {reenviandoLink ? 'Enviando…' : 'Reenviar enlace de seguimiento'}
+            </button>
           )}
         </Panel>
 

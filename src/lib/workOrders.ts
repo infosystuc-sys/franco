@@ -736,6 +736,44 @@ export async function setWorkOrderStatus(workOrderId: string, statusId: string) 
   if (error) throw error;
 }
 
+/** Qué contestó el reenvío del link de seguimiento. */
+export type ReenvioLinkResultado =
+  | 'ENCOLADO'
+  | 'YA_ENCOLADO'
+  | 'SIN_TELEFONO'
+  | 'OPT_OUT'
+  | 'NO_EXISTE';
+
+/**
+ * Vuelve a mandarle al cliente el link para seguir su orden. El link sale solo
+ * al dar de alta la OT; esto es para cuando ese mensaje no llegó.
+ */
+export async function reenviarLinkSeguimiento(
+  workOrderId: string
+): Promise<ReenvioLinkResultado> {
+  const { data, error } = await supabase.rpc('reenviar_link_seguimiento', {
+    p_work_order_id: workOrderId,
+  });
+  if (error) throw error;
+  return (data ?? 'NO_EXISTE') as ReenvioLinkResultado;
+}
+
+/** Qué decirle al usuario según lo que contestó el reenvío. */
+export function describirReenvioLink(resultado: ReenvioLinkResultado): string {
+  switch (resultado) {
+    case 'ENCOLADO':
+      return 'Enlace de seguimiento en camino: sale en el próximo minuto.';
+    case 'YA_ENCOLADO':
+      return 'Ese envío ya estaba en camino: no se mandó otro mensaje igual.';
+    case 'SIN_TELEFONO':
+      return 'El cliente no tiene un teléfono válido cargado, así que el mensaje no se puede mandar. Cargale el teléfono en su ficha y probá de nuevo.';
+    case 'OPT_OUT':
+      return 'Este cliente pidió no recibir mensajes, así que no se le manda nada.';
+    default:
+      return 'No se encontró la orden.';
+  }
+}
+
 /**
  * Manda al cliente el aviso de que el monto cambió respecto a la cotización,
  * pidiéndole autorización. Mientras no responda con un sí para este mismo
