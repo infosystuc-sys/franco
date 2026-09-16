@@ -166,6 +166,10 @@ export function NewWorkOrderModal({
       setError('Poné la entrega estimada: es lo que permite saber cuándo se libera el lugar en la playa.');
       return;
     }
+    if (!employeeId) {
+      setError('Asigná un empleado: toda orden tiene que tener un responsable.');
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -184,7 +188,7 @@ export function NewWorkOrderModal({
         component,
         receptionKind,
         observations,
-        employeeId: employeeId || null,
+        employeeId,
         estimatedDeliveryDate: receptionKind === 'VEHICULO' ? estimatedDelivery : null,
       });
     } catch (err) {
@@ -345,13 +349,13 @@ export function NewWorkOrderModal({
             </Label>
 
             <Label>
-              Empleado
+              Empleado *
               <select
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                className={fieldClass(false, 'font-normal normal-case bg-panel')}
+                className={fieldClass(true, 'font-normal normal-case bg-panel')}
               >
-                <option value="">Sin asignar</option>
+                <option value="">Elegí un empleado…</option>
                 {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>{employee.name}</option>
                 ))}

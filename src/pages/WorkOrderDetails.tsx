@@ -274,7 +274,7 @@ export function WorkOrderDetails() {
     }
   }
 
-  async function handleAssignEmployee(employeeId: string | null) {
+  async function handleAssignEmployee(employeeId: string) {
     if (!order) return;
     setAssigningEmployee(true);
     setError(null);
@@ -781,11 +781,19 @@ export function WorkOrderDetails() {
           {isAdmin && !locked ? (
             <select
               value={order.employee?.id ?? ''}
-              onChange={(e) => handleAssignEmployee(e.target.value || null)}
+              onChange={(e) => e.target.value && handleAssignEmployee(e.target.value)}
               disabled={assigningEmployee}
-              className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+              className={cn(
+                'w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none',
+                !order.employee && 'field-required'
+              )}
             >
-              <option value="">Sin asignar</option>
+              {/* La opción vacía existe solo mientras la orden no tenga a
+                  nadie: hace falta para que el select muestre algo coherente
+                  en las órdenes viejas que quedaron sin asignar. Una vez que
+                  hay responsable desaparece, así que no se puede volver a
+                  dejarla sin nadie. */}
+              {!order.employee && <option value="">Elegí un empleado…</option>}
               {/* Quien ya tiene la orden aparece siempre, aunque no esté en la
                   lista de asignables: puede ser un dueño que la tomó, o un
                   operario dado de baja después. Si no figurara, el select
@@ -1171,13 +1179,20 @@ function InvoiceAction({
     );
   }
 
-  if (!order.status.isTerminal) {
+  // Con el presupuesto aceptado se puede facturar en cualquier momento, sin
+  // esperar a que la orden termine: el cliente ya dijo que sí y el trabajo
+  // muchas veces se cobra antes de entregar. Sin presupuesto aceptado sigue
+  // valiendo lo de siempre —se factura la orden terminada—, que es el único
+  // punto donde se sabe qué se hizo.
+  const cotizacionAceptada = order.quotationStatus === 'ACEPTADA';
+
+  if (!order.status.isTerminal && !cotizacionAceptada) {
     return (
       <Button
         type="button"
         variant="ghost"
         disabled
-        title={`Se factura cuando la orden está terminada. Ahora está en ${order.status.label}.`}
+        title={`Se factura con el presupuesto aceptado, o cuando la orden está terminada. Ahora está en ${order.status.label}.`}
       >
         <Receipt size={16} /> Facturar
       </Button>

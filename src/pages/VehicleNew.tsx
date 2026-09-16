@@ -302,6 +302,12 @@ export function VehicleNew() {
         return;
       }
     }
+    // Vale para pieza y para vehículo: la orden que se abre acá necesita un
+    // responsable igual que cualquier otra.
+    if (vieneDeOT && !employeeId) {
+      setError('Elegí quién toma la orden: toda orden tiene que tener un responsable.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -362,7 +368,7 @@ export function VehicleNew() {
             component,
             receptionKind: form.kind,
             observations: otObservations,
-            employeeId: employeeId || null,
+            employeeId,
             estimatedDeliveryDate: form.kind === 'VEHICULO' ? estimatedDelivery : null,
           });
         } catch (err) {
@@ -747,19 +753,20 @@ export function VehicleNew() {
               )}
 
               <label className={cn(labelClass, 'sm:col-span-3')}>
-                Quién la toma
+                Quién la toma *
                 <select
                   value={employeeId}
                   onChange={(e) => setEmployeeId(e.target.value)}
-                  className={cn(inputClass, 'bg-panel')}
+                  className={cn(inputClass, 'bg-panel', employeeId === '' && 'field-required')}
                 >
-                  <option value="">Sin asignar</option>
+                  <option value="">Elegí un empleado…</option>
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>{e.name}</option>
                   ))}
                 </select>
                 <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
-                  Viene sugerido quien está cargando la recepción. Se puede cambiar o dejar sin asignar.
+                  Viene sugerido quien está cargando la recepción. Se puede cambiar, pero toda orden
+                  tiene que quedar con un responsable.
                 </span>
               </label>
 

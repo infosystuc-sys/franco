@@ -8,6 +8,9 @@ import html2canvas from 'html2canvas';
  * hay render del lado del servidor, así que el PDF se arma en el navegador
  * con lo que ya está dibujado.
  */
+/** Un centímetro, en puntos: el margen que queda alrededor del comprobante. */
+const MARGEN = 28.35;
+
 async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const canvas = await html2canvas(element, {
     scale: 2,
@@ -16,23 +19,45 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   });
 
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  const anchoUtil = pdf.internal.pageSize.getWidth() - MARGEN * 2;
+  const altoUtil = pdf.internal.pageSize.getHeight() - MARGEN * 2;
 
-  let heightLeft = imgHeight;
-  let position = 0;
+  // Cuántos puntos de hoja mide un píxel del dibujo, para traducir de uno a
+  // otro en los dos sentidos.
+  const escala = anchoUtil / canvas.width;
+  const altoDeUnaHoja = Math.floor(altoUtil / escala);
 
-  pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
+  // Se recorta el dibujo en pedazos de una hoja y cada pedazo va en su página.
+  // Antes se mandaba el dibujo entero a cada página, corrido hacia arriba: eso
+  // alcanzaba mientras el comprobante arrancaba pegado al borde, pero con
+  // margen el sobrante de una página invade el margen de abajo y vuelve a
+  // aparecer arriba de la siguiente, repetido.
+  let desde = 0;
+  let primera = true;
 
-  while (heightLeft > 0) {
-    position -= pageHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+  while (desde < canvas.height) {
+    const alto = Math.min(altoDeUnaHoja, canvas.height - desde);
+
+    const pedazo = document.createElement('canvas');
+    pedazo.width = canvas.width;
+    pedazo.height = alto;
+    const ctx = pedazo.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, pedazo.width, pedazo.height);
+    ctx.drawImage(canvas, 0, desde, canvas.width, alto, 0, 0, canvas.width, alto);
+
+    if (!primera) pdf.addPage();
+    pdf.addImage(
+      pedazo.toDataURL('image/jpeg', 0.92),
+      'JPEG',
+      MARGEN,
+      MARGEN,
+      anchoUtil,
+      alto * escala
+    );
+
+    primera = false;
+    desde += alto;
   }
 
   return pdf;
