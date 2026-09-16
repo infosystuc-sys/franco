@@ -606,6 +606,23 @@ export function WorkOrderDetails() {
             <Button variant="ghost" type="button" onClick={handleVolver} disabled={saving}>
               <ArrowLeft size={16} /> {saving ? 'Guardando…' : 'Volver'}
             </Button>
+            {/* El link de seguimiento sale solo al dar de alta la orden. Si ese
+                mensaje no llegó —teléfono mal cargado, cola parada, el cliente
+                lo borró— esto lo repite. Va en la barra con el resto de los
+                botones: probado aparte, en la ficha del cliente, no se
+                encontraba. */}
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleReenviarLink}
+                disabled={reenviandoLink}
+                title="Vuelve a mandarle al cliente por WhatsApp el link para seguir esta orden: el mismo que sale al ingresar el vehículo."
+              >
+                <Send size={16} />
+                {reenviandoLink ? 'Enviando…' : 'Reenviar seguimiento'}
+              </Button>
+            )}
             {isAdmin && !order.quotationNumber && candidatas.length > 0 && (
               <select
                 value=""
@@ -722,22 +739,6 @@ export function WorkOrderDetails() {
               )}
               {TAX_CONDITION_LABELS[order.customer.tax_condition]}
             </span>
-          )}
-          {/* El link de seguimiento sale solo al dar de alta la orden. Si ese
-              mensaje no llegó —teléfono mal cargado, cola parada, el cliente lo
-              borró— hasta acá no había forma de repetirlo desde la app. Va en
-              la ficha del cliente y no en la barra de arriba porque es sobre a
-              quién se le avisa, no sobre la orden. */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={handleReenviarLink}
-              disabled={reenviandoLink}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-accent-deep disabled:opacity-60"
-            >
-              <Send size={13} />
-              {reenviandoLink ? 'Enviando…' : 'Reenviar enlace de seguimiento'}
-            </button>
           )}
         </Panel>
 
