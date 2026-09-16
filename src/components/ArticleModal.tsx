@@ -618,6 +618,21 @@ function ComboSection({
     setCantidad('1');
   }
 
+  /**
+   * Enter acá agrega la parte; no guarda el artículo.
+   *
+   * Esta sección vive adentro del <form> del artículo, así que un Enter en
+   * cualquiera de sus campos lo enviaba: se guardaba el combo con las partes
+   * que ya estaban, se cerraba la ficha, y la que se estaba por agregar se
+   * perdía sin decir nada. Tipear la cantidad y confirmar con Enter es lo más
+   * natural del mundo, y era justo lo que rompía.
+   */
+  function enterAgrega(e: React.KeyboardEvent) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    agregar();
+  }
+
   function cambiarCantidad(componentArticleId: string, valor: number) {
     onChange(
       componentes.map((c) =>
@@ -667,6 +682,10 @@ function ComboSection({
                   step="1"
                   value={c.quantity}
                   onChange={(e) => cambiarCantidad(c.componentArticleId, Number(e.target.value))}
+                  // Enter tampoco guarda acá: la cantidad ya quedó aplicada al
+                  // tipearla, y enviar la ficha desde el medio de la lista
+                  // sorprende igual que antes.
+                  onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                   className="w-16 border border-line bg-panel px-2 py-1 text-right text-sm"
                 />
               </label>
@@ -688,6 +707,7 @@ function ComboSection({
           <select
             value={elegido}
             onChange={(e) => setElegido(e.target.value)}
+            onKeyDown={enterAgrega}
             className="col-span-8 border border-line bg-panel px-2 py-2 text-sm"
           >
             <option value="">Agregar un artículo al combo...</option>
@@ -701,6 +721,7 @@ function ComboSection({
             step="1"
             value={cantidad}
             onChange={(e) => setCantidad(e.target.value)}
+            onKeyDown={enterAgrega}
             placeholder="Cant."
             className="col-span-3 border border-line px-2 py-2 text-right text-sm"
           />
