@@ -1238,22 +1238,38 @@ function StatusControls({
     ? statuses
     : [order.status, ...statuses];
 
-  // Una OT facturada queda bloqueada, pero con una única salida: Retirado. El
-  // vehículo se entrega DESPUÉS de facturar, y sin ese paso la orden seguiría
-  // ocupando lugar en la playa para siempre.
-  //
-  // Se reconoce por clave y no por su nombre: el ABM deja renombrar los
-  // estados, y comparar contra el texto dejaría a la orden facturada sin
-  // salida en cuanto alguien lo tocara, sin que nada avise.
+  // Los estados se reconocen por clave y no por su nombre: el ABM deja
+  // renombrarlos, y comparar contra el texto rompería estas reglas en cuanto
+  // alguien los tocara, sin que nada avise.
   const retirado = statuses.find((s) => s.systemKey === 'RETIRADO') ?? null;
-  const options = invoice
-    ? todos.filter((s) => s.id === order.status.id || s.id === retirado?.id)
-    : todos;
 
-  // Con factura, el desplegable sirve solo si hay algún destino además del
-  // estado actual: ya retirada —o sin ese estado en el ABM— no hay nada que
-  // ofrecer y vuelve a quedar bloqueado como antes.
-  const puedeRetirar = !!invoice && options.length > 1;
+  // Desde que se puede facturar con el presupuesto aceptado, una orden queda
+  // facturada con el trabajo todavía en curso. Ahí el estado tiene que seguir
+  // moviéndose: falta armarla, calibrarla y recién después entregarla.
+  //
+  // Lo que no se admite es retroceder al tramo previo al trabajo —ingresar,
+  // cotizar, autorizar—: eso ya pasó, y la factura emitida lo da por cerrado.
+  const previosAlTrabajo = ['INGRESADO', 'COTIZADO', 'AUTORIZADA'];
+  const facturadaEnCurso = !!invoice && !isDone;
+
+  // Se resuelven a ids acá porque la lista del desplegable puede incluir el
+  // estado actual de la orden, que no viene con la clave del sistema.
+  const idsPreviosAlTrabajo = new Set(
+    statuses.filter((s) => previosAlTrabajo.includes(s.systemKey ?? '')).map((s) => s.id)
+  );
+
+  // Facturada y terminada es el circuito de siempre: lo único que queda es
+  // entregar el vehículo. Sin ese paso la orden ocuparía lugar en la playa
+  // para siempre.
+  const options = !invoice
+    ? todos
+    : facturadaEnCurso
+      ? todos.filter((s) => s.id === order.status.id || !idsPreviosAlTrabajo.has(s.id))
+      : todos.filter((s) => s.id === order.status.id || s.id === retirado?.id);
+
+  // El desplegable sirve solo si hay algún destino además del estado actual:
+  // ya retirada —o sin ese estado en el ABM— no hay nada que ofrecer.
+  const hayADondeIr = options.length > 1;
 
   return (
     <div className="mt-7 border-t border-line pt-4">
@@ -1264,7 +1280,7 @@ function StatusControls({
         <select
           value={order.status.id}
           onChange={(e) => onChange(e.target.value)}
-          disabled={busy || (!!invoice && !puedeRetirar)}
+          disabled={busy || (!!invoice && !hayADondeIr)}
           className="rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none disabled:opacity-60"
         >
           {options.map((status) => (
@@ -1281,7 +1297,17 @@ function StatusControls({
       {invoice && (
         <p className="mt-3 rounded-md border border-state-wait/40 bg-state-wait/10 px-3 py-2 text-xs text-state-wait">
           Esta orden ya tiene la {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber} emitida
-          {puedeRetirar && retirado ? (
+          {facturadaEnCurso ? (
+            <>
+              , pero el trabajo sigue en curso: el estado se puede seguir moviendo hasta
+              entregarla. Lo que no admite es volverla atrás a{' '}
+              {statuses
+                .filter((s) => previosAlTrabajo.includes(s.systemKey ?? ''))
+                .map((s) => s.label)
+                .join(', ')}
+              . Los renglones sí quedan congelados; para corregirlos, anulá esa factura primero.
+            </>
+          ) : hayADondeIr && retirado ? (
             <>
               : lo único que admite es pasarla a {retirado.label}, cuando el cliente
               se lleve el vehículo. Para cualquier otra corrección, anulá esa factura primero.
