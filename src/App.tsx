@@ -44,6 +44,7 @@ import { Quotations } from './pages/Quotations';
 import { ReportView } from './pages/ReportView';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { MechanicAccounts } from './pages/MechanicAccounts';
 import { Suppliers } from './pages/Suppliers';
 import { TaxRates } from './pages/TaxRates';
 import { Vehicles } from './pages/Vehicles';
@@ -127,6 +128,7 @@ export default function App() {
                     <Route path="/nc-provisorias" element={<ProvisionalCreditNotes />} />
                     <Route path="/alicuotas" element={<TaxRates />} />
                     <Route path="/conceptos" element={<ExpenseConcepts />} />
+                    <Route path="/mecanicos" element={<MechanicAccounts />} />
                     <Route path="/configuracion" element={<Settings />} />
                     <Route path="/inventario" element={<Inventory />} />
                     <Route path="/listas-precios" element={<PriceLists />} />

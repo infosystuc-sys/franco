@@ -618,6 +618,13 @@ export interface WorkOrderDetail {
       }
     | null;
   employee: { id: string; name: string } | null;
+  /**
+   * Quién hace el trabajo y cobra la sobrefacturación. Distinto de employee:
+   * el que recibe el vehículo no siempre es el que lo repara.
+   */
+  mechanic: { id: string; name: string } | null;
+  /** Monto ya repartido dentro de los precios. Se le acredita al facturar. */
+  overbillAmount: number;
   quotationNumber: string | null;
   /** Id de esa cotización, para poder mandarla a autorizar desde acá. */
   quotationId: string | null;
@@ -659,7 +666,9 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip),
        vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
-       employee:employees(id, name),
+       employee:employees!work_orders_employee_id_fkey(id, name),
+       mechanic:employees!work_orders_mechanic_id_fkey(id, name),
+       overbill_amount,
        quotation:quotations!work_orders_quotation_id_fkey(id, number, status, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
        photos:work_order_photos(id, storage_path, created_at),
@@ -681,6 +690,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     customer: (data as any).customer,
     vehicle: (data as any).vehicle,
     employee: (data as any).employee,
+    mechanic: (data as any).mechanic ?? null,
+    overbillAmount: Number((data as any).overbill_amount ?? 0),
     quotationNumber: quotation?.number ?? null,
     quotationId: quotation?.id ?? null,
     quotationStatus: quotation?.status ?? null,
@@ -815,6 +826,19 @@ export async function assignEmployee(workOrderId: string, employeeId: string | n
   const { error } = await supabase
     .from('work_orders')
     .update({ employee_id: employeeId })
+    .eq('id', workOrderId);
+  if (error) throw error;
+}
+
+/**
+ * Quién repara y cobra la sobrefacturación. Se puede dejar sin mecánico: una
+ * orden que no le genera beneficio a nadie es perfectamente válida, y ahí no
+ * se pregunta ningún recargo al cotizar.
+ */
+export async function assignMechanic(workOrderId: string, mechanicId: string | null) {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({ mechanic_id: mechanicId })
     .eq('id', workOrderId);
   if (error) throw error;
 }

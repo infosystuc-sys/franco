@@ -28,9 +28,12 @@ import {
   enviarCotizacionParaAutorizar,
 } from '@/src/lib/quotations';
 import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
+import { SobrefacturacionModal } from '@/src/components/SobrefacturacionModal';
+import { type Sobrefacturacion } from '@/src/lib/mechanics';
 import {
   addReceivedPart,
   assignEmployee,
+  assignMechanic,
   deleteReceivedPart,
   deleteWorkOrderPhoto,
   describirReenvioLink,
@@ -79,6 +82,10 @@ export function WorkOrderDetails() {
   const [cotizando, setCotizando] = useState(false);
   const [enviandoCotizacion, setEnviandoCotizacion] = useState(false);
   const [reenviandoLink, setReenviandoLink] = useState(false);
+  const [asignandoMecanico, setAsignandoMecanico] = useState(false);
+  // Se abre al cotizar una orden con mecánico: el recargo se define ahí, no
+  // antes, porque recién en ese momento están todos los renglones.
+  const [pidiendoRecargo, setPidiendoRecargo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   // Cotizaciones del cliente de esta OT que todavía no están enganchadas a
   // ninguna orden: el presupuesto hecho por teléfono, antes de que llegara
@@ -288,6 +295,20 @@ export function WorkOrderDetails() {
     }
   }
 
+  async function handleAssignMechanic(mechanicId: string | null) {
+    if (!order) return;
+    setAsignandoMecanico(true);
+    setError(null);
+    try {
+      await assignMechanic(order.id, mechanicId);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setAsignandoMecanico(false);
+    }
+  }
+
   async function handleEstimatedDeliveryChange(date: string) {
     if (!order) return;
     setError(null);
@@ -370,13 +391,25 @@ export function WorkOrderDetails() {
    */
   async function handleCotizar() {
     if (!order || !order.customer) return;
+    // Con mecánico asignado, primero se define cuánto se le sobrefactura: el
+    // recargo tiene que estar dentro de los precios ANTES de que la cotización
+    // se los copie.
+    if (order.mechanic) {
+      setPidiendoRecargo(true);
+      return;
+    }
+    await cotizar();
+  }
+
+  async function cotizar(sobrefacturacion?: Sobrefacturacion) {
+    if (!order || !order.customer) return;
     setCotizando(true);
     setError(null);
     setAviso(null);
     try {
       await saveWorkOrderItems(order.id, items);
       itemsBaselineRef.current = JSON.stringify(items);
-      const creada = await quoteFromWorkOrder(order.id, defaultValidUntil());
+      const creada = await quoteFromWorkOrder(order.id, defaultValidUntil(), sobrefacturacion);
 
       // Se pregunta después de crearla, no antes: si el alta falla no hay nada
       // que mandar, y preguntar primero habría hecho decidir sobre algo que
@@ -395,7 +428,19 @@ export function WorkOrderDetails() {
 
       // Se queda en la orden: cotizar es un paso del trabajo, no el final.
       // Desde acá se sigue cargando renglones o se manda el presupuesto.
-      await loadOrder();
+      const fresca = await loadOrder();
+
+      // Con recargo, los precios los reescribió la base al prorratearlo, así
+      // que el borrador local quedó viejo. loadOrder no los re-sincroniza a
+      // propósito —para no pisar ediciones sin guardar—, y acá hay que
+      // forzarlo: si no, la pantalla seguiría mostrando los precios de antes
+      // del recargo y el próximo Guardar los volvería a escribir.
+      if (sobrefacturacion && fresca) {
+        const recargados = mapItems(fresca);
+        setItems(recargados);
+        itemsBaselineRef.current = JSON.stringify(recargados);
+      }
+
       setAviso(mensaje);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -817,6 +862,42 @@ export function WorkOrderDetails() {
           )}
         </Panel>
 
+        {/* El mecánico es quien hace el trabajo y cobra la sobrefacturación:
+            no siempre es el mismo que tomó la orden. Solo lo ve un admin — el
+            recargo es información sensible. */}
+        {isAdmin && (
+          <Panel className="p-4">
+            <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+              Mecánico
+            </span>
+            {locked ? (
+              <span className="block text-sm font-semibold text-text">
+                {order.mechanic?.name ?? 'Sin asignar'}
+              </span>
+            ) : (
+              <select
+                value={order.mechanic?.id ?? ''}
+                onChange={(e) => handleAssignMechanic(e.target.value || null)}
+                disabled={asignandoMecanico}
+                className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
+              >
+                <option value="">Sin mecánico</option>
+                {order.mechanic && !employees.some((e) => e.id === order.mechanic?.id) && (
+                  <option value={order.mechanic.id}>{order.mechanic.name}</option>
+                )}
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                ))}
+              </select>
+            )}
+            {order.overbillAmount > 0 && (
+              <span className="mt-1.5 block text-xs text-accent-deep">
+                Sobrefacturado: $ {formatMoney(order.overbillAmount)}
+              </span>
+            )}
+          </Panel>
+        )}
+
         <Panel className="p-4">
           <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Entrega estimada
@@ -1016,6 +1097,18 @@ export function WorkOrderDetails() {
               respaldo de un comprobante emitido. */}
           <PhotosSection order={order} isAdmin={isAdmin && !locked} onChanged={loadOrder} onError={setError} />
         </div>
+      )}
+
+      {pidiendoRecargo && order.mechanic && (
+        <SobrefacturacionModal
+          mecanico={order.mechanic.name}
+          neto={currentTotal}
+          onClose={() => setPidiendoRecargo(false)}
+          onConfirm={(valor) => {
+            setPidiendoRecargo(false);
+            cotizar(valor);
+          }}
+        />
       )}
     </div>
   );

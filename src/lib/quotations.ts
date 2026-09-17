@@ -356,11 +356,19 @@ export async function rejectQuotationWorkOrder(quotationId: string): Promise<voi
  */
 export async function quoteFromWorkOrder(
   workOrderId: string,
-  validUntil: string
+  validUntil: string,
+  /**
+   * Sobrefacturación del mecánico: se reparte dentro de los precios de los
+   * renglones ANTES de copiarlos al presupuesto, para que el cliente vea los
+   * precios definitivos. La base la ignora si la orden no tiene mecánico.
+   */
+  sobrefacturacion?: { monto: number | null; porcentaje: number | null }
 ): Promise<{ id: string; number: string }> {
   const { data, error } = await supabase.rpc('cotizar_desde_ot', {
     p_work_order_id: workOrderId,
     p_valid_until: validUntil || null,
+    p_sobrefacturar_monto: sobrefacturacion?.monto ?? null,
+    p_sobrefacturar_porcentaje: sobrefacturacion?.porcentaje ?? null,
   });
   if (error) throw error;
   const row: any = Array.isArray(data) ? data[0] : data;
