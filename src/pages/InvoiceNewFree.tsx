@@ -36,6 +36,7 @@ import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
+import { CustomerModal } from '@/src/components/CustomerModal';
 
 /**
  * Facturar sin OT ni cotización: para lo que no sale de una reparación
@@ -65,6 +66,8 @@ export function InvoiceNewFree() {
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   const [proximo, setProximo] = React.useState<string | null>(null);
+  const [altaCliente, setAltaCliente] = React.useState(false);
+  const [vencimiento, setVencimiento] = React.useState('');
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
@@ -120,7 +123,7 @@ export function InvoiceNewFree() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   if (loading) {
-    return <div className="mx-auto max-w-5xl p-8 text-center text-text-soft">Cargando…</div>;
+    return <div className="w-full p-8 text-center text-text-soft">Cargando…</div>;
   }
 
   if (!isReadyToInvoice(company)) {
@@ -172,7 +175,8 @@ export function InvoiceNewFree() {
     setError(null);
     try {
       const issued = await issueFreeInvoice(
-        customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta, remitoId
+        customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
+        isCash ? null : (vencimiento || null), remitoId
       );
       if (isCash) {
         try {
@@ -205,7 +209,7 @@ export function InvoiceNewFree() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="w-full">
       <InvoiceTopBar
         title="Factura de venta"
         type={invoiceType}
@@ -230,8 +234,8 @@ export function InvoiceNewFree() {
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <FieldBox label="Cliente" className="col-span-2 sm:col-span-2">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <FieldBox label="Cliente" className="col-span-2">
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
@@ -250,10 +254,16 @@ export function InvoiceNewFree() {
               Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
             </span>
           )}
-          {customers.length === 0 && !remito && (
-            <span className="mt-1 block text-[11px] normal-case text-state-wait">
-              No hay clientes activos. Cargá uno desde la sección Clientes.
-            </span>
+          {/* El cliente nuevo se da de alta acá mismo: facturar no puede
+              obligar a salir a Clientes, cargarlo y volver a empezar. */}
+          {!remito && (
+            <button
+              type="button"
+              onClick={() => setAltaCliente(true)}
+              className="mt-1 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+            >
+              + Nuevo cliente
+            </button>
           )}
         </FieldBox>
 
@@ -294,15 +304,35 @@ export function InvoiceNewFree() {
           </span>
         </FieldBox>
 
-        <FieldBox label="Emisión / Vencimiento">
+        <FieldBox label="Emisión">
           <span className="block">{formatDate(toDateString(issueDate))}</span>
-          <span className="block text-text-soft">
-            {condicion === ''
-              ? 'Según la condición de venta'
-              : isCash
-                ? 'Contado: vence el mismo día'
-                : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
-          </span>
+          <span className="block text-[11px] normal-case text-text-soft">Hoy</span>
+        </FieldBox>
+
+        <FieldBox label="Vencimiento">
+          {condicion === 'CUENTA_CORRIENTE' ? (
+            <>
+              <input
+                type="date"
+                value={vencimiento || toDateString(dueDate)}
+                min={toDateString(issueDate)}
+                onChange={(e) => setVencimiento(e.target.value)}
+                className="w-full border-0 bg-transparent p-0 font-mono text-[13px] font-semibold text-text focus:outline-none"
+              />
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                Se puede corregir después desde la factura.
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="block">
+                {condicion === '' ? '—' : formatDate(toDateString(issueDate))}
+              </span>
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                {condicion === '' ? 'Según la condición de venta' : 'Contado: vence el mismo día'}
+              </span>
+            </>
+          )}
         </FieldBox>
 
         {/* Con remito de origen no hay nada que elegir: ya existe y se vincula. */}
@@ -365,6 +395,19 @@ export function InvoiceNewFree() {
           />
         </Panel>
       </div>
+
+      {altaCliente && (
+        <CustomerModal
+          customer={null}
+          onClose={() => setAltaCliente(false)}
+          onSaved={(nuevo) => {
+            setAltaCliente(false);
+            setCustomers((actuales) => [...actuales, nuevo].sort((a, b) => a.name.localeCompare(b.name)));
+            // Queda elegido: es para eso que se lo dio de alta desde acá.
+            setCustomerId(nuevo.id);
+          }}
+        />
+      )}
 
       {checkModalOpen && (
         <CheckDraftModal

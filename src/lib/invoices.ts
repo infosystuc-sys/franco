@@ -466,7 +466,9 @@ export async function issueInvoice(
   notes: string,
   emitRemito: boolean,
   invoiceType: InvoiceType,
-  condicion: CondicionVenta
+  condicion: CondicionVenta,
+  /** Solo se usa en cuenta corriente; en contado vence el mismo día. */
+  dueDate: string | null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_invoice', {
     p_work_order_id: workOrderId,
@@ -481,6 +483,7 @@ export async function issueInvoice(
     p_emit_remito: emitRemito,
     p_invoice_type: invoiceType,
     p_condicion: condicion,
+    p_due_date: dueDate,
   });
 
   if (error) throw error;
@@ -510,6 +513,7 @@ export async function issueFreeInvoice(
   emitRemito: boolean,
   invoiceType: InvoiceType,
   condicion: CondicionVenta,
+  dueDate: string | null,
   remitoId: string | null = null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_free_invoice', {
@@ -526,6 +530,7 @@ export async function issueFreeInvoice(
     p_remito_id: remitoId,
     p_invoice_type: invoiceType,
     p_condicion: condicion,
+    p_due_date: dueDate,
   });
 
   if (error) throw error;
@@ -594,6 +599,19 @@ export async function fijarProximoNumero(
     p_invoice_type: invoiceType,
     p_sales_point: salesPoint,
     p_next_number: nextNumber,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Corrige el vencimiento de una factura de cuenta corriente ya emitida.
+ * Renegociar el plazo es habitual y no toca nada del contenido fiscal. La base
+ * rechaza las anuladas, las de contado y una fecha anterior a la emisión.
+ */
+export async function cambiarVencimiento(invoiceId: string, dueDate: string): Promise<void> {
+  const { error } = await supabase.rpc('cambiar_vencimiento_factura', {
+    p_invoice_id: invoiceId,
+    p_due_date: dueDate,
   });
   if (error) throw error;
 }

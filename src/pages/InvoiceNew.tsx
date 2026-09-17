@@ -44,6 +44,7 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
+import { CustomerModal } from '@/src/components/CustomerModal';
 
 /**
  * Una celda de la ficha de cabecera del comprobante: rótulo chico arriba,
@@ -162,6 +163,9 @@ export function InvoiceNew() {
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   const [proximo, setProximo] = React.useState<string | null>(null);
+  const [altaCliente, setAltaCliente] = React.useState(false);
+  // Vacío = el plazo por defecto. Solo se usa en cuenta corriente.
+  const [vencimiento, setVencimiento] = React.useState('');
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
@@ -255,7 +259,7 @@ export function InvoiceNew() {
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   if (loading) {
-    return <div className="mx-auto max-w-5xl p-8 text-center text-text-soft">Cargando orden…</div>;
+    return <div className="w-full p-8 text-center text-text-soft">Cargando orden…</div>;
   }
 
   if (!order) {
@@ -357,7 +361,8 @@ export function InvoiceNew() {
     setError(null);
     try {
       const issued = await issueInvoice(
-        order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta
+        order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
+        isCash ? null : (vencimiento || null)
       );
       if (isCash) {
         try {
@@ -390,7 +395,7 @@ export function InvoiceNew() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="w-full">
       <InvoiceTopBar
         title={`Factura de venta · OT ${order.number}`}
         type={invoiceType}
@@ -415,8 +420,8 @@ export function InvoiceNew() {
       {/* La ficha del comprobante: un dato por celda, sin el aire de un panel
           grande — de un vistazo se lee a quién, con qué letra y cuándo vence,
           igual que la cabecera de un talonario electrónico. */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <FieldBox label="Cliente" className="col-span-2 sm:col-span-2">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <FieldBox label="Cliente" className="col-span-2">
           <span className="block truncate font-semibold text-text">
             {order.customer?.legal_name || order.customer?.name || '—'}
           </span>
@@ -436,9 +441,21 @@ export function InvoiceNew() {
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
-          </span>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] normal-case text-text-soft">
+              {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
+            </span>
+            {/* El cliente nuevo aparece acá y no en la pantalla de Clientes:
+                si el que trajo el vehículo no está cargado, facturar no puede
+                obligar a salir, darlo de alta y volver a empezar. */}
+            <button
+              type="button"
+              onClick={() => setAltaCliente(true)}
+              className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+            >
+              + Nuevo
+            </button>
+          </div>
         </FieldBox>
 
         <FieldBox label="Tipo de factura">
@@ -478,15 +495,35 @@ export function InvoiceNew() {
           </span>
         </FieldBox>
 
-        <FieldBox label="Emisión / Vencimiento">
+        <FieldBox label="Emisión">
           <span className="block">{formatDate(toDateString(issueDate))}</span>
-          <span className="block text-text-soft">
-            {condicion === ''
-              ? 'Según la condición de venta'
-              : isCash
-                ? 'Contado: vence el mismo día'
-                : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
-          </span>
+          <span className="block text-[11px] normal-case text-text-soft">Hoy</span>
+        </FieldBox>
+
+        <FieldBox label="Vencimiento">
+          {condicion === 'CUENTA_CORRIENTE' ? (
+            <>
+              <input
+                type="date"
+                value={vencimiento || toDateString(dueDate)}
+                min={toDateString(issueDate)}
+                onChange={(e) => setVencimiento(e.target.value)}
+                className="w-full border-0 bg-transparent p-0 font-mono text-[13px] font-semibold text-text focus:outline-none"
+              />
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                Se puede corregir después desde la factura.
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="block">
+                {condicion === '' ? '—' : formatDate(toDateString(issueDate))}
+              </span>
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                {condicion === '' ? 'Según la condición de venta' : 'Contado: vence el mismo día'}
+              </span>
+            </>
+          )}
         </FieldBox>
 
         <FieldBox label="Remito">
@@ -549,6 +586,20 @@ export function InvoiceNew() {
           />
         </Panel>
       </div>
+
+      {altaCliente && (
+        <CustomerModal
+          customer={null}
+          onClose={() => setAltaCliente(false)}
+          onSaved={async (nuevo) => {
+            setAltaCliente(false);
+            setCustomers((actuales) => [...actuales, nuevo].sort((a, b) => a.name.localeCompare(b.name)));
+            // Se le factura al que se acaba de cargar: es para eso que se lo
+            // dio de alta acá y no en la pantalla de Clientes.
+            await handleCambiarCliente(nuevo.id);
+          }}
+        />
+      )}
 
       {checkModalOpen && (
         <CheckDraftModal

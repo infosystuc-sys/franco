@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import {
   balanceOf,
+  cambiarVencimiento,
   daysUntilDue,
   describeInvoiceError,
   discriminatesVat,
@@ -207,19 +208,14 @@ export function InvoiceDetails() {
             <Metric label="Total" value={`$ ${formatMoney(invoice.totalAmount)}`} />
             <Metric label="Cobrado" value={`$ ${formatMoney(invoice.paidAmount)}`} />
             <Metric label="Saldo" value={`$ ${formatMoney(balance)}`} strong />
-            <Metric
-              label="Vencimiento"
-              value={formatDate(invoice.dueDate)}
-              hint={
-                balance <= 0
-                  ? 'Sin saldo'
-                  : days < 0
-                    ? `Vencida hace ${Math.abs(days)} d.`
-                    : days === 0
-                      ? 'Vence hoy'
-                      : `En ${days} ${days === 1 ? 'día' : 'días'}`
-              }
-              danger={overdue}
+            <VencimientoMetric
+              invoice={invoice}
+              balance={balance}
+              days={days}
+              overdue={overdue}
+              editable={role === 'admin' && invoice.paymentTermsDays > 0}
+              onChanged={load}
+              onError={setError}
             />
           </div>
         )}
@@ -312,6 +308,114 @@ export function RemitoDocument({ remito }: { remito: Remito }) {
         <p className="mt-3 border-t border-line pt-3 text-[13px] text-text-soft">{remito.voidedReason}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * El vencimiento, editable cuando la factura es de cuenta corriente.
+ *
+ * Renegociar el plazo con un cliente es habitual y no toca nada del contenido
+ * fiscal del comprobante, así que se corrige acá en vez de anular y reemitir.
+ * En una de contado no hay nada que mover: se cobró al emitirse.
+ */
+function VencimientoMetric({
+  invoice,
+  balance,
+  days,
+  overdue,
+  editable,
+  onChanged,
+  onError,
+}: {
+  invoice: InvoiceDetail;
+  balance: number;
+  days: number;
+  overdue: boolean;
+  editable: boolean;
+  onChanged: () => void;
+  onError: (message: string) => void;
+}) {
+  const [editando, setEditando] = React.useState(false);
+  const [fecha, setFecha] = React.useState(invoice.dueDate);
+  const [guardando, setGuardando] = React.useState(false);
+
+  const hint = balance <= 0
+    ? 'Sin saldo'
+    : days < 0
+      ? `Vencida hace ${Math.abs(days)} d.`
+      : days === 0
+        ? 'Vence hoy'
+        : `En ${days} ${days === 1 ? 'día' : 'días'}`;
+
+  async function guardar() {
+    setGuardando(true);
+    onError('');
+    try {
+      await cambiarVencimiento(invoice.id, fecha);
+      setEditando(false);
+      onChanged();
+    } catch (err) {
+      onError(describeInvoiceError(getErrorMessage(err)));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  if (!editando) {
+    return (
+      <Panel className="p-4">
+        <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          Vencimiento
+        </span>
+        <span className={cn('block font-display text-xl font-medium', overdue ? 'text-danger' : 'text-text-soft')}>
+          {formatDate(invoice.dueDate)}
+        </span>
+        <span className="mt-0.5 block text-[13px] text-text-faint">{hint}</span>
+        {editable && (
+          <button
+            type="button"
+            onClick={() => { setFecha(invoice.dueDate); setEditando(true); }}
+            className="mt-1.5 text-[12px] font-semibold uppercase tracking-wider text-text-soft hover:text-accent-deep"
+          >
+            Cambiar
+          </button>
+        )}
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel className="p-4">
+      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+        Vencimiento
+      </span>
+      <input
+        type="date"
+        autoFocus
+        value={fecha}
+        min={invoice.issueDate}
+        onChange={(e) => setFecha(e.target.value)}
+        className="w-full border border-line bg-panel px-2 py-1 font-mono text-sm focus:border-accent-deep focus:outline-none"
+      />
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          disabled={guardando || fecha === invoice.dueDate}
+          onClick={guardar}
+          className="text-[12px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
+        >
+          {guardando ? 'Guardando…' : 'Guardar'}
+        </button>
+        <button
+          type="button"
+          disabled={guardando}
+          onClick={() => setEditando(false)}
+          className="text-[12px] font-semibold uppercase tracking-wider text-text-soft hover:underline"
+        >
+          Cancelar
+        </button>
+      </div>
+    </Panel>
   );
 }
 
