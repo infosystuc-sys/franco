@@ -25,19 +25,17 @@ export type InvoiceType = 'A' | 'B' | 'C' | 'X';
 export type InvoiceStatus = 'EMITIDA' | 'ANULADA';
 
 /**
- * Las dos numeraciones que emite el taller.
+ * Las letras que se pueden elegir al emitir.
  *
- * ELECTRONICA es la que en su momento va a pedirle el CAE a ARCA; hasta
- * entonces el CAE se simula para poder probar el circuito entero. INTERNA es
- * la letra X: sin validez fiscal, pero numera, imprime, va a la cuenta
+ * A y B van por la numeración electrónica —la que en su momento le va a pedir
+ * el CAE a ARCA; hasta entonces se simula—. La X es la interna: sin validez
+ * fiscal, con su propio punto de venta, pero numera, imprime, va a la cuenta
  * corriente y se cobra igual que cualquier otra.
+ *
+ * La C no se ofrece: la emite un monotributista, y este taller es Responsable
+ * Inscripto. Si eso cambiara, la base rechaza la A y la B y hay que agregarla.
  */
-export type InvoiceSerie = 'ELECTRONICA' | 'INTERNA';
-
-export const SERIE_LABELS: Record<InvoiceSerie, string> = {
-  ELECTRONICA: 'Factura electrónica',
-  INTERNA: 'Factura interna (X)',
-};
+export const LETRAS_EMISIBLES: InvoiceType[] = ['A', 'B', 'X'];
 
 /** Contado se cobra al emitir; cuenta corriente vence a los 7 días. */
 export type CondicionVenta = 'CONTADO' | 'CUENTA_CORRIENTE';
@@ -467,7 +465,7 @@ export async function issueInvoice(
   items: WorkOrderItemInput[],
   notes: string,
   emitRemito: boolean,
-  serie: InvoiceSerie,
+  invoiceType: InvoiceType,
   condicion: CondicionVenta
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_invoice', {
@@ -481,7 +479,7 @@ export async function issueInvoice(
     })),
     p_notes: notes.trim() || null,
     p_emit_remito: emitRemito,
-    p_serie: serie,
+    p_invoice_type: invoiceType,
     p_condicion: condicion,
   });
 
@@ -510,7 +508,7 @@ export async function issueFreeInvoice(
   items: WorkOrderItemInput[],
   notes: string,
   emitRemito: boolean,
-  serie: InvoiceSerie,
+  invoiceType: InvoiceType,
   condicion: CondicionVenta,
   remitoId: string | null = null
 ): Promise<IssuedInvoice> {
@@ -526,7 +524,7 @@ export async function issueFreeInvoice(
     p_notes: notes.trim() || null,
     p_emit_remito: emitRemito,
     p_remito_id: remitoId,
-    p_serie: serie,
+    p_invoice_type: invoiceType,
     p_condicion: condicion,
   });
 
@@ -540,6 +538,27 @@ export async function issueFreeInvoice(
     fullNumber: row.invoice_full_number,
     invoiceType: row.invoice_letter,
     remitoFullNumber: row.remito_full_number,
+  };
+}
+
+/**
+ * Qué número va a llevar la próxima factura de esta letra. Es una previsión
+ * para mostrarla antes de emitir: si alguien emite primero, el número real va
+ * a ser el siguiente.
+ */
+export async function fetchProximoNumero(
+  invoiceType: InvoiceType
+): Promise<{ salesPoint: number; nextNumber: number; fullNumber: string } | null> {
+  const { data, error } = await supabase.rpc('proximo_numero_factura', {
+    p_invoice_type: invoiceType,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) return null;
+  return {
+    salesPoint: Number(row.sales_point),
+    nextNumber: Number(row.next_number),
+    fullNumber: row.full_number,
   };
 }
 

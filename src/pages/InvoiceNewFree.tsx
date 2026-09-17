@@ -1,7 +1,7 @@
 import React from 'react';
 import { Receipt, AlertTriangle, ArrowRight, Truck, CalendarClock } from 'lucide-react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { formatMoney } from '@/src/lib/utils';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, Panel, SectionHeader } from '@/src/components/ui';
@@ -22,11 +22,12 @@ import {
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
+  fetchProximoNumero,
+  LETRAS_EMISIBLES,
   PAYMENT_TERMS_DAYS,
-  SERIE_LABELS,
   toDateString,
   type CondicionVenta,
-  type InvoiceSerie,
+  type InvoiceType,
 } from '@/src/lib/invoices';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
@@ -59,8 +60,11 @@ export function InvoiceNewFree() {
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
-  const [serie, setSerie] = React.useState<InvoiceSerie>('INTERNA');
-  const [condicion, setCondicion] = React.useState<CondicionVenta>('CUENTA_CORRIENTE');
+  const [invoiceType, setInvoiceType] = React.useState<InvoiceType>('X');
+  // Sin valor inicial: elegirla es parte de emitir, y un default se confirma
+  // sin mirarlo. La base también la exige.
+  const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
+  const [proximo, setProximo] = React.useState<string | null>(null);
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
@@ -104,6 +108,15 @@ export function InvoiceNewFree() {
     return () => { cancelled = true; };
   }, [role, remitoId]);
 
+  // Cada letra tiene su numeración: se vuelve a pedir al cambiarla.
+  React.useEffect(() => {
+    let cancelado = false;
+    fetchProximoNumero(invoiceType)
+      .then((p) => !cancelado && setProximo(p?.fullNumber ?? null))
+      .catch(() => !cancelado && setProximo(null));
+    return () => { cancelado = true; };
+  }, [invoiceType]);
+
   if (role !== 'admin') return <Navigate to="/" replace />;
 
   if (loading) {
@@ -129,18 +142,17 @@ export function InvoiceNewFree() {
   const settings = company!;
   const customer = customers.find((c) => c.id === customerId) ?? null;
   const customerCondition = customer?.taxCondition ?? 'CONSUMIDOR_FINAL';
-  // La letra fiscal manda para el IVA —también en la interna, para que el
-  // total dé lo mismo en las dos series—; la emitida es la que sale impresa.
+  // La letra la elige quien emite; para el IVA manda la que le correspondería
+  // al cliente, también en la X, para que el total dé lo mismo.
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
-  const invoiceType = serie === 'INTERNA' ? 'X' : letraFiscal;
-  const totals = computeTotals(items, letraFiscal);
+  const totals = computeTotals(items, invoiceType === 'X' ? letraFiscal : invoiceType);
 
   const isCash = condicion === 'CONTADO';
-  const puntoDeVenta = serie === 'INTERNA' ? settings.salesPointInternal : settings.salesPoint;
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
+    condicion !== '' &&
     (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
   const issueDate = new Date();
@@ -160,7 +172,7 @@ export function InvoiceNewFree() {
     setError(null);
     try {
       const issued = await issueFreeInvoice(
-        customer.id, items, notes, emitRemito, serie, condicion, remitoId
+        customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta, remitoId
       );
       if (isCash) {
         try {
@@ -206,6 +218,7 @@ export function InvoiceNewFree() {
             'Sin orden de trabajo ni cotización — se carga el cliente y los renglones a mano.'
           )
         }
+        numero={proximo}
         total={totals.total}
         cancelHref="/facturas"
         onIssue={handleIssue}
@@ -244,28 +257,18 @@ export function InvoiceNewFree() {
           )}
         </FieldBox>
 
-        <FieldBox label="Condición del cliente">
-          {customer?.taxId && <span className="block font-mono text-[13px]">{formatCuit(customer.taxId)}</span>}
-          <span className="block text-text-soft">{TAX_CONDITION_LABELS[customerCondition]}</span>
-        </FieldBox>
-
-        <FieldBox label="Domicilio">
-          <span className="block truncate text-text-soft">
-            {customer ? formatAddress(customer) || 'Sin domicilio cargado' : '—'}
-          </span>
-        </FieldBox>
-
-        <FieldBox label="Serie">
+        <FieldBox label="Tipo de factura">
           <select
-            value={serie}
-            onChange={(e) => setSerie(e.target.value as InvoiceSerie)}
+            value={invoiceType}
+            onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
             className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
           >
-            <option value="INTERNA">{SERIE_LABELS.INTERNA}</option>
-            <option value="ELECTRONICA">{SERIE_LABELS.ELECTRONICA}</option>
+            {LETRAS_EMISIBLES.map((l) => (
+              <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+            ))}
           </select>
-          <span className="mt-1 block font-mono text-[11px] normal-case text-text-soft">
-            Pto. vta. {String(puntoDeVenta).padStart(4, '0')}
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
+            {invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal'}
           </span>
         </FieldBox>
 
@@ -273,22 +276,32 @@ export function InvoiceNewFree() {
           <select
             value={condicion}
             onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+            className={cn(
+              'w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none',
+              condicion === '' && 'text-danger'
+            )}
           >
+            <option value="">Elegí una…</option>
             <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
             <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
           </select>
           <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {isCash ? 'Se cobra al emitir' : `Vence a ${PAYMENT_TERMS_DAYS} días`}
+            {condicion === ''
+              ? 'Obligatoria para emitir'
+              : isCash
+                ? 'Se cobra al emitir'
+                : `Vence a ${PAYMENT_TERMS_DAYS} días`}
           </span>
         </FieldBox>
 
         <FieldBox label="Emisión / Vencimiento">
           <span className="block">{formatDate(toDateString(issueDate))}</span>
           <span className="block text-text-soft">
-            {isCash
-              ? 'Contado: vence el mismo día'
-              : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
+            {condicion === ''
+              ? 'Según la condición de venta'
+              : isCash
+                ? 'Contado: vence el mismo día'
+                : `Vence ${formatDate(toDateString(dueDate))} (${PAYMENT_TERMS_DAYS} días)`}
           </span>
         </FieldBox>
 
