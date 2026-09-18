@@ -72,7 +72,9 @@ export function InvoiceNewFree() {
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   const [proximo, setProximo] = React.useState<string | null>(null);
-  const [altaCliente, setAltaCliente] = React.useState(false);
+  // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
+  // = alta, { customer } = modificación del que ya está elegido.
+  const [fichaCliente, setFichaCliente] = React.useState<{ customer: Customer | null } | null>(null);
   const [vencimiento, setVencimiento] = React.useState('');
   const [paymentMethodId, setPaymentMethodId] = React.useState('');
   const [banks, setBanks] = React.useState<Bank[]>([]);
@@ -248,17 +250,30 @@ export function InvoiceNewFree() {
               Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
             </span>
           )}
-          {/* El cliente nuevo se da de alta acá mismo: facturar no puede
-              obligar a salir a Clientes, cargarlo y volver a empezar. */}
-          {!remito && (
-            <button
-              type="button"
-              onClick={() => setAltaCliente(true)}
-              className="mt-1 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-            >
-              + Nuevo cliente
-            </button>
-          )}
+          {/* El alta y la modificación se hacen acá mismo: facturar no puede
+              obligar a salir a Clientes, arreglar la ficha y volver a empezar.
+              Modificar se permite aun con remito —cambia la ficha, no a quién
+              se le factura—; dar de alta otro, no. */}
+          <div className="mt-1 flex items-center gap-3">
+            {customer && (
+              <button
+                type="button"
+                onClick={() => setFichaCliente({ customer })}
+                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+              >
+                Modificar cliente
+              </button>
+            )}
+            {!remito && (
+              <button
+                type="button"
+                onClick={() => setFichaCliente({ customer: null })}
+                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+              >
+                + Nuevo cliente
+              </button>
+            )}
+          </div>
         </FieldBox>
 
         <FieldBox label="Tipo de factura">
@@ -382,15 +397,21 @@ export function InvoiceNewFree() {
         </Panel>
       </div>
 
-      {altaCliente && (
+      {fichaCliente && (
         <CustomerModal
-          customer={null}
-          onClose={() => setAltaCliente(false)}
-          onSaved={(nuevo) => {
-            setAltaCliente(false);
-            setCustomers((actuales) => [...actuales, nuevo].sort((a, b) => a.name.localeCompare(b.name)));
+          customer={fichaCliente.customer}
+          onClose={() => setFichaCliente(null)}
+          onSaved={(guardado) => {
+            const eraAlta = fichaCliente.customer === null;
+            setFichaCliente(null);
+            setCustomers((actuales) =>
+              (eraAlta
+                ? [...actuales, guardado]
+                : actuales.map((c) => (c.id === guardado.id ? guardado : c))
+              ).sort((a, b) => a.name.localeCompare(b.name))
+            );
             // Queda elegido: es para eso que se lo dio de alta desde acá.
-            setCustomerId(nuevo.id);
+            if (eraAlta) setCustomerId(guardado.id);
           }}
         />
       )}

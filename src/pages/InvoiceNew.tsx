@@ -179,7 +179,9 @@ export function InvoiceNew() {
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   const [proximo, setProximo] = React.useState<string | null>(null);
-  const [altaCliente, setAltaCliente] = React.useState(false);
+  // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
+  // = alta, { customer } = modificación del que ya está elegido.
+  const [fichaCliente, setFichaCliente] = React.useState<{ customer: Customer | null } | null>(null);
   // Vacío = el plazo por defecto. Solo se usa en cuenta corriente.
   const [vencimiento, setVencimiento] = React.useState('');
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
@@ -319,6 +321,10 @@ export function InvoiceNew() {
   }
 
   const settings = company!;
+  // La ficha completa del que está elegido. La orden trae sus datos fiscales,
+  // pero el modal necesita el Customer entero —vehículos incluidos—, y eso
+  // vive en la lista que se trajo para poder cambiarlo.
+  const clienteElegido = customers.find((c) => c.id === order.customer?.id) ?? null;
   const customerCondition = order.customer?.tax_condition ?? 'CONSUMIDOR_FINAL';
   // La letra la elige quien emite. Para el IVA manda la que le correspondería
   // al cliente, también en la X, para que el total dé lo mismo en las dos
@@ -452,16 +458,28 @@ export function InvoiceNew() {
             <span className="text-[11px] normal-case text-text-soft">
               {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
             </span>
-            {/* El cliente nuevo aparece acá y no en la pantalla de Clientes:
-                si el que trajo el vehículo no está cargado, facturar no puede
-                obligar a salir, darlo de alta y volver a empezar. */}
-            <button
-              type="button"
-              onClick={() => setAltaCliente(true)}
-              className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-            >
-              + Nuevo
-            </button>
+            {/* El alta y la modificación viven acá y no en la pantalla de
+                Clientes: si el que trajo el vehículo no está cargado —o está
+                cargado sin CUIT, que es lo que más pasa— facturar no puede
+                obligar a salir, arreglar la ficha y volver a empezar. */}
+            <div className="flex shrink-0 items-center gap-3">
+              {clienteElegido && (
+                <button
+                  type="button"
+                  onClick={() => setFichaCliente({ customer: clienteElegido })}
+                  className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+                >
+                  Modificar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFichaCliente({ customer: null })}
+                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+              >
+                + Nuevo
+              </button>
+            </div>
           </div>
         </FieldBox>
 
@@ -589,16 +607,48 @@ export function InvoiceNew() {
         </Panel>
       </div>
 
-      {altaCliente && (
+      {fichaCliente && (
         <CustomerModal
-          customer={null}
-          onClose={() => setAltaCliente(false)}
-          onSaved={async (nuevo) => {
-            setAltaCliente(false);
-            setCustomers((actuales) => [...actuales, nuevo].sort((a, b) => a.name.localeCompare(b.name)));
-            // Se le factura al que se acaba de cargar: es para eso que se lo
-            // dio de alta acá y no en la pantalla de Clientes.
-            await handleCambiarCliente(nuevo.id);
+          customer={fichaCliente.customer}
+          onClose={() => setFichaCliente(null)}
+          onSaved={async (guardado) => {
+            const eraAlta = fichaCliente.customer === null;
+            setFichaCliente(null);
+            setCustomers((actuales) =>
+              (eraAlta
+                ? [...actuales, guardado]
+                : actuales.map((c) => (c.id === guardado.id ? guardado : c))
+              ).sort((a, b) => a.name.localeCompare(b.name))
+            );
+            if (eraAlta) {
+              // Se le factura al que se acaba de cargar: es para eso que se lo
+              // dio de alta acá y no en la pantalla de Clientes.
+              await handleCambiarCliente(guardado.id);
+              return;
+            }
+            // Modificación: la orden ya apunta a este cliente, así que se le
+            // copian los datos nuevos en vez de recargarla. Recargar volvería a
+            // traer los renglones de la OT y se perderían los retoques hechos
+            // en esta pantalla.
+            setOrder((actual) =>
+              actual && actual.customer?.id === guardado.id
+                ? {
+                    ...actual,
+                    customer: {
+                      id: guardado.id,
+                      name: guardado.name,
+                      phone: guardado.phone,
+                      legal_name: guardado.legalName,
+                      tax_id: guardado.taxId,
+                      tax_condition: guardado.taxCondition,
+                      address_street: guardado.addressStreet,
+                      address_city: guardado.addressCity,
+                      address_state: guardado.addressState,
+                      address_zip: guardado.addressZip,
+                    },
+                  }
+                : actual
+            );
           }}
         />
       )}
