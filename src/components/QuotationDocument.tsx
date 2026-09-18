@@ -37,6 +37,12 @@ export interface QuotationDocumentData {
  * mismo papel. Antes cada pantalla dibujaba el suyo —la interna una tabla
  * seca, la del cliente unos paneles de pantalla— y ninguno decía de qué taller
  * venía.
+ *
+ * Los tamaños de letra están puestos para una A4: el PDF se arma con el
+ * comprobante dibujado al ancho útil de la hoja (ver src/lib/pdf.ts), así que
+ * un px de acá es un px impreso a 96 dpi. Los 16 px del cuerpo son unos 12
+ * puntos, el tamaño de un presupuesto de papel; achicarlos de nuevo lo vuelve
+ * ilegible impreso, aunque en pantalla se vea bien.
  */
 export function QuotationDocument({
   quotation,
@@ -60,10 +66,10 @@ export function QuotationDocument({
           <img src={logo} alt={taller?.tradeName ?? 'Luciano Diesel'} className="h-12 w-auto" />
           {taller && (
             <>
-              <h2 className="mt-3 font-display text-xl font-medium uppercase leading-tight text-text">
+              <h2 className="mt-3 font-display text-2xl font-medium uppercase leading-tight text-text">
                 {taller.legalName}
               </h2>
-              <dl className="mt-2 space-y-0.5 text-[13px] text-text-soft">
+              <dl className="mt-2 space-y-0.5 text-[15px] text-text-soft">
                 {domicilioTaller && <dd>{domicilioTaller}</dd>}
                 <dd>{TAX_CONDITION_LABELS[taller.taxCondition]}</dd>
                 {taller.taxId && <dd className="font-mono">CUIT {formatCuit(taller.taxId)}</dd>}
@@ -80,11 +86,11 @@ export function QuotationDocument({
         </div>
 
         <div className="sm:text-right">
-          <h3 className="font-display text-xl uppercase tracking-[0.08em] text-text-faint">
+          <h3 className="font-display text-2xl uppercase tracking-[0.08em] text-text-faint">
             Presupuesto
           </h3>
-          <p className="mt-1 font-mono text-lg font-semibold text-text">{quotation.number}</p>
-          <dl className="mt-2 space-y-0.5 text-[13px] text-text-soft">
+          <p className="mt-1 font-mono text-xl font-semibold text-text">{quotation.number}</p>
+          <dl className="mt-2 space-y-0.5 text-[15px] text-text-soft">
             <dd>Fecha de emisión: {formatDate(quotation.issueDate)}</dd>
             {quotation.validUntil && <dd>Válido hasta: {formatDate(quotation.validUntil)}</dd>}
             {quotation.workOrderNumber && (
@@ -97,7 +103,7 @@ export function QuotationDocument({
       {/* Cliente y trabajo. Cada dato se muestra solo si está: el presupuesto
           que ve el cliente por el link no lleva su CUIT ni su domicilio, y una
           fila con un guión no informa nada. */}
-      <div className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-line py-4 text-[14px] sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 border-b border-line py-4 text-[16px] sm:grid-cols-2">
         <Campo label="Señor(es)" value={quotation.customerName} />
         {quotation.customerTaxId && (
           <Campo label="CUIT / CUIL" value={formatCuit(quotation.customerTaxId)} mono />
@@ -120,14 +126,16 @@ export function QuotationDocument({
 
       {/* Renglones */}
       <div className="overflow-x-auto py-4">
-        <table className="w-full text-left text-[14px]">
-          <thead className="border-b-2 border-line-strong text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+        <table className="w-full text-left text-[16px]">
+          <thead className="border-b-2 border-line-strong text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
-              <th className="w-24 py-1.5 pr-2">Código</th>
-              <th className="py-1.5 pr-2">Descripción</th>
-              <th className="w-16 py-1.5 pr-2 text-right">Cant.</th>
-              <th className="w-28 py-1.5 pr-2 text-right">P. unitario</th>
-              <th className="w-28 py-1.5 text-right">Subtotal</th>
+              {/* El código se achica un poco: con la letra más grande, lo que
+                  hace falta es lugar para la descripción. */}
+              <th className="w-20 py-2 pr-2">Código</th>
+              <th className="py-2 pr-2">Descripción</th>
+              <th className="w-16 py-2 pr-2 text-right">Cant.</th>
+              <th className="w-28 py-2 pr-2 text-right">P. unitario</th>
+              <th className="w-28 py-2 text-right">Subtotal</th>
             </tr>
           </thead>
           <tbody>
@@ -140,11 +148,11 @@ export function QuotationDocument({
             )}
             {quotation.items.map((item, idx) => (
               <tr key={idx} className="border-b border-line">
-                <td className="py-1.5 pr-2 font-mono text-text-soft">{item.code ?? ''}</td>
-                <td className="py-1.5 pr-2">{item.description}</td>
-                <td className="py-1.5 pr-2 text-right">{item.quantity.toFixed(2)}</td>
-                <td className="py-1.5 pr-2 text-right">$ {formatMoney(item.unitPrice)}</td>
-                <td className="py-1.5 text-right font-semibold">
+                <td className="py-2 pr-2 font-mono text-[15px] text-text-soft">{item.code ?? ''}</td>
+                <td className="py-2 pr-2">{item.description}</td>
+                <td className="py-2 pr-2 text-right">{item.quantity.toFixed(2)}</td>
+                <td className="py-2 pr-2 text-right">$ {formatMoney(item.unitPrice)}</td>
+                <td className="py-2 text-right font-semibold">
                   $ {formatMoney(item.quantity * item.unitPrice)}
                 </td>
               </tr>
@@ -155,14 +163,14 @@ export function QuotationDocument({
 
       {/* Totales */}
       <div className="flex justify-end border-t-2 border-ink pt-4">
-        <div className="w-full space-y-1.5 sm:w-72">
+        <div className="w-full space-y-1.5 sm:w-80">
           <Renglon label="Neto gravado" value={neto} />
           <Renglon label="IVA 21%" value={iva} />
           <div className="flex items-baseline justify-between border-t-2 border-accent pt-2">
-            <span className="text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+            <span className="text-[15px] font-semibold uppercase tracking-[0.08em] text-text-soft">
               Total
             </span>
-            <span className="font-display text-2xl font-medium text-text">
+            <span className="font-display text-3xl font-medium text-text">
               $ {formatMoney(neto + iva)}
             </span>
           </div>
@@ -171,14 +179,14 @@ export function QuotationDocument({
 
       {quotation.notes && (
         <div className="mt-5 border-t border-line pt-3">
-          <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+          <span className="mb-1 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Observaciones
           </span>
-          <p className="whitespace-pre-line text-[14px] text-text-soft">{quotation.notes}</p>
+          <p className="whitespace-pre-line text-[16px] text-text-soft">{quotation.notes}</p>
         </div>
       )}
 
-      <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
+      <p className="mt-6 border-t border-line pt-3 text-center text-[13px] text-text-faint">
         Presupuesto sin validez fiscal: no reemplaza a la factura.
         {quotation.validUntil
           ? ` Los precios se mantienen hasta el ${formatDate(quotation.validUntil)}.`
@@ -201,7 +209,7 @@ function Campo({ label, value, mono }: { label: string; value: string; mono?: bo
 
 function Renglon({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex justify-between text-[14px] text-text-soft">
+    <div className="flex justify-between text-[16px] text-text-soft">
       <span>{label}</span>
       <span className="text-text">$ {formatMoney(value)}</span>
     </div>
