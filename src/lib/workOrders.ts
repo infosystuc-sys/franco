@@ -391,7 +391,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
-       employee:employees(name),
+       employee:employees!work_orders_employee_id_fkey(name),
        quotation:quotations!work_orders_quotation_id_fkey(items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
        invoice:invoices!invoices_work_order_id_fkey(full_number, status)`
