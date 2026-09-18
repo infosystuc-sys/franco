@@ -72,9 +72,12 @@ export function FieldBox({
  * Los desplegables de la cabecera, con el mismo formato que el del cliente:
  * caja con borde y flecha. Antes iban sin borde sobre el fondo, y no se leían
  * como algo que se pudiera abrir.
+ *
+ * Sin ancho: lo pone cada uno. Casi todos van a todo el ancho de su celda,
+ * pero el de la letra se achica a su contenido para dejarle lugar al número.
  */
 export const selectCabecera =
-  'w-full rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-text ' +
+  'rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-text ' +
   'focus:border-accent-deep focus:outline-none';
 
 /**
@@ -449,7 +452,7 @@ export function InvoiceNew() {
             value={order.customer?.id ?? ''}
             disabled={cambiandoCliente || customers.length === 0}
             onChange={(e) => handleCambiarCliente(e.target.value)}
-            className={cn(selectCabecera, 'mt-1.5 disabled:opacity-50')}
+            className={cn(selectCabecera, 'mt-1.5 w-full disabled:opacity-50')}
           >
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -487,28 +490,33 @@ export function InvoiceNew() {
         </FieldBox>
 
         <FieldBox label="Tipo de factura">
-          <select
-            value={invoiceType}
-            onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-            className={selectCabecera}
-          >
-            {LETRAS_EMISIBLES.map((l) => (
-              <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
-            ))}
-          </select>
-          {/* El número va acá y no en el encabezado: es lo que define esta
-              letra, y cambia con ella. Todavía no está emitido, así que es el
-              que le va a tocar. */}
-          <span className="mt-1 block font-mono text-[12px] normal-case text-text-soft">
-            {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-          </span>
+          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
+              juntos son la identidad del comprobante, y el número es lo que
+              esta letra define —cambia con ella—. Todavía no está emitido, así
+              que es el que le va a tocar. */}
+          {/* Envuelve en pantalla angosta: el número baja abajo entero en vez
+              de cortarse, que es lo único que no se puede adivinar. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <select
+              value={invoiceType}
+              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              className={cn(selectCabecera, 'w-auto shrink-0')}
+            >
+              {LETRAS_EMISIBLES.map((l) => (
+                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              ))}
+            </select>
+            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
+            </span>
+          </div>
         </FieldBox>
 
         <FieldBox label="Condición de venta">
           <select
             value={condicion}
             onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(selectCabecera, condicion === '' && 'border-danger text-danger')}
+            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
           >
             <option value="">Elegí una…</option>
             <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
@@ -780,7 +788,7 @@ export function CashCheckoutFields({
           if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal();
           else onPaymentMethodIdChange(e.target.value);
         }}
-        className={cn(selectCabecera, !paymentMethodId && 'border-danger text-danger')}
+        className={cn(selectCabecera, 'w-full', !paymentMethodId && 'border-danger text-danger')}
       >
         <option value="">Elegí un medio…</option>
         {selectableMethods.map((m) => (

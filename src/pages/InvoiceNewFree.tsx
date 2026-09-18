@@ -238,7 +238,7 @@ export function InvoiceNewFree() {
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={!!remito}
-            className={cn(selectCabecera, 'disabled:opacity-60')}
+            className={cn(selectCabecera, 'w-full disabled:opacity-60')}
           >
             <option value="">Elegí un cliente...</option>
             {customers.map((c) => (
@@ -279,25 +279,29 @@ export function InvoiceNewFree() {
         </FieldBox>
 
         <FieldBox label="Tipo de factura">
-          <select
-            value={invoiceType}
-            onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-            className={selectCabecera}
-          >
-            {LETRAS_EMISIBLES.map((l) => (
-              <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
-            ))}
-          </select>
-          <span className="mt-1 block font-mono text-[12px] normal-case text-text-soft">
-            {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-          </span>
+          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
+              juntos son la identidad del comprobante. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <select
+              value={invoiceType}
+              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              className={cn(selectCabecera, 'w-auto shrink-0')}
+            >
+              {LETRAS_EMISIBLES.map((l) => (
+                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              ))}
+            </select>
+            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
+            </span>
+          </div>
         </FieldBox>
 
         <FieldBox label="Condición de venta">
           <select
             value={condicion}
             onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(selectCabecera, condicion === '' && 'border-danger text-danger')}
+            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
           >
             <option value="">Elegí una…</option>
             <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
