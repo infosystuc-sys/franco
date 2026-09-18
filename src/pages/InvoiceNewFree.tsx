@@ -31,6 +31,7 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import {
   Blocked,
+  BotonesDeCliente,
   CashCheckoutFields,
   FieldBox,
   InvoiceTopBar,
@@ -220,6 +221,7 @@ export function InvoiceNewFree() {
     <div className="w-full">
       <InvoiceTopBar
         title="Factura de venta"
+        numero={proximo}
         cancelHref="/facturas"
         onIssue={handleIssue}
         issuing={issuing}
@@ -230,90 +232,44 @@ export function InvoiceNewFree() {
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      {/* Dos filas de cuatro —el cliente ocupa dos lugares—, con Cobrado con
-          debajo de la condición de venta que lo hace aparecer. */}
+      {/* Tres filas sobre cuatro columnas: el cliente y la letra se llevan
+          media pantalla cada uno porque son los campos largos, y a su derecha
+          van los cortos. Cobrado con queda al lado de la condición de venta,
+          que es lo que lo hace aparecer. */}
       <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-4 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            disabled={!!remito}
-            className={cn(selectCabecera, 'w-full disabled:opacity-60')}
-          >
-            <option value="">Elegí un cliente...</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-              </option>
-            ))}
-          </select>
-          {remito && (
-            <span className="mt-1 block text-[11px] normal-case text-text-soft">
-              Es el cliente del remito {remito.fullNumber} — no se puede cambiar acá.
-            </span>
-          )}
-          {/* El alta y la modificación se hacen acá mismo: facturar no puede
+          {/* El alta y la modificación van pegadas al campo: facturar no puede
               obligar a salir a Clientes, arreglar la ficha y volver a empezar.
               Modificar se permite aun con remito —cambia la ficha, no a quién
               se le factura—; dar de alta otro, no. */}
-          <div className="mt-1 flex items-center gap-3">
-            {customer && (
-              <button
-                type="button"
-                onClick={() => setFichaCliente({ customer })}
-                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-              >
-                Modificar cliente
-              </button>
-            )}
-            {!remito && (
-              <button
-                type="button"
-                onClick={() => setFichaCliente({ customer: null })}
-                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-              >
-                + Nuevo cliente
-              </button>
-            )}
-          </div>
-        </FieldBox>
-
-        <FieldBox label="Tipo de factura">
-          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
-              juntos son la identidad del comprobante. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex">
             <select
-              value={invoiceType}
-              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-              className={cn(selectCabecera, 'w-auto shrink-0')}
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              disabled={!!remito}
+              className={cn(
+                selectCabecera,
+                'w-full disabled:opacity-60',
+                (!remito || customer) && 'rounded-r-none'
+              )}
             >
-              {LETRAS_EMISIBLES.map((l) => (
-                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              <option value="">Elegí un cliente...</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
+                </option>
               ))}
             </select>
-            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
-              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-            </span>
+            <BotonesDeCliente
+              onNuevo={remito ? undefined : () => setFichaCliente({ customer: null })}
+              onModificar={customer ? () => setFichaCliente({ customer }) : undefined}
+            />
           </div>
-        </FieldBox>
-
-        <FieldBox label="Condición de venta">
-          <select
-            value={condicion}
-            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
-          >
-            <option value="">Elegí una…</option>
-            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
-            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
-          </select>
-          <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {condicion === ''
-              ? 'Obligatoria para emitir'
-              : isCash
-                ? 'Se cobra al emitir'
-                : 'Queda impaga: se cobra desde Cobranzas'}
-          </span>
+          {remito && (
+            <span className="mt-1 block text-[11px] normal-case text-text-soft">
+              Lo fija el remito — no se cambia acá.
+            </span>
+          )}
         </FieldBox>
 
         <FieldBox label="Emisión">
@@ -347,15 +303,67 @@ export function InvoiceNewFree() {
           )}
         </FieldBox>
 
-        {/* Con remito de origen no hay nada que elegir: ya existe y se vincula. */}
-        {!remito && (
-          <FieldBox label="Remito">
-            <SiNo value={emitRemito} onChange={setEmitRemito} />
-            <span className="mt-1 block text-[11px] normal-case text-text-soft">
-              Emitir junto con la factura
+        <FieldBox label="Tipo de factura" className="col-span-2">
+          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
+              juntos son la identidad del comprobante. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <select
+              value={invoiceType}
+              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              className={cn(selectCabecera, 'w-auto shrink-0')}
+            >
+              {LETRAS_EMISIBLES.map((l) => (
+                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              ))}
+            </select>
+            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
             </span>
-          </FieldBox>
-        )}
+          </div>
+        </FieldBox>
+
+        {/* Con remito de origen no hay nada que elegir: ya existe y se vincula,
+            así que el campo muestra cuál en vez de preguntar. Ocupa dos
+            columnas para cerrar la fila de la letra: así la condición de venta
+            arranca una fila nueva y no se cuela en el hueco. */}
+        <FieldBox label="Remito" className="col-span-2">
+          {remito ? (
+            <>
+              <span className="block font-mono text-[13px] font-semibold text-text">
+                {remito.fullNumber}
+              </span>
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                Es el remito que se factura
+              </span>
+            </>
+          ) : (
+            <>
+              <SiNo value={emitRemito} onChange={setEmitRemito} />
+              <span className="mt-1 block text-[11px] normal-case text-text-soft">
+                Emitir junto con la factura
+              </span>
+            </>
+          )}
+        </FieldBox>
+
+        <FieldBox label="Condición de venta">
+          <select
+            value={condicion}
+            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
+            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
+          >
+            <option value="">Elegí una…</option>
+            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
+            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
+          </select>
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
+            {condicion === ''
+              ? 'Obligatoria para emitir'
+              : isCash
+                ? 'Se cobra al emitir'
+                : 'Queda impaga: se cobra desde Cobranzas'}
+          </span>
+        </FieldBox>
 
         {isCash && (
           <FieldBox label="Cobrado con">

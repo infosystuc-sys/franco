@@ -81,6 +81,51 @@ export const selectCabecera =
   'focus:border-accent-deep focus:outline-none';
 
 /**
+ * Los dos botones que van pegados al selector de cliente: + da de alta uno
+ * nuevo y M abre la ficha del que está elegido.
+ *
+ * Pegados al campo y no como enlaces debajo porque son dos acciones sobre ese
+ * campo, no dos opciones más de la pantalla: sueltos abajo se leían como parte
+ * de la aclaración y había que buscarlos. Cada uno se dibuja solo si se puede
+ * hacer —no hay ficha que modificar sin cliente elegido, y con un remito de
+ * origen no se da de alta otro—, y el último redondea la esquina para cerrar
+ * el grupo contra el selector.
+ */
+export function BotonesDeCliente({
+  onNuevo,
+  onModificar,
+}: {
+  onNuevo?: () => void;
+  onModificar?: () => void;
+}) {
+  const botones = [
+    onNuevo && { texto: '+', titulo: 'Dar de alta un cliente nuevo', onClick: onNuevo },
+    onModificar && { texto: 'M', titulo: 'Modificar la ficha del cliente', onClick: onModificar },
+  ].filter(Boolean) as { texto: string; titulo: string; onClick: () => void }[];
+
+  return (
+    <>
+      {botones.map((boton, i) => (
+        <button
+          key={boton.texto}
+          type="button"
+          onClick={boton.onClick}
+          title={boton.titulo}
+          aria-label={boton.titulo}
+          className={cn(
+            '-ml-px shrink-0 border border-line bg-panel px-3 py-1.5 text-sm font-bold leading-tight',
+            'text-accent-deep hover:bg-panel-alt focus:border-accent-deep focus:outline-none',
+            i === botones.length - 1 && 'rounded-r-md'
+          )}
+        >
+          {boton.texto}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/**
  * Sí / No en vez de un tilde. Un checkbox obliga a leer la etiqueta para saber
  * qué pasa si no se toca; con dos botones, cuál está elegido se ve de lejos.
  */
@@ -124,12 +169,15 @@ export function SiNo({
  */
 export function InvoiceTopBar({
   title,
+  numero,
   cancelHref,
   onIssue,
   issuing,
   canIssue,
 }: {
   title: string;
+  /** El número que va a llevar. Null mientras se está leyendo. */
+  numero?: string | null;
   cancelHref: string;
   onIssue: () => void;
   issuing: boolean;
@@ -140,10 +188,16 @@ export function InvoiceTopBar({
       className="sticky z-20 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-[3px] border-accent bg-panel px-4 py-3 sm:px-5"
       style={{ top: 'calc(3.5rem + var(--safe-top))' }}
     >
-      {/* Solo el título: la letra, el número y el total viven abajo, cada uno
-          al lado del campo que los define. Arriba quedan las dos decisiones
-          que cierran la pantalla. */}
-      <h1 className="font-display text-xl uppercase tracking-[0.04em] text-text leading-none">{title}</h1>
+      {/* El título y el número: con qué comprobante se está trabajando. Todavía
+          no está emitido, así que es el que le va a tocar —si alguien emite
+          primero, será el siguiente—. Abajo se repite al lado de la letra, que
+          es lo que lo define y lo cambia. */}
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="font-display text-xl uppercase tracking-[0.04em] text-text leading-none">{title}</h1>
+        {numero && (
+          <span className="font-mono text-lg font-semibold leading-none text-text-soft">{numero}</span>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
@@ -423,6 +477,7 @@ export function InvoiceNew() {
     <div className="w-full">
       <InvoiceTopBar
         title="Factura de venta"
+        numero={proximo}
         cancelHref={`/orden/${order.number}`}
         onIssue={handleIssue}
         issuing={issuing}
@@ -435,10 +490,10 @@ export function InvoiceNew() {
 
       {/* Los datos del comprobante, entre las dos líneas amarillas: la de
           arriba la pone la barra, la de abajo cierra este bloque. Sin recuadro
-          por dato, y en exactamente dos filas de cuatro —el cliente ocupa dos
-          lugares— para que todo lo que hay que decidir antes de emitir entre
-          de un vistazo. Cobrado con queda debajo de la condición de venta, que
-          es lo que lo hace aparecer. */}
+          por dato, en tres filas sobre cuatro columnas: el cliente y la letra
+          se llevan media pantalla cada uno porque son los campos largos, y a
+          su derecha van los cortos. Cobrado con queda al lado de la condición
+          de venta, que es lo que lo hace aparecer. */}
       <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-4 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
           <span className="block truncate font-semibold text-text">
@@ -447,87 +502,30 @@ export function InvoiceNew() {
           {/* A quién se le factura puede no ser quien trajo el vehículo: la
               empresa del titular, el seguro, la contratista. Se cambia acá,
               antes de emitir, porque después la factura ya salió con un
-              nombre. */}
-          <select
-            value={order.customer?.id ?? ''}
-            disabled={cambiandoCliente || customers.length === 0}
-            onChange={(e) => handleCambiarCliente(e.target.value)}
-            className={cn(selectCabecera, 'mt-1.5 w-full disabled:opacity-50')}
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-              </option>
-            ))}
-          </select>
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="text-[11px] normal-case text-text-soft">
-              {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
-            </span>
-            {/* El alta y la modificación viven acá y no en la pantalla de
-                Clientes: si el que trajo el vehículo no está cargado —o está
-                cargado sin CUIT, que es lo que más pasa— facturar no puede
-                obligar a salir, arreglar la ficha y volver a empezar. */}
-            <div className="flex shrink-0 items-center gap-3">
-              {clienteElegido && (
-                <button
-                  type="button"
-                  onClick={() => setFichaCliente({ customer: clienteElegido })}
-                  className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-                >
-                  Modificar
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setFichaCliente({ customer: null })}
-                className="text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-              >
-                + Nuevo
-              </button>
-            </div>
-          </div>
-        </FieldBox>
-
-        <FieldBox label="Tipo de factura">
-          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
-              juntos son la identidad del comprobante, y el número es lo que
-              esta letra define —cambia con ella—. Todavía no está emitido, así
-              que es el que le va a tocar. */}
-          {/* Envuelve en pantalla angosta: el número baja abajo entero en vez
-              de cortarse, que es lo único que no se puede adivinar. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              nombre. Y el alta y la modificación de la ficha van pegadas al
+              campo: si el que trajo el vehículo no está cargado —o está
+              cargado sin CUIT, que es lo que más pasa— facturar no puede
+              obligar a salir a Clientes, arreglarlo y volver a empezar. */}
+          <div className="mt-1.5 flex">
             <select
-              value={invoiceType}
-              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-              className={cn(selectCabecera, 'w-auto shrink-0')}
+              value={order.customer?.id ?? ''}
+              disabled={cambiandoCliente || customers.length === 0}
+              onChange={(e) => handleCambiarCliente(e.target.value)}
+              className={cn(selectCabecera, 'w-full rounded-r-none disabled:opacity-50')}
             >
-              {LETRAS_EMISIBLES.map((l) => (
-                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
+                </option>
               ))}
             </select>
-            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
-              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-            </span>
+            <BotonesDeCliente
+              onNuevo={() => setFichaCliente({ customer: null })}
+              onModificar={clienteElegido ? () => setFichaCliente({ customer: clienteElegido }) : undefined}
+            />
           </div>
-        </FieldBox>
-
-        <FieldBox label="Condición de venta">
-          <select
-            value={condicion}
-            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
-          >
-            <option value="">Elegí una…</option>
-            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
-            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
-          </select>
           <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {condicion === ''
-              ? 'Obligatoria para emitir'
-              : isCash
-                ? 'Se cobra al emitir'
-                : 'Queda impaga: se cobra desde Cobranzas'}
+            {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
           </span>
         </FieldBox>
 
@@ -562,10 +560,54 @@ export function InvoiceNew() {
           )}
         </FieldBox>
 
-        <FieldBox label="Remito">
+        <FieldBox label="Tipo de factura" className="col-span-2">
+          {/* La letra y el número, uno al lado del otro y del mismo tamaño:
+              juntos son la identidad del comprobante, y el número es lo que
+              esta letra define —cambia con ella—. Todavía no está emitido, así
+              que es el que le va a tocar. */}
+          {/* Envuelve en pantalla angosta: el número baja abajo entero en vez
+              de cortarse, que es lo único que no se puede adivinar. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <select
+              value={invoiceType}
+              onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
+              className={cn(selectCabecera, 'w-auto shrink-0')}
+            >
+              {LETRAS_EMISIBLES.map((l) => (
+                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+              ))}
+            </select>
+            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
+            </span>
+          </div>
+        </FieldBox>
+
+        {/* Ocupa dos columnas para cerrar la fila de la letra: así la condición
+            de venta arranca una fila nueva y no se cuela en el hueco. */}
+        <FieldBox label="Remito" className="col-span-2">
           <SiNo value={emitRemito} onChange={setEmitRemito} />
           <span className="mt-1 block text-[11px] normal-case text-text-soft">
             Emitir junto con la factura
+          </span>
+        </FieldBox>
+
+        <FieldBox label="Condición de venta">
+          <select
+            value={condicion}
+            onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
+            className={cn(selectCabecera, 'w-full', condicion === '' && 'border-danger text-danger')}
+          >
+            <option value="">Elegí una…</option>
+            <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
+            <option value="CONTADO">{CONDICION_VENTA_LABELS.CONTADO}</option>
+          </select>
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
+            {condicion === ''
+              ? 'Obligatoria para emitir'
+              : isCash
+                ? 'Se cobra al emitir'
+                : 'Queda impaga: se cobra desde Cobranzas'}
           </span>
         </FieldBox>
 
