@@ -1,16 +1,15 @@
 import React from 'react';
-import { XCircle, Receipt, AlertTriangle, ArrowRight, CalendarClock, Banknote } from 'lucide-react';
+import { XCircle, Receipt, AlertTriangle, ArrowRight, Banknote } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
-import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
+import { formatCuit } from '@/src/lib/fiscal';
 import { fetchCustomers, type Customer } from '@/src/lib/customers';
 import {
   fetchCompanySettings,
-  formatAddress,
   isReadyToInvoice,
   type CompanySettings,
 } from '@/src/lib/companySettings';
@@ -22,7 +21,6 @@ import {
   fetchInvoiceForWorkOrder,
   formatDate,
   INVOICE_TYPE_LABELS,
-  INVOICE_TYPE_REASON,
   invoiceTypeFor,
   issueInvoice,
   fetchProximoNumero,
@@ -47,11 +45,9 @@ import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftMod
 import { CustomerModal } from '@/src/components/CustomerModal';
 
 /**
- * Una celda de la ficha de cabecera del comprobante: rótulo chico arriba,
- * valor abajo, con su propio borde. Así se arma una grilla densa —varios
- * datos por vistazo, sin desplazarse— en vez de paneles grandes con mucho
- * aire entre uno y otro dato, que es como se ve un sistema de facturación
- * de escritorio (Tango y similares) y como pidió que se viera este módulo.
+ * Un dato de la cabecera: rótulo chico arriba, valor abajo. Sin recuadro
+ * propio — los datos viven sueltos adentro del bloque que encierran las dos
+ * líneas amarillas, y un borde por dato lo volvía una grilla de cuadraditos.
  */
 export function FieldBox({
   label,
@@ -63,11 +59,55 @@ export function FieldBox({
   className?: string;
 }) {
   return (
-    <div className={cn('border border-line bg-panel px-3 py-2', className)}>
+    <div className={cn('min-w-0', className)}>
       <span className="block text-[11px] font-bold uppercase tracking-wider text-text-faint">
         {label}
       </span>
       <div className="mt-1 text-sm text-text">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Los desplegables de la cabecera, con el mismo formato que el del cliente:
+ * caja con borde y flecha. Antes iban sin borde sobre el fondo, y no se leían
+ * como algo que se pudiera abrir.
+ */
+export const selectCabecera =
+  'w-full rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-text ' +
+  'focus:border-accent-deep focus:outline-none';
+
+/**
+ * Sí / No en vez de un tilde. Un checkbox obliga a leer la etiqueta para saber
+ * qué pasa si no se toca; con dos botones, cuál está elegido se ve de lejos.
+ */
+export function SiNo({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-line overflow-hidden">
+      {[true, false].map((opcion) => (
+        <button
+          key={String(opcion)}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(opcion)}
+          className={cn(
+            'px-4 py-1 text-[13px] font-bold uppercase tracking-wider transition-colors disabled:opacity-50',
+            value === opcion
+              ? 'bg-accent text-accent-ink'
+              : 'bg-panel text-text-soft hover:bg-panel-alt'
+          )}
+        >
+          {opcion ? 'Sí' : 'No'}
+        </button>
+      ))}
     </div>
   );
 }
@@ -81,21 +121,12 @@ export function FieldBox({
  */
 export function InvoiceTopBar({
   title,
-  type,
-  numero,
-  subtitle,
-  total,
   cancelHref,
   onIssue,
   issuing,
   canIssue,
 }: {
   title: string;
-  type: InvoiceType;
-  /** El número que va a llevar. Null mientras se está leyendo. */
-  numero?: string | null;
-  subtitle?: React.ReactNode;
-  total: number;
   cancelHref: string;
   onIssue: () => void;
   issuing: boolean;
@@ -103,30 +134,15 @@ export function InvoiceTopBar({
 }) {
   return (
     <div
-      className="sticky z-20 mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-[3px] border-accent bg-panel px-4 py-3 sm:px-5"
+      className="sticky z-20 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b-[3px] border-accent bg-panel px-4 py-3 sm:px-5"
       style={{ top: 'calc(3.5rem + var(--safe-top))' }}
     >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h1 className="font-display text-xl uppercase tracking-[0.04em] text-text leading-none">{title}</h1>
-          <InvoiceTypeBadge type={type} />
-          {/* El número va acá arriba, con la letra: es la identidad del
-              comprobante. Todavía no está emitido, así que es el que le va a
-              tocar — si alguien emite primero, será el siguiente. */}
-          {numero && (
-            <span className="font-mono text-lg font-semibold leading-none text-text">{numero}</span>
-          )}
-        </div>
-        {subtitle && <div className="mt-1 text-xs text-text-soft">{subtitle}</div>}
-      </div>
+      {/* Solo el título: la letra, el número y el total viven abajo, cada uno
+          al lado del campo que los define. Arriba quedan las dos decisiones
+          que cierran la pantalla. */}
+      <h1 className="font-display text-xl uppercase tracking-[0.04em] text-text leading-none">{title}</h1>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="text-right">
-          <span className="block text-[11px] font-bold uppercase tracking-wider text-text-faint">Total</span>
-          <span className="font-display text-2xl font-medium leading-none text-text">
-            $ {formatMoney(total)}
-          </span>
-        </div>
         <div className="flex items-center gap-2">
           <Link to={cancelHref}>
             <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
@@ -397,16 +413,7 @@ export function InvoiceNew() {
   return (
     <div className="w-full">
       <InvoiceTopBar
-        title={`Factura de venta · OT ${order.number}`}
-        type={invoiceType}
-        subtitle={
-          <Link to={`/orden/${order.number}`} className="inline-flex items-center gap-1.5 hover:text-accent-deep hover:underline">
-            <XCircle size={13} /> Desde la orden {order.number}
-            {order.component ? ` · ${order.component}` : ''}
-          </Link>
-        }
-        numero={proximo}
-        total={totals.total}
+        title="Factura de venta"
         cancelHref={`/orden/${order.number}`}
         onIssue={handleIssue}
         issuing={issuing}
@@ -417,10 +424,10 @@ export function InvoiceNew() {
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      {/* La ficha del comprobante: un dato por celda, sin el aire de un panel
-          grande — de un vistazo se lee a quién, con qué letra y cuándo vence,
-          igual que la cabecera de un talonario electrónico. */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      {/* Los datos del comprobante, entre las dos líneas amarillas: la de
+          arriba la pone la barra, la de abajo cierra este bloque. Sin recuadro
+          por dato — son dos filas corridas. */}
+      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-3 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
           <span className="block truncate font-semibold text-text">
             {order.customer?.legal_name || order.customer?.name || '—'}
@@ -433,7 +440,7 @@ export function InvoiceNew() {
             value={order.customer?.id ?? ''}
             disabled={cambiandoCliente || customers.length === 0}
             onChange={(e) => handleCambiarCliente(e.target.value)}
-            className="mt-1.5 w-full border border-line bg-panel-alt px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-50"
+            className={cn(selectCabecera, 'mt-1.5 disabled:opacity-50')}
           >
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -462,14 +469,17 @@ export function InvoiceNew() {
           <select
             value={invoiceType}
             onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+            className={selectCabecera}
           >
             {LETRAS_EMISIBLES.map((l) => (
               <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
             ))}
           </select>
-          <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal'}
+          {/* El número va acá y no en el encabezado: es lo que define esta
+              letra, y cambia con ella. Todavía no está emitido, así que es el
+              que le va a tocar. */}
+          <span className="mt-1 block font-mono text-[12px] normal-case text-text-soft">
+            {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
           </span>
         </FieldBox>
 
@@ -477,10 +487,7 @@ export function InvoiceNew() {
           <select
             value={condicion}
             onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(
-              'w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none',
-              condicion === '' && 'text-danger'
-            )}
+            className={cn(selectCabecera, condicion === '' && 'border-danger text-danger')}
           >
             <option value="">Elegí una…</option>
             <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
@@ -527,19 +534,14 @@ export function InvoiceNew() {
         </FieldBox>
 
         <FieldBox label="Remito">
-          <label className="flex cursor-pointer items-center gap-2 text-[13px] normal-case text-text">
-            <input
-              type="checkbox"
-              checked={emitRemito}
-              onChange={(e) => setEmitRemito(e.target.checked)}
-              className="h-4 w-4 accent-accent-deep"
-            />
+          <SiNo value={emitRemito} onChange={setEmitRemito} />
+          <span className="mt-1 block text-[11px] normal-case text-text-soft">
             Emitir junto con la factura
-          </label>
+          </span>
         </FieldBox>
       </div>
 
-      <Panel className="mb-4 p-4">
+      <Panel className="mb-4 rounded-lg p-4">
         <ItemsEditor
           items={items}
           onChange={setItems}
@@ -562,7 +564,7 @@ export function InvoiceNew() {
           últimas decisiones antes de emitir, y ninguna de las dos necesita
           el espacio de un panel entero. */}
       <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <Panel className="p-4">
+        <Panel className="rounded-lg p-4">
           <SectionHeader title="Cómo se cobra" className="mb-3" />
           <CashCheckoutFields
             isCash={isCash}
@@ -575,7 +577,7 @@ export function InvoiceNew() {
           />
         </Panel>
 
-        <Panel className="p-4">
+        <Panel className="rounded-lg p-4">
           <SectionHeader title="Observaciones" className="mb-3" />
           <textarea
             value={notes}
@@ -617,21 +619,6 @@ export function InvoiceNew() {
   );
 }
 
-/** La letra del comprobante, con el motivo a la vista antes de confirmar. */
-export function InvoiceTypeBadge({ type }: { type: InvoiceType }) {
-  return (
-    <span
-      title={INVOICE_TYPE_REASON[type]}
-      className="inline-flex items-center gap-2 border border-line-strong bg-panel px-2.5 py-1"
-    >
-      <span className="font-display text-xl font-medium leading-none text-text">{type}</span>
-      <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-soft">
-        {INVOICE_TYPE_LABELS[type]}
-      </span>
-    </span>
-  );
-}
-
 /**
  * Totales según la letra. En la A el IVA se discrimina, en la B va incluido y
  * en la C no existe: por eso no sirve el cuadro fijo de ItemsEditor.
@@ -643,11 +630,12 @@ export function InvoiceTotals({
   type: InvoiceType;
   totals: { net: number; vat: number; total: number };
 }) {
+  // Solo los totales: la explicación de por qué salió esa letra se fue con el
+  // resto del texto estático — la letra se elige a mano y está a la vista en
+  // la cabecera.
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <p className="max-w-sm text-xs text-text-soft">{INVOICE_TYPE_REASON[type]}</p>
-
-      <div className="w-full space-y-2 border border-line bg-panel-alt p-4 md:w-1/3">
+    <div className="flex justify-end">
+      <div className="w-full space-y-2 rounded-lg border border-line bg-panel-alt p-4 md:w-1/3">
         {discriminatesVat(type) ? (
           <>
             <div className="flex justify-between text-xs text-text-soft">

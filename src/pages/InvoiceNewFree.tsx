@@ -1,5 +1,5 @@
 import React from 'react';
-import { Receipt, AlertTriangle, ArrowRight, Truck, CalendarClock } from 'lucide-react';
+import { Receipt, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -7,10 +7,8 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
-import { TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import {
   fetchCompanySettings,
-  formatAddress,
   isReadyToInvoice,
   type CompanySettings,
 } from '@/src/lib/companySettings';
@@ -31,7 +29,15 @@ import {
 } from '@/src/lib/invoices';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
-import { Blocked, CashCheckoutFields, FieldBox, InvoiceTopBar, InvoiceTotals } from '@/src/pages/InvoiceNew';
+import {
+  Blocked,
+  CashCheckoutFields,
+  FieldBox,
+  InvoiceTopBar,
+  InvoiceTotals,
+  selectCabecera,
+  SiNo,
+} from '@/src/pages/InvoiceNew';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
@@ -212,18 +218,6 @@ export function InvoiceNewFree() {
     <div className="w-full">
       <InvoiceTopBar
         title="Factura de venta"
-        type={invoiceType}
-        subtitle={
-          remito ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Truck size={13} className="text-accent-deep" /> Facturando el remito {remito.fullNumber}
-            </span>
-          ) : (
-            'Sin orden de trabajo ni cotización — se carga el cliente y los renglones a mano.'
-          )
-        }
-        numero={proximo}
-        total={totals.total}
         cancelHref="/facturas"
         onIssue={handleIssue}
         issuing={issuing}
@@ -234,13 +228,13 @@ export function InvoiceNewFree() {
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-3 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
           <select
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
             disabled={!!remito}
-            className="w-full border border-line bg-panel-alt px-2 py-1 text-xs focus:border-accent-deep focus:outline-none disabled:opacity-60"
+            className={cn(selectCabecera, 'disabled:opacity-60')}
           >
             <option value="">Elegí un cliente...</option>
             {customers.map((c) => (
@@ -271,14 +265,14 @@ export function InvoiceNewFree() {
           <select
             value={invoiceType}
             onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-            className="w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none"
+            className={selectCabecera}
           >
             {LETRAS_EMISIBLES.map((l) => (
               <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
             ))}
           </select>
-          <span className="mt-1 block text-[11px] normal-case text-text-soft">
-            {invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal'}
+          <span className="mt-1 block font-mono text-[12px] normal-case text-text-soft">
+            {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
           </span>
         </FieldBox>
 
@@ -286,10 +280,7 @@ export function InvoiceNewFree() {
           <select
             value={condicion}
             onChange={(e) => setCondicion(e.target.value as CondicionVenta)}
-            className={cn(
-              'w-full border-0 bg-transparent p-0 text-[13px] font-semibold text-text focus:outline-none',
-              condicion === '' && 'text-danger'
-            )}
+            className={cn(selectCabecera, condicion === '' && 'border-danger text-danger')}
           >
             <option value="">Elegí una…</option>
             <option value="CUENTA_CORRIENTE">{CONDICION_VENTA_LABELS.CUENTA_CORRIENTE}</option>
@@ -338,20 +329,15 @@ export function InvoiceNewFree() {
         {/* Con remito de origen no hay nada que elegir: ya existe y se vincula. */}
         {!remito && (
           <FieldBox label="Remito">
-            <label className="flex cursor-pointer items-center gap-2 text-[13px] normal-case text-text">
-              <input
-                type="checkbox"
-                checked={emitRemito}
-                onChange={(e) => setEmitRemito(e.target.checked)}
-                className="h-4 w-4 accent-accent-deep"
-              />
+            <SiNo value={emitRemito} onChange={setEmitRemito} />
+            <span className="mt-1 block text-[11px] normal-case text-text-soft">
               Emitir junto con la factura
-            </label>
+            </span>
           </FieldBox>
         )}
       </div>
 
-      <Panel className="mb-4 p-4">
+      <Panel className="mb-4 rounded-lg p-4">
         <ItemsEditor
           items={items}
           onChange={setItems}
@@ -371,7 +357,7 @@ export function InvoiceNewFree() {
       </Panel>
 
       <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <Panel className="p-4">
+        <Panel className="rounded-lg p-4">
           <SectionHeader title="Cómo se cobra" className="mb-3" />
           <CashCheckoutFields
             isCash={isCash}
@@ -384,7 +370,7 @@ export function InvoiceNewFree() {
           />
         </Panel>
 
-        <Panel className="p-4">
+        <Panel className="rounded-lg p-4">
           <SectionHeader title="Observaciones" className="mb-3" />
           <textarea
             value={notes}
