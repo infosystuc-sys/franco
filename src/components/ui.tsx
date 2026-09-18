@@ -1,4 +1,5 @@
 import React from 'react';
+import { Pencil, Plus } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
 /**
@@ -114,6 +115,66 @@ export const inputClass =
 
 export function fieldClass(required?: boolean, extra?: string) {
   return cn(inputClass, required && 'field-required', extra);
+}
+
+/**
+ * Los botones que acompañan a un campo de selección: + da de alta una ficha
+ * nueva y el lápiz abre la que está elegida, sin salir de la pantalla ni
+ * perder lo que ya se cargó.
+ *
+ * Con el símbolo solo y no con la palabra: son dos acciones chicas al costado
+ * de un campo, y escritas ("+ NUEVO", "MODIFICAR") se llevaban más ancho que
+ * el campo, que es lo que importa leer. Cada uno lleva title, así que al pasar
+ * por encima dice qué hace, y aria-label para quien no ve el símbolo.
+ *
+ * Van pegados al campo, compartiendo el borde, para que se lean como acciones
+ * sobre él y no como dos botones más de la pantalla. Eso pide dos cosas de
+ * quien los usa: envolver todo en un `flex` y sacarle al campo el redondeo de
+ * la derecha (`rounded-r-none`).
+ */
+export function AccionesDeCampo({
+  nuevo,
+  modificar,
+}: {
+  nuevo?: { onClick: () => void; titulo: string; disabled?: boolean };
+  modificar?: { onClick: () => void; titulo: string; disabled?: boolean };
+}) {
+  const acciones = [
+    nuevo && { ...nuevo, Icono: Plus, clave: 'nuevo' },
+    modificar && { ...modificar, Icono: Pencil, clave: 'modificar' },
+  ].filter(Boolean) as {
+    onClick: () => void;
+    titulo: string;
+    disabled?: boolean;
+    Icono: typeof Plus;
+    clave: string;
+  }[];
+
+  return (
+    <>
+      {acciones.map((accion, i) => (
+        <button
+          key={accion.clave}
+          type="button"
+          onClick={accion.onClick}
+          disabled={accion.disabled}
+          title={accion.titulo}
+          aria-label={accion.titulo}
+          className={cn(
+            // Sin alto propio: lo toma del campo que tiene al lado, que en cada
+            // pantalla tiene el suyo.
+            '-ml-px inline-flex shrink-0 items-center justify-center border border-line bg-panel px-3',
+            'text-text-soft hover:bg-panel-alt hover:text-text',
+            'focus:relative focus:border-accent-deep focus:outline-none',
+            'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-panel disabled:hover:text-text-soft',
+            i === acciones.length - 1 && 'rounded-r-md'
+          )}
+        >
+          <accion.Icono size={16} />
+        </button>
+      ))}
+    </>
+  );
 }
 
 /** Panel blanco: el contenedor de tablas y formularios. */

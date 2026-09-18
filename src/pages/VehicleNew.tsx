@@ -1,9 +1,9 @@
 import React from 'react';
-import { Truck, Save, Users, Camera, Plus, Trash2, Wrench, Pencil } from 'lucide-react';
+import { Truck, Save, Users, Camera, Plus, Trash2, Wrench } from 'lucide-react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { AccionesDeCampo, Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { createWorkOrder, getErrorMessage } from '@/src/lib/workOrders';
 import {
   conElUsuarioIncluido,
@@ -432,11 +432,15 @@ export function VehicleNew() {
           <SectionHeader title={<><Users size={15} className="mr-1.5 inline-block align-[-2px]" />Cliente</>} />
           <label className={cn(labelClass, 'block sm:max-w-2xl')}>
             Cliente propietario *
-            <div className="flex gap-2">
+            {/* El vehículo llega con un dueño que muchas veces es cliente
+                nuevo, o con un dato viejo que recién acá se descubre mal:
+                mandarlo a Clientes y volver le haría perder todo lo que ya
+                cargó en esta pantalla. */}
+            <div className="mt-1 flex">
               <select
                 value={form.customerId}
                 onChange={(e) => patch({ customerId: e.target.value })}
-                className={cn(inputClass, 'flex-1 bg-panel')}
+                className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel')}
               >
                 <option value="">Elegí un cliente…</option>
                 {customers.map((customer) => (
@@ -445,25 +449,17 @@ export function VehicleNew() {
                   </option>
                 ))}
               </select>
-              {/* El vehículo llega con un dueño que muchas veces es cliente
-                  nuevo, o con un dato viejo que recién acá se descubre mal:
-                  mandarlo a Clientes y volver le haría perder todo lo que ya
-                  cargó en esta pantalla. */}
-              <button
-                type="button"
-                onClick={() => setFichaCliente('nuevo')}
-                className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
-              >
-                + Nuevo
-              </button>
-              <button
-                type="button"
-                onClick={() => clienteElegido && setFichaCliente(clienteElegido)}
-                disabled={!clienteElegido}
-                className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Pencil size={13} className="mr-1 inline-block align-[-2px]" />Modificar
-              </button>
+              <AccionesDeCampo
+                nuevo={{
+                  titulo: 'Dar de alta un cliente nuevo',
+                  onClick: () => setFichaCliente('nuevo'),
+                }}
+                modificar={{
+                  titulo: 'Modificar la ficha del cliente',
+                  onClick: () => clienteElegido && setFichaCliente(clienteElegido),
+                  disabled: !clienteElegido,
+                }}
+              />
             </div>
           </label>
 

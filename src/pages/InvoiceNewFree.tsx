@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
-import { Button, Panel, SectionHeader } from '@/src/components/ui';
+import { AccionesDeCampo, Button, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import {
@@ -31,7 +31,6 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import {
   Blocked,
-  BotonesDeCliente,
   CashCheckoutFields,
   FieldBox,
   InvoiceTopBar,
@@ -247,11 +246,7 @@ export function InvoiceNewFree() {
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
               disabled={!!remito}
-              className={cn(
-                selectCabecera,
-                'w-full disabled:opacity-60',
-                (!remito || customer) && 'rounded-r-none'
-              )}
+              className={cn(selectCabecera, 'w-full rounded-r-none disabled:opacity-60')}
             >
               <option value="">Elegí un cliente...</option>
               {customers.map((c) => (
@@ -260,9 +255,19 @@ export function InvoiceNewFree() {
                 </option>
               ))}
             </select>
-            <BotonesDeCliente
-              onNuevo={remito ? undefined : () => setFichaCliente({ customer: null })}
-              onModificar={customer ? () => setFichaCliente({ customer }) : undefined}
+            <AccionesDeCampo
+              nuevo={{
+                titulo: 'Dar de alta un cliente nuevo',
+                onClick: () => setFichaCliente({ customer: null }),
+                // Con un remito de origen el cliente ya está decidido: dar de
+                // alta otro acá no cambiaría a quién se le factura.
+                disabled: !!remito,
+              }}
+              modificar={{
+                titulo: 'Modificar la ficha del cliente',
+                onClick: () => customer && setFichaCliente({ customer }),
+                disabled: !customer,
+              }}
             />
           </div>
           {remito && (

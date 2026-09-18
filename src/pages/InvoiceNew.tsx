@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { AccionesDeCampo, Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit } from '@/src/lib/fiscal';
 import { fetchCustomers, type Customer } from '@/src/lib/customers';
@@ -79,51 +79,6 @@ export function FieldBox({
 export const selectCabecera =
   'rounded-md border border-line bg-panel px-2 py-1.5 text-sm text-text ' +
   'focus:border-accent-deep focus:outline-none';
-
-/**
- * Los dos botones que van pegados al selector de cliente: + da de alta uno
- * nuevo y M abre la ficha del que está elegido.
- *
- * Pegados al campo y no como enlaces debajo porque son dos acciones sobre ese
- * campo, no dos opciones más de la pantalla: sueltos abajo se leían como parte
- * de la aclaración y había que buscarlos. Cada uno se dibuja solo si se puede
- * hacer —no hay ficha que modificar sin cliente elegido, y con un remito de
- * origen no se da de alta otro—, y el último redondea la esquina para cerrar
- * el grupo contra el selector.
- */
-export function BotonesDeCliente({
-  onNuevo,
-  onModificar,
-}: {
-  onNuevo?: () => void;
-  onModificar?: () => void;
-}) {
-  const botones = [
-    onNuevo && { texto: '+', titulo: 'Dar de alta un cliente nuevo', onClick: onNuevo },
-    onModificar && { texto: 'M', titulo: 'Modificar la ficha del cliente', onClick: onModificar },
-  ].filter(Boolean) as { texto: string; titulo: string; onClick: () => void }[];
-
-  return (
-    <>
-      {botones.map((boton, i) => (
-        <button
-          key={boton.texto}
-          type="button"
-          onClick={boton.onClick}
-          title={boton.titulo}
-          aria-label={boton.titulo}
-          className={cn(
-            '-ml-px shrink-0 border border-line bg-panel px-3 py-1.5 text-sm font-bold leading-tight',
-            'text-accent-deep hover:bg-panel-alt focus:border-accent-deep focus:outline-none',
-            i === botones.length - 1 && 'rounded-r-md'
-          )}
-        >
-          {boton.texto}
-        </button>
-      ))}
-    </>
-  );
-}
 
 /**
  * Sí / No en vez de un tilde. Un checkbox obliga a leer la etiqueta para saber
@@ -519,9 +474,16 @@ export function InvoiceNew() {
                 </option>
               ))}
             </select>
-            <BotonesDeCliente
-              onNuevo={() => setFichaCliente({ customer: null })}
-              onModificar={clienteElegido ? () => setFichaCliente({ customer: clienteElegido }) : undefined}
+            <AccionesDeCampo
+              nuevo={{
+                titulo: 'Dar de alta un cliente nuevo',
+                onClick: () => setFichaCliente({ customer: null }),
+              }}
+              modificar={{
+                titulo: 'Modificar la ficha del cliente',
+                onClick: () => clienteElegido && setFichaCliente({ customer: clienteElegido }),
+                disabled: !clienteElegido,
+              }}
             />
           </div>
           <span className="mt-1 block text-[11px] normal-case text-text-soft">

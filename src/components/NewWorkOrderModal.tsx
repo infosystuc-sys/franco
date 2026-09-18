@@ -1,7 +1,7 @@
 import React from 'react';
 import { Trash2, X } from 'lucide-react';
 import { useAuth } from '@/src/lib/auth';
-import { Button, Label, fieldClass } from '@/src/components/ui';
+import { AccionesDeCampo, Button, Label, fieldClass } from '@/src/components/ui';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { conElUsuarioIncluido, fetchEmpleadoDelUsuario, fetchOperarios, type Employee } from '@/src/lib/employees';
 import { disponibilidad, fetchYardCells, fetchYardOccupancy, type YardAvailability } from '@/src/lib/yardCapacity';
@@ -266,12 +266,12 @@ export function NewWorkOrderModal({
 
             <Label>
               Cliente
-              <div className="flex gap-2">
+              <div className="mt-1 flex">
                 <select
                   value={customerId}
                   onChange={(e) => handleCustomerChange(e.target.value)}
                   disabled={loadingCustomers}
-                  className={fieldClass(true, 'font-normal normal-case flex-1')}
+                  className={fieldClass(true, 'mt-0 flex-1 rounded-r-none font-normal normal-case')}
                 >
                   <option value="">
                     {loadingCustomers ? 'Cargando clientes…' : 'Elegí un cliente'}
@@ -283,29 +283,31 @@ export function NewWorkOrderModal({
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => setCreatingCustomer(true)}
-                  className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt"
-                >
-                  + Nuevo
-                </button>
+                <AccionesDeCampo
+                  nuevo={{
+                    titulo: 'Dar de alta un cliente nuevo',
+                    onClick: () => setCreatingCustomer(true),
+                  }}
+                />
               </div>
               {!loadingCustomers && customers.length === 0 && (
                 <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
-                  No hay clientes activos. Cargá uno con el botón "+ Nuevo".
+                  No hay clientes activos. Cargá uno con el botón +.
                 </span>
               )}
             </Label>
 
             <Label>
               Vehículo / Equipo
-              <div className="flex gap-2">
+              <div className="mt-1 flex">
                 <select
                   value={vehicleId}
                   onChange={(e) => setVehicleId(e.target.value)}
                   disabled={!selectedCustomer}
-                  className={fieldClass(receptionKind === 'VEHICULO', 'font-normal normal-case flex-1 disabled:bg-panel-alt')}
+                  className={fieldClass(
+                    receptionKind === 'VEHICULO',
+                    'mt-0 flex-1 rounded-r-none font-normal normal-case disabled:bg-panel-alt'
+                  )}
                 >
                   <option value="">
                     {!selectedCustomer
@@ -320,20 +322,19 @@ export function NewWorkOrderModal({
                     </option>
                   ))}
                 </select>
-                {/* El vehículo se da de alta contra el cliente elegido, así que
-                    sin cliente no hay contra quién crearlo. */}
-                <button
-                  type="button"
-                  disabled={!selectedCustomer}
-                  onClick={() => setCreatingVehicle(true)}
-                  className="whitespace-nowrap border border-line px-3 text-[13px] font-bold uppercase tracking-wider text-text-soft hover:bg-panel-alt disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  + Nuevo
-                </button>
+                <AccionesDeCampo
+                  nuevo={{
+                    titulo: 'Dar de alta un vehículo o equipo nuevo',
+                    onClick: () => setCreatingVehicle(true),
+                    // Se da de alta contra el cliente elegido: sin cliente no
+                    // hay contra quién crearlo.
+                    disabled: !selectedCustomer,
+                  }}
+                />
               </div>
               {selectedCustomer && vehicles.length === 0 && (
                 <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
-                  Este cliente no tiene vehículos activos. Agregale uno con el botón "+ Nuevo".
+                  Este cliente no tiene vehículos activos. Agregale uno con el botón +.
                 </span>
               )}
             </Label>

@@ -5,7 +5,7 @@ import { Plus, Save, XCircle, AlertTriangle, CheckCircle2, Package, Trash2 } fro
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { AccionesDeCampo, Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { PurchaseArticlePicker } from '@/src/components/PurchaseArticlePicker';
 import { PurchaseItemRow } from '@/src/components/purchase/PurchaseItemRow';
@@ -872,20 +872,23 @@ export function PurchaseAIReview() {
                 ) : (
                   <span className="ml-1.5 text-[12px] font-normal normal-case text-state-wait">elegilo a mano</span>
                 )}
-                <div className="flex gap-2">
+                <div className="mt-1 flex">
                   <select
                     value={supplierId}
                     onChange={(e) => setSupplierId(e.target.value)}
-                    className={cn(inputClass, 'bg-panel', !supplierId && 'field-required')}
+                    className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel', !supplierId && 'field-required')}
                   >
                     <option value="">Elegí un proveedor</option>
                     {suppliers.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}{s.taxId ? ` — ${formatCuit(s.taxId)}` : ''}</option>
                     ))}
                   </select>
-                  <Button type="button" variant="ghost" className="shrink-0 px-3" onClick={() => setShowNewSupplier(true)}>
-                    <Plus size={14} /> Nuevo
-                  </Button>
+                  <AccionesDeCampo
+                    nuevo={{
+                      titulo: 'Dar de alta un proveedor nuevo',
+                      onClick: () => setShowNewSupplier(true),
+                    }}
+                  />
                 </div>
                 {!draft.supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
                   <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
