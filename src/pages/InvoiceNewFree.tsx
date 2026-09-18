@@ -230,7 +230,9 @@ export function InvoiceNewFree() {
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-3 sm:px-5">
+      {/* Dos filas de cuatro —el cliente ocupa dos lugares—, con Cobrado con
+          debajo de la condición de venta que lo hace aparecer. */}
+      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-4 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
           <select
             value={customerId}
@@ -306,7 +308,7 @@ export function InvoiceNewFree() {
               ? 'Obligatoria para emitir'
               : isCash
                 ? 'Se cobra al emitir'
-                : `Vence a ${PAYMENT_TERMS_DAYS} días`}
+                : 'Queda impaga: se cobra desde Cobranzas'}
           </span>
         </FieldBox>
 
@@ -350,6 +352,19 @@ export function InvoiceNewFree() {
             </span>
           </FieldBox>
         )}
+
+        {isCash && (
+          <FieldBox label="Cobrado con">
+            <CashCheckoutFields
+              paymentMethods={paymentMethods}
+              paymentMethodId={paymentMethodId}
+              onPaymentMethodIdChange={setPaymentMethodId}
+              checkDrafts={checkDrafts}
+              onOpenCheckModal={() => setCheckModalOpen(true)}
+              onClearChecks={() => setCheckDrafts(null)}
+            />
+          </FieldBox>
+        )}
       </div>
 
       <Panel className="mb-4 rounded-lg p-4">
@@ -371,31 +386,18 @@ export function InvoiceNewFree() {
         )}
       </Panel>
 
-      <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <Panel className="rounded-lg p-4">
-          <SectionHeader title="Cómo se cobra" className="mb-3" />
-          <CashCheckoutFields
-            isCash={isCash}
-            paymentMethods={paymentMethods}
-            paymentMethodId={paymentMethodId}
-            onPaymentMethodIdChange={setPaymentMethodId}
-            checkDrafts={checkDrafts}
-            onOpenCheckModal={() => setCheckModalOpen(true)}
-            onClearChecks={() => setCheckDrafts(null)}
-          />
-        </Panel>
-
-        <Panel className="rounded-lg p-4">
-          <SectionHeader title="Observaciones" className="mb-3" />
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={4}
-            placeholder="Texto que sale impreso en el comprobante. Opcional."
-            className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
-          />
-        </Panel>
-      </div>
+      {/* Con qué se cobra subió al encabezado, así que abajo queda solo lo
+          único que no es una decisión: el texto que sale impreso. */}
+      <Panel className="mb-10 rounded-lg p-4">
+        <SectionHeader title="Observaciones" className="mb-3" />
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          placeholder="Texto que sale impreso en el comprobante. Opcional."
+          className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+        />
+      </Panel>
 
       {fichaCliente && (
         <CustomerModal

@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Receipt, AlertTriangle, ArrowRight, Banknote } from 'lucide-react';
+import { XCircle, Receipt, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -432,8 +432,11 @@ export function InvoiceNew() {
 
       {/* Los datos del comprobante, entre las dos líneas amarillas: la de
           arriba la pone la barra, la de abajo cierra este bloque. Sin recuadro
-          por dato — son dos filas corridas. */}
-      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-3 sm:px-5">
+          por dato, y en exactamente dos filas de cuatro —el cliente ocupa dos
+          lugares— para que todo lo que hay que decidir antes de emitir entre
+          de un vistazo. Cobrado con queda debajo de la condición de venta, que
+          es lo que lo hace aparecer. */}
+      <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-4 border-b-2 border-accent px-4 py-4 sm:grid-cols-4 sm:px-5">
         <FieldBox label="Cliente" className="col-span-2">
           <span className="block truncate font-semibold text-text">
             {order.customer?.legal_name || order.customer?.name || '—'}
@@ -516,7 +519,7 @@ export function InvoiceNew() {
               ? 'Obligatoria para emitir'
               : isCash
                 ? 'Se cobra al emitir'
-                : `Vence a ${PAYMENT_TERMS_DAYS} días`}
+                : 'Queda impaga: se cobra desde Cobranzas'}
           </span>
         </FieldBox>
 
@@ -557,6 +560,19 @@ export function InvoiceNew() {
             Emitir junto con la factura
           </span>
         </FieldBox>
+
+        {isCash && (
+          <FieldBox label="Cobrado con">
+            <CashCheckoutFields
+              paymentMethods={paymentMethods}
+              paymentMethodId={paymentMethodId}
+              onPaymentMethodIdChange={setPaymentMethodId}
+              checkDrafts={checkDrafts}
+              onOpenCheckModal={() => setCheckModalOpen(true)}
+              onClearChecks={() => setCheckDrafts(null)}
+            />
+          </FieldBox>
+        )}
       </div>
 
       <Panel className="mb-4 rounded-lg p-4">
@@ -578,34 +594,18 @@ export function InvoiceNew() {
         )}
       </Panel>
 
-      {/* Cómo se cobra y las observaciones, en la misma franja: son las dos
-          últimas decisiones antes de emitir, y ninguna de las dos necesita
-          el espacio de un panel entero. */}
-      <div className="mb-10 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <Panel className="rounded-lg p-4">
-          <SectionHeader title="Cómo se cobra" className="mb-3" />
-          <CashCheckoutFields
-            isCash={isCash}
-            paymentMethods={paymentMethods}
-            paymentMethodId={paymentMethodId}
-            onPaymentMethodIdChange={setPaymentMethodId}
-            checkDrafts={checkDrafts}
-            onOpenCheckModal={() => setCheckModalOpen(true)}
-            onClearChecks={() => setCheckDrafts(null)}
-          />
-        </Panel>
-
-        <Panel className="rounded-lg p-4">
-          <SectionHeader title="Observaciones" className="mb-3" />
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={4}
-            placeholder="Texto que sale impreso en el comprobante. Opcional."
-            className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
-          />
-        </Panel>
-      </div>
+      {/* Con qué se cobra subió al encabezado, así que abajo queda solo lo
+          único que no es una decisión: el texto que sale impreso. */}
+      <Panel className="mb-10 rounded-lg p-4">
+        <SectionHeader title="Observaciones" className="mb-3" />
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          placeholder="Texto que sale impreso en el comprobante. Opcional."
+          className="w-full resize-y border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
+        />
+      </Panel>
 
       {fichaCliente && (
         <CustomerModal
@@ -720,14 +720,16 @@ export function InvoiceTotals({
  * la factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
  * InvoiceNewFree — mismo comportamiento, con o sin OT de por medio.
  *
- * Que la factura sea de contado ya no se decide acá: lo dice la condición de
- * venta del encabezado, y este bloque solo aparece cuando es contado.
+ * Vive como un dato más del encabezado, debajo de la condición de venta que lo
+ * hace aparecer: con qué se cobra es parte de emitir, no un paso posterior, y
+ * tenerlo abajo en un panel aparte lo dejaba fuera de la vista. Quien lo llama
+ * decide si va —solo cuando la condición es contado—, así que acá ya no se
+ * pregunta.
  */
 /** Valor centinela del select: elegirlo abre el modal de carga en vez de fijar un medio. */
 const CHEQUE_OPTION_VALUE = '__cheque__';
 
 export function CashCheckoutFields({
-  isCash,
   paymentMethods,
   paymentMethodId,
   onPaymentMethodIdChange,
@@ -735,7 +737,6 @@ export function CashCheckoutFields({
   onOpenCheckModal,
   onClearChecks,
 }: {
-  isCash: boolean;
   paymentMethods: PaymentMethod[];
   paymentMethodId: string;
   onPaymentMethodIdChange: (value: string) => void;
@@ -748,71 +749,53 @@ export function CashCheckoutFields({
   // con un cheque NUEVO (que el cliente entrega en el momento) es distinto:
   // esa opción abre el modal de carga en vez de salir de esta lista.
   const selectableMethods = paymentMethods.filter((m) => m.kind !== 'CARTERA_CHEQUES');
-  const payingWithChecks = checkDrafts !== null;
 
-  if (!isCash) {
+  if (checkDrafts !== null) {
     return (
-      <p className="mt-1 text-sm text-text-soft">
-        Cuenta corriente: queda impaga y se cobra después desde Cobranzas.
-      </p>
+      <div className="rounded-md border border-line bg-panel-alt px-2 py-1.5 text-[12px]">
+        <span className="block font-semibold uppercase tracking-wider text-text-soft">
+          {checkDrafts.length === 1 ? 'Cheque cargado' : `${checkDrafts.length} cheques cargados`}
+        </span>
+        {checkDrafts.map((c, i) => (
+          <span key={i} className="mt-0.5 block truncate normal-case text-text">
+            {c.checkNumber} — {c.checkBank} — $ {formatMoney(c.amount)}
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={onClearChecks}
+          className="mt-1 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+        >
+          Cambiar
+        </button>
+      </div>
     );
   }
 
   return (
-    <div className="mt-1">
-      {(
-        <div className="max-w-xs">
-          <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-soft">
-            <Banknote size={13} className="text-accent-deep" /> Cobrado con
-          </span>
-
-          {payingWithChecks ? (
-            <div className="mt-1 rounded-md border border-line bg-panel-alt px-3 py-2 text-xs">
-              <span className="block font-semibold uppercase tracking-wider text-text-soft">
-                {checkDrafts!.length === 1 ? 'Cheque cargado' : `${checkDrafts!.length} cheques cargados`}
-              </span>
-              {checkDrafts!.map((c, i) => (
-                <span key={i} className="mt-1 block normal-case text-text">
-                  {c.checkNumber} — {c.checkBank} — $ {formatMoney(c.amount)}
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={onClearChecks}
-                className="mt-2 text-[13px] font-semibold uppercase tracking-wider text-accent-deep hover:underline"
-              >
-                Cambiar
-              </button>
-            </div>
-          ) : (
-            <>
-              <select
-                value={paymentMethodId}
-                onChange={(e) => {
-                  if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal();
-                  else onPaymentMethodIdChange(e.target.value);
-                }}
-                className={cn(
-                  'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none',
-                  !paymentMethodId && 'field-required'
-                )}
-              >
-                <option value="">Elegí un medio...</option>
-                {selectableMethods.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-                <option value={CHEQUE_OPTION_VALUE}>Cheque</option>
-              </select>
-              {selectableMethods.length === 0 && (
-                <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
-                  No hay medios de pago activos. Cargá uno desde Medios de pago.
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+    <>
+      <select
+        value={paymentMethodId}
+        onChange={(e) => {
+          if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal();
+          else onPaymentMethodIdChange(e.target.value);
+        }}
+        className={cn(selectCabecera, !paymentMethodId && 'border-danger text-danger')}
+      >
+        <option value="">Elegí un medio…</option>
+        {selectableMethods.map((m) => (
+          <option key={m.id} value={m.id}>{m.name}</option>
+        ))}
+        <option value={CHEQUE_OPTION_VALUE}>Cheque</option>
+      </select>
+      <span className="mt-1 block text-[11px] normal-case text-text-soft">
+        {selectableMethods.length === 0
+          ? 'No hay medios activos. Cargá uno desde Medios de pago.'
+          : paymentMethodId
+            ? 'Se cobra al emitir'
+            : 'Obligatorio para emitir de contado'}
+      </span>
+    </>
   );
 }
 
