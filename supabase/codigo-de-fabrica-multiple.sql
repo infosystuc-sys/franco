@@ -31,15 +31,34 @@
 -- ---------------------------------------------------------------------------
 -- 1. El prefijo pasa a ser una lista
 -- ---------------------------------------------------------------------------
-alter table suppliers
-  alter column factory_code_prefix drop default;
+-- El disparador se declara "update OF factory_code_prefix", asi que depende de
+-- esa columna y Postgres no deja cambiarle el tipo mientras exista. Se suelta
+-- aca y se vuelve a crear mas abajo, ya con la funcion nueva.
+drop trigger if exists suppliers_normalize_factory_prefix on public.suppliers;
 
-alter table suppliers
-  alter column factory_code_prefix type text[]
-  using case
-    when factory_code_prefix is null or trim(factory_code_prefix) = '' then null
-    else array[upper(trim(factory_code_prefix))]
-  end;
+-- Envuelto en un DO para poder correr la migracion dos veces sin romper: si la
+-- columna ya es text[], el trim() de la conversion fallaria.
+do $mig$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'suppliers'
+      and column_name = 'factory_code_prefix'
+      and data_type <> 'ARRAY'
+  ) then
+    alter table suppliers
+      alter column factory_code_prefix drop default;
+
+    alter table suppliers
+      alter column factory_code_prefix type text[]
+      using case
+        when factory_code_prefix is null or trim(factory_code_prefix) = '' then null
+        else array[upper(trim(factory_code_prefix))]
+      end;
+  end if;
+end
+$mig$;
 
 comment on column suppliers.factory_code_prefix is
   'Los prefijos que este proveedor le antepone al número de fábrica. Vacío = usa el número tal cual.';
