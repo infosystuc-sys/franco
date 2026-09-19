@@ -33,17 +33,20 @@
 -- ---------------------------------------------------------------------------
 -- Un disparador declarado "update OF factory_code_prefix" queda registrado
 -- como dependiente de esa columna, y Postgres rechaza el alter type con 0A000
--- mientras exista. Soltarlo unas lineas mas arriba no alcanzo: el drop y el
--- alter tienen que salir juntos, en el mismo bloque, sin nada en el medio que
--- los pueda separar.
+-- mientras exista. Soltar el nuestro no alcanzaba: suppliers hoy tiene DOS
+-- disparadores, y suppliers_normalize_code_prefix tambien nombra la columna,
+-- asi que seguia bloqueando.
 --
--- Y se sueltan TODOS los que nombren la columna, no solo el que conocemos por
--- nombre: si quedo alguno de una migracion anterior, el alter vuelve a fallar
--- igual. El nuestro se vuelve a crear mas abajo.
+-- Por eso esto no va por nombre: busca todos los que la nombren, se guarda su
+-- definicion con pg_get_triggerdef, los suelta, hace el alter y los vuelve a
+-- crear tal cual estaban. Soltar el del code_prefix sin reponerlo dejaria ese
+-- campo sin normalizar, en silencio.
 do $mig$
 declare
   v_col smallint;
-  v_trg text;
+  v_defs text[] := '{}';
+  v_trg record;
+  v_def text;
   v_es_arreglo boolean;
 begin
   select attnum into v_col
@@ -57,7 +60,7 @@ begin
   end if;
 
   for v_trg in
-    select t.tgname
+    select t.tgname, pg_get_triggerdef(t.oid) as def
     from pg_trigger t
     where t.tgrelid = 'public.suppliers'::regclass
       and not t.tgisinternal
@@ -65,8 +68,9 @@ begin
       -- espacio. Se compara asi para no depender de un cast a smallint[].
       and (' ' || t.tgattr::text || ' ') like ('% ' || v_col::text || ' %')
   loop
-    raise notice 'Soltando el disparador % para poder cambiar el tipo de la columna.', v_trg;
-    execute format('drop trigger %I on public.suppliers', v_trg);
+    raise notice 'Soltando % para poder cambiar el tipo de la columna; se repone despues.', v_trg.tgname;
+    v_defs := v_defs || v_trg.def;
+    execute format('drop trigger %I on public.suppliers', v_trg.tgname);
   end loop;
 
   -- Correr la migracion dos veces no tiene que romper: con la columna ya en
@@ -86,6 +90,13 @@ begin
         else array[upper(trim(factory_code_prefix))]
       end;
   end if;
+
+  -- De vuelta como estaban. El de factory_code_prefix se vuelve a crear mas
+  -- abajo con la funcion nueva; reponerlo aca igual no molesta.
+  foreach v_def in array v_defs
+  loop
+    execute v_def;
+  end loop;
 end
 $mig$;
 
