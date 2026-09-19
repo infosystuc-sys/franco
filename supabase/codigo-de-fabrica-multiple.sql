@@ -31,26 +31,55 @@
 -- ---------------------------------------------------------------------------
 -- 1. El prefijo pasa a ser una lista
 -- ---------------------------------------------------------------------------
--- El disparador se declara "update OF factory_code_prefix", asi que depende de
--- esa columna y Postgres no deja cambiarle el tipo mientras exista. Se suelta
--- aca y se vuelve a crear mas abajo, ya con la funcion nueva.
-drop trigger if exists suppliers_normalize_factory_prefix on public.suppliers;
-
--- Envuelto en un DO para poder correr la migracion dos veces sin romper: si la
--- columna ya es text[], el trim() de la conversion fallaria.
+-- Un disparador declarado "update OF factory_code_prefix" queda registrado
+-- como dependiente de esa columna, y Postgres rechaza el alter type con 0A000
+-- mientras exista. Soltarlo unas lineas mas arriba no alcanzo: el drop y el
+-- alter tienen que salir juntos, en el mismo bloque, sin nada en el medio que
+-- los pueda separar.
+--
+-- Y se sueltan TODOS los que nombren la columna, no solo el que conocemos por
+-- nombre: si quedo alguno de una migracion anterior, el alter vuelve a fallar
+-- igual. El nuestro se vuelve a crear mas abajo.
 do $mig$
+declare
+  v_col smallint;
+  v_trg text;
+  v_es_arreglo boolean;
 begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'suppliers'
-      and column_name = 'factory_code_prefix'
-      and data_type <> 'ARRAY'
-  ) then
-    alter table suppliers
+  select attnum into v_col
+  from pg_attribute
+  where attrelid = 'public.suppliers'::regclass
+    and attname = 'factory_code_prefix'
+    and not attisdropped;
+
+  if v_col is null then
+    raise exception 'La columna suppliers.factory_code_prefix no existe. Corre primero supabase/codigo-de-fabrica.sql.';
+  end if;
+
+  for v_trg in
+    select t.tgname
+    from pg_trigger t
+    where t.tgrelid = 'public.suppliers'::regclass
+      and not t.tgisinternal
+      -- tgattr es un int2vector: su texto son los numeros separados por
+      -- espacio. Se compara asi para no depender de un cast a smallint[].
+      and (' ' || t.tgattr::text || ' ') like ('% ' || v_col::text || ' %')
+  loop
+    raise notice 'Soltando el disparador % para poder cambiar el tipo de la columna.', v_trg;
+    execute format('drop trigger %I on public.suppliers', v_trg);
+  end loop;
+
+  -- Correr la migracion dos veces no tiene que romper: con la columna ya en
+  -- text[], el trim() de la conversion fallaria.
+  select a.atttypid = 'text[]'::regtype into v_es_arreglo
+  from pg_attribute a
+  where a.attrelid = 'public.suppliers'::regclass and a.attnum = v_col;
+
+  if not v_es_arreglo then
+    alter table public.suppliers
       alter column factory_code_prefix drop default;
 
-    alter table suppliers
+    alter table public.suppliers
       alter column factory_code_prefix type text[]
       using case
         when factory_code_prefix is null or trim(factory_code_prefix) = '' then null
