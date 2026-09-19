@@ -23,12 +23,15 @@ export interface Supplier extends FiscalEntity {
   /** Prefijo de 2 letras para los artículos que se dan de alta solos al importar su lista. */
   codePrefix: string | null;
   /**
-   * Lo que este proveedor le antepone al número del fabricante. Null si usa el
-   * número tal cual. Es lo que permite reconocer que su código y el de otro
+   * Lo que este proveedor le antepone al número del fabricante. Vacío si usa
+   * el número tal cual. Es lo que permite reconocer que su código y el de otro
    * proveedor son la misma pieza — no confundir con codePrefix, que es el
    * prefijo de NUESTROS códigos.
+   *
+   * Son varios porque un proveedor puede usar uno distinto por familia de
+   * pieza: Maximiliano prefija F los common rail y B las toberas.
    */
-  factoryCodePrefix: string | null;
+  factoryCodePrefix: string[];
 }
 
 /**
@@ -39,7 +42,7 @@ export interface Supplier extends FiscalEntity {
 export interface SupplierInput extends FiscalEntityInput {
   paymentTermsDays: number;
   codePrefix: string | null;
-  factoryCodePrefix: string | null;
+  factoryCodePrefix: string[];
 }
 
 function mapSupplier(row: any): Supplier {
@@ -47,7 +50,7 @@ function mapSupplier(row: any): Supplier {
     ...mapFiscalEntity(row),
     paymentTermsDays: Number(row.payment_terms_days ?? 30),
     codePrefix: row.code_prefix ?? null,
-    factoryCodePrefix: row.factory_code_prefix ?? null,
+    factoryCodePrefix: row.factory_code_prefix ?? [],
     articles: (row.links ?? []).map((link: any) => ({
       id: link.article?.id ?? link.id,
       code: link.article?.code ?? '—',
@@ -69,7 +72,8 @@ function toRow(input: SupplierInput) {
     ...fiscalEntityToRow(input),
     payment_terms_days: input.paymentTermsDays,
     code_prefix: input.codePrefix,
-    factory_code_prefix: input.factoryCodePrefix,
+    // Vacío viaja como null: es lo que la base entiende por "sin prefijo".
+    factory_code_prefix: input.factoryCodePrefix.length ? input.factoryCodePrefix : null,
   };
 }
 
