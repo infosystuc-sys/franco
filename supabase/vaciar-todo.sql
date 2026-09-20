@@ -31,8 +31,30 @@
 --     desde el panel, en Storage.
 
 -- ── 1) Los avisos se callan ────────────────────────────────────────────────
-alter table quotations disable trigger quotations_enqueue_sent;
-alter table work_orders disable trigger work_orders_enqueue_status;
+-- Sin nombrarlos: los nombres cambiaron desde que se escribio
+-- vaciar-comprobantes.sql y llamarlos por nombre aborta el script entero
+-- ANTES de apagar nada, que es el peor momento posible para fallar.
+--
+-- Se apagan todos los disparadores de usuario de las dos tablas. Las foraneas
+-- no se tocan: son disparadores internos y DISABLE TRIGGER USER no los alcanza,
+-- asi que el borrado en cascada sigue funcionando igual.
+--
+-- Se anota cuales estaban encendidos para volver a dejar exactamente eso. Si
+-- alguno ya estaba apagado a proposito, sigue apagado al final.
+create temp table if not exists _avisos_apagados (tabla text, nombre text);
+delete from _avisos_apagados where tabla is not null;
+
+insert into _avisos_apagados (tabla, nombre)
+select c.relname, tg.tgname
+from pg_trigger tg
+join pg_class c on c.oid = tg.tgrelid
+where not tg.tgisinternal
+  and tg.tgenabled <> 'D'
+  and c.relnamespace = 'public'::regnamespace
+  and c.relname in ('quotations', 'work_orders');
+
+alter table quotations disable trigger user;
+alter table work_orders disable trigger user;
 
 -- ── 2) El vínculo circular se suelta ───────────────────────────────────────
 -- work_orders.quotation_id y quotations.work_order_id se apuntan en RESTRICT
@@ -105,8 +127,36 @@ update provisional_credit_note_sequence set last_number = 0 where last_number <>
 delete from article_code_sequences where code_prefix is not null;
 
 -- ── 14) Los avisos vuelven ─────────────────────────────────────────────────
-alter table quotations enable trigger quotations_enqueue_sent;
-alter table work_orders enable trigger work_orders_enqueue_status;
+-- Uno por uno, solo los que estaban encendidos al empezar.
+do $prender$
+declare
+  t record;
+begin
+  if to_regclass('pg_temp._avisos_apagados') is not null then
+    for t in select tabla, nombre from _avisos_apagados loop
+      execute format('alter table public.%I enable trigger %I', t.tabla, t.nombre);
+    end loop;
+  else
+    -- Si la tabla temporal no sobrevivio a la sesion, se encienden todos.
+    -- Dejar un aviso apagado en silencio es mucho peor que encender uno que
+    -- estaba apagado: la app dejaria de avisarle al cliente y nadie se
+    -- enteraria hasta que alguien reclame que nunca le llego el mensaje.
+    alter table public.quotations enable trigger user;
+    alter table public.work_orders enable trigger user;
+  end if;
+end
+$prender$;
+
+drop table if exists _avisos_apagados;
+
+-- Control: esto tiene que venir vacio. Si sale alguna fila, ese disparador
+-- quedo apagado y hay que encenderlo a mano.
+select c.relname as tabla, tg.tgname as disparador_apagado
+from pg_trigger tg
+join pg_class c on c.oid = tg.tgrelid
+where not tg.tgisinternal
+  and tg.tgenabled = 'D'
+  and c.relnamespace = 'public'::regnamespace;
 
 -- ── 15) Qué quedó ──────────────────────────────────────────────────────────
 -- Las tres primeras tienen que dar 0; las otras, lo que había.
