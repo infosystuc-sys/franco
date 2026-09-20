@@ -61,43 +61,48 @@ alter table work_orders disable trigger user;
 -- mutuo: sin soltar uno, ninguna de las dos tablas se puede borrar.
 update quotations set work_order_id = null where work_order_id is not null;
 
--- ── 3) Cobranzas y pagos ───────────────────────────────────────────────────
+-- ── 3) La cuenta corriente del mecánico ─────────────────────────────────────
+-- Apunta a work_orders Y a invoices (invoice_id, no solo work_order_id: esto
+-- es lo que rompió el intento anterior). Tiene que irse antes de tocar
+-- cualquiera de las dos, así que va primero de todo lo que sigue.
+delete from mechanic_account_entries where id is not null;
+
+-- ── 4) Cobranzas y pagos ───────────────────────────────────────────────────
 -- Van primero: son los que retienen facturas, cheques y tesorería.
 delete from receipts where id is not null;              -- arrastra imputaciones, valores y cambios
 delete from payment_orders where id is not null;        -- arrastra imputaciones y valores
 delete from provisional_credit_notes where id is not null;
 delete from third_party_checks where id is not null;    -- ya sin valores que los referencien
 
--- ── 4) Ventas ──────────────────────────────────────────────────────────────
+-- ── 5) Ventas ──────────────────────────────────────────────────────────────
 delete from remitos where id is not null;               -- apunta a facturas
 delete from invoices where id is not null;              -- apunta a órdenes de trabajo
 
--- ── 5) Compras ─────────────────────────────────────────────────────────────
+-- ── 6) Compras ─────────────────────────────────────────────────────────────
 delete from purchase_invoice_extractions where id is not null;  -- borradores leídos por IA
 delete from purchase_invoices where id is not null;
 
--- ── 6) Recepciones del circuito viejo ──────────────────────────────────────
+-- ── 7) Recepciones del circuito viejo ──────────────────────────────────────
 delete from vehicle_intakes where id is not null;       -- apuntan a cotizaciones
 
--- ── 7) Lo que cuelga de la orden y no se va con ella ───────────────────────
--- La cuenta corriente del mecánico apunta a la orden que la generó. No existía
--- cuando se escribió vaciar-comprobantes.sql, así que acá va explícita.
-delete from mechanic_account_entries where id is not null;
+-- ── 8) Lo que cuelga de la orden y no se va con ella ───────────────────────
+-- mechanic_account_entries ya se borró en el paso 3: además de work_order_id
+-- apunta a invoice_id, así que tenía que irse ANTES de tocar facturas, no acá.
 delete from yard_reservations where id is not null;
 
--- ── 8) Órdenes de trabajo y cotizaciones ───────────────────────────────────
+-- ── 9) Órdenes de trabajo y cotizaciones ───────────────────────────────────
 delete from work_orders where id is not null;
 delete from quotations where id is not null;
 
--- ── 9) Tesorería ───────────────────────────────────────────────────────────
+-- ── 10) Tesorería ───────────────────────────────────────────────────────────
 -- Recién ahora: recibos, pagos y cheques la referenciaban en RESTRICT.
 delete from treasury_movements where id is not null;
 
--- ── 10) Avisos huérfanos ───────────────────────────────────────────────────
+-- ── 11) Avisos huérfanos ───────────────────────────────────────────────────
 -- Antes de los clientes: los nombran.
 delete from notifications where id is not null;
 
--- ── 11) El catálogo ────────────────────────────────────────────────────────
+-- ── 12) El catálogo ────────────────────────────────────────────────────────
 -- Los componentes de combo van primero: apuntan a artículos en RESTRICT, que
 -- es justo lo que impide sacar del catálogo una pieza que forma parte de un
 -- combo. El resto ya no tiene renglones que lo referencien.
@@ -107,14 +112,14 @@ delete from unmatched_supplier_prices where id is not null;
 delete from price_imports where id is not null;
 delete from articles where id is not null;
 
--- ── 12) Vehículos y clientes ───────────────────────────────────────────────
+-- ── 13) Vehículos y clientes ───────────────────────────────────────────────
 -- Las fotos y las piezas cuelgan del vehículo; los vehículos, del cliente.
 delete from vehicle_photos where id is not null;
 delete from vehicle_parts where id is not null;
 delete from vehicles where id is not null;
 delete from customers where id is not null;
 
--- ── 13) La numeración vuelve a empezar ─────────────────────────────────────
+-- ── 14) La numeración vuelve a empezar ─────────────────────────────────────
 select setval('work_order_number_seq', 1, false);
 select setval('quotation_number_seq', 1, false);
 select setval('articles_code_seq', 1, false);
@@ -126,7 +131,7 @@ update treasury_sequences set last_number = 0 where last_number <> 0;
 update provisional_credit_note_sequence set last_number = 0 where last_number <> 0;
 delete from article_code_sequences where code_prefix is not null;
 
--- ── 14) Los avisos vuelven ─────────────────────────────────────────────────
+-- ── 15) Los avisos vuelven ─────────────────────────────────────────────────
 -- Uno por uno, solo los que estaban encendidos al empezar.
 do $prender$
 declare
@@ -158,7 +163,7 @@ where not tg.tgisinternal
   and tg.tgenabled = 'D'
   and c.relnamespace = 'public'::regnamespace;
 
--- ── 15) Qué quedó ──────────────────────────────────────────────────────────
+-- ── 16) Qué quedó ──────────────────────────────────────────────────────────
 -- Las tres primeras tienen que dar 0; las otras, lo que había.
 select 'articulos' as tabla, count(*) from articles
 union all select 'clientes', count(*) from customers
