@@ -104,6 +104,10 @@ export function ArticleModal({
 
   // Los rubros y familias que ya existen, para sugerirlos. Salen del catálogo
   // que esta ficha ya recibe: no hace falta ir a buscarlos a la base.
+  // La marca decide el origen, así que la ficha lo aclara mientras se escribe
+  // en vez de dejar que el valor cambie solo al guardar, sin explicación.
+  const esBosch = (form.brand ?? '').trim().toUpperCase() === 'BOSCH';
+
   const rubrosUsados = React.useMemo(
     () => [...new Set(catalogo.map((a) => a.rubro).filter((v): v is string => !!v))].sort(),
     [catalogo]
@@ -295,9 +299,10 @@ export function ArticleModal({
               </span>
             </label>
 
-            {/* El mismo número de fábrica viene en la pieza legítima y en la
-                que la reemplaza. La marca ya las separa; esto dice cuál es
-                cuál sin tener que saberse de memoria qué marcas fabrican. */}
+            {/* Se puede elegir, pero la base tiene la última palabra: marca
+                BOSCH queda ORIGINAL, y un número que Bosch usa con otra marca
+                encima queda REEMPLAZO. Se deja editable para lo que no cae en
+                ninguna de las dos —un Denso con número Denso—. */}
             <label className={cn(labelClass, 'col-span-3')}>
               Origen
               <select
@@ -309,6 +314,11 @@ export function ArticleModal({
                 <option value="ORIGINAL">{PART_KIND_LABELS.ORIGINAL}</option>
                 <option value="REEMPLAZO">{PART_KIND_LABELS.REEMPLAZO}</option>
               </select>
+              <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
+                {esBosch
+                  ? 'Marca Bosch: queda original, lo elijas o no.'
+                  : 'Si el código de fábrica es uno que Bosch también usa, queda reemplazo solo.'}
+              </span>
             </label>
 
             {/* Texto libre con los valores ya usados a mano: sin una lista
