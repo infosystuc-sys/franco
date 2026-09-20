@@ -1,3 +1,12 @@
+-- ###########################################################################
+-- ESTE ARCHIVO YA NO SE CORRE. Queda como registro de lo que se hizo aquella
+-- vez. Para vaciar la base usar supabase/vaciar-todo.sql.
+--
+-- Si se corre, falla en la primera linea: los disparadores de aviso cambiaron
+-- de nombre y aca se los llama por el viejo. vaciar-todo.sql los apaga sin
+-- nombrarlos, justamente por esto.
+-- ###########################################################################
+
 -- ===========================================================================
 -- La app queda sin comprobantes para probar los circuitos nuevos
 -- ===========================================================================

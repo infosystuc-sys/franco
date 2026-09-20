@@ -219,7 +219,6 @@ function ImportSection({
   const [importing, setImporting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const supplier = suppliers.find((s) => s.id === supplierId) ?? null;
 
   async function loadForFile(selected: File, currentSupplierId: string) {
     setParsed(null);
@@ -259,7 +258,7 @@ function ImportSection({
     setGrid(null);
     setMapping(null);
     const nextSupplier = suppliers.find((s) => s.id === id);
-    if (file && id && nextSupplier?.codePrefix) loadForFile(file, id);
+    if (file && id) loadForFile(file, id);
   }
 
   async function handleEditMapping() {
@@ -289,10 +288,6 @@ function ImportSection({
 
   async function handleImport() {
     if (!supplierId || !parsed || !file) return;
-    if (!supplier?.codePrefix) {
-      onError('Este proveedor no tiene prefijo de código. Definilo en Proveedores antes de importar.');
-      return;
-    }
     setImporting(true);
     try {
       const result = await importSupplierPrices(supplierId, file.name, parsed.rows);
@@ -335,11 +330,6 @@ function ImportSection({
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-          {supplier && !supplier.codePrefix && (
-            <span className="mt-1 block text-[13px] font-normal normal-case text-danger">
-              Este proveedor no tiene prefijo de código. Definilo en Proveedores antes de importar.
-            </span>
-          )}
         </label>
 
         <label className="text-xs font-bold uppercase tracking-wider text-text-soft">
@@ -348,7 +338,7 @@ function ImportSection({
             ref={inputRef}
             type="file"
             accept=".xlsx,.xls,.csv"
-            disabled={!supplierId || !supplier?.codePrefix}
+            disabled={!supplierId}
             onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
             className="mt-1 w-full border border-line px-3 py-[7px] text-sm font-normal normal-case file:mr-3 file:border-0 file:bg-panel-head file:px-2 file:py-1 file:text-xs file:cursor-pointer disabled:opacity-50"
           />
