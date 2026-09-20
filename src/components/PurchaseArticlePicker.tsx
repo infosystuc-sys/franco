@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
 import { cn, formatMoney } from '@/src/lib/utils';
-import type { Article } from '@/src/lib/articles';
+import { articuloCoincide, type Article } from '@/src/lib/articles';
 
 /**
  * Buscador de artículos para cargar una compra.
@@ -23,13 +23,10 @@ export function PurchaseArticlePicker({
 }) {
   const [search, setSearch] = React.useState('');
 
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return articles;
-    return articles.filter(
-      (a) => a.code.toLowerCase().includes(term) || a.description.toLowerCase().includes(term)
-    );
-  }, [articles, search]);
+  const filtered = React.useMemo(
+    () => (search.trim() === '' ? articles : articles.filter((a) => articuloCoincide(a, search))),
+    [articles, search]
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">

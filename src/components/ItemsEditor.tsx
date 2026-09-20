@@ -6,7 +6,7 @@ import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { fetchComboArticleIds } from '@/src/lib/articleCombos';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import { type Article } from '@/src/lib/articles';
+import { articuloCoincide, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 
 /**
@@ -258,13 +258,10 @@ function ArticlePicker({
     fetchComboArticleIds().then(setCombos).catch(() => {});
   }, []);
 
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return articles;
-    return articles.filter(
-      (a) => a.code.toLowerCase().includes(term) || a.description.toLowerCase().includes(term)
-    );
-  }, [articles, search]);
+  const filtered = React.useMemo(
+    () => (search.trim() === '' ? articles : articles.filter((a) => articuloCoincide(a, search))),
+    [articles, search]
+  );
 
   // No se cierra al elegir: se puede seguir cargando renglones sin volver a
   // abrir la ventana. Se limpia la búsqueda y vuelve el foco, como si el
@@ -338,7 +335,9 @@ function ArticlePicker({
                   className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
                 >
                   <td data-primary className="p-2 font-bold">
-                    {article.code}
+                    {/* El número de fábrica primero: es el que se busca y el
+                        que está escrito en la pieza. El nuestro es interno. */}
+                    <span className="font-mono">{article.factoryCode ?? article.code}</span>
                     {combos.has(article.id) && (
                       // Se avisa acá porque el combo entra como un renglón
                       // solo: sin la marca, quien carga no sabe que ese

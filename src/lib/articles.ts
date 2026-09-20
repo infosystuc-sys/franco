@@ -61,6 +61,46 @@ export interface ArticleInput {
   unitPrice: number;
 }
 
+/**
+ * Deja un código comparable: mayúsculas y sin separadores. Bosch imprime sus
+ * números partidos —"0 433 171 034"— y cada lista los copia a su manera.
+ */
+function normalizar(valor: string): string {
+  return valor.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * ¿Este artículo coincide con lo que se escribió en el buscador?
+ *
+ * Vive acá y no en cada pantalla porque lo usan tres buscadores —el de la
+ * orden, el de la factura de compra y el de Inventario— y tienen que
+ * encontrar lo mismo: si uno halla la pieza por el número de Bosch y otro no,
+ * quien carga cree que no está en el catálogo y la da de alta de nuevo.
+ *
+ * El número de fábrica se compara normalizado; el resto, como se escribió.
+ * Normalizar todo rompería la búsqueda por descripción de más de una palabra.
+ */
+export function articuloCoincide(article: Article, termino: string): boolean {
+  const term = termino.trim().toLowerCase();
+  if (term === '') return true;
+
+  const textos = [
+    article.code,
+    article.description,
+    article.brand,
+    article.preferredSupplierCode,
+    article.preferredSupplierName,
+  ];
+  if (textos.some((t) => t && t.toLowerCase().includes(term))) return true;
+
+  if (article.factoryCode) {
+    const buscado = normalizar(termino);
+    if (buscado !== '' && normalizar(article.factoryCode).includes(buscado)) return true;
+  }
+
+  return false;
+}
+
 function mapArticle(row: any): Article {
   const suppliers: any[] = row.suppliers ?? [];
   const preferred = suppliers.find((s) => s.is_preferred) ?? null;

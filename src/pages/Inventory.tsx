@@ -7,6 +7,7 @@ import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   computeSalePrice,
+  articuloCoincide,
   createArticle,
   deleteArticle,
   fetchArticles,
@@ -76,15 +77,10 @@ export function Inventory() {
     if (isAdmin) loadArticles();
   }, [isAdmin, loadArticles]);
 
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return articles;
-    return articles.filter((a) =>
-      [a.code, a.description, a.preferredSupplierName, a.preferredSupplierCode]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term))
-    );
-  }, [articles, search]);
+  const filtered = React.useMemo(
+    () => (search.trim() === '' ? articles : articles.filter((a) => articuloCoincide(a, search))),
+    [articles, search]
+  );
 
   async function handleDelete(article: Article) {
     if (!window.confirm(`¿Eliminar el artículo ${article.code}?`)) return;
