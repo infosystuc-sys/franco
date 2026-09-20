@@ -7,9 +7,11 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   computeSalePrice,
   createArticle,
+  PART_KIND_LABELS,
   updateArticle,
   type Article,
   type ArticleInput,
+  type PartKind,
 } from '@/src/lib/articles';
 import { type Supplier } from '@/src/lib/suppliers';
 import {
@@ -41,6 +43,9 @@ export const EMPTY_ARTICLE_FORM: ArticleInput = {
   description: '',
   brand: null,
   factoryCode: null,
+  partKind: null,
+  rubro: null,
+  familia: null,
   tracksStock: false,
   stockQuantity: 0,
   active: true,
@@ -84,6 +89,9 @@ export function ArticleModal({
           description: article.description,
           brand: article.brand,
           factoryCode: article.factoryCode,
+          partKind: article.partKind,
+          rubro: article.rubro,
+          familia: article.familia,
           tracksStock: article.tracksStock,
           stockQuantity: article.stockQuantity,
           active: article.active,
@@ -93,6 +101,17 @@ export function ArticleModal({
       : EMPTY_ARTICLE_FORM
   );
   const [links, setLinks] = React.useState<ArticleSupplier[]>([]);
+
+  // Los rubros y familias que ya existen, para sugerirlos. Salen del catálogo
+  // que esta ficha ya recibe: no hace falta ir a buscarlos a la base.
+  const rubrosUsados = React.useMemo(
+    () => [...new Set(catalogo.map((a) => a.rubro).filter((v): v is string => !!v))].sort(),
+    [catalogo]
+  );
+  const familiasUsadas = React.useMemo(
+    () => [...new Set(catalogo.map((a) => a.familia).filter((v): v is string => !!v))].sort(),
+    [catalogo]
+  );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -234,9 +253,18 @@ export function ArticleModal({
 
           {/* Identificación */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+            {/* El código lo pone la base con la secuencia del catálogo. Se
+                deja editable por si hay que corregir uno viejo, pero en un
+                alta se deja en blanco y sale solo: escribirlo a mano no
+                agrega nada, nadie lo busca por ahí. */}
             <label className={cn(labelClass, 'col-span-2')}>
               Nuestro código
-              <input value={form.code} onChange={(e) => patch({ code: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="BOS-093" />
+              <input
+                value={form.code}
+                onChange={(e) => patch({ code: e.target.value })}
+                className={cn(inputClass, 'font-mono')}
+                placeholder={article ? '' : 'Se asigna solo'}
+              />
             </label>
             <label className={cn(labelClass, 'col-span-2')}>
               Descripción
@@ -265,6 +293,53 @@ export function ArticleModal({
               <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
                 El número de Bosch, Denso o quien la fabrique. Une a los proveedores que venden esta misma pieza.
               </span>
+            </label>
+
+            {/* El mismo número de fábrica viene en la pieza legítima y en la
+                que la reemplaza. La marca ya las separa; esto dice cuál es
+                cuál sin tener que saberse de memoria qué marcas fabrican. */}
+            <label className={cn(labelClass, 'col-span-3')}>
+              Origen
+              <select
+                value={form.partKind ?? ''}
+                onChange={(e) => patch({ partKind: (e.target.value || null) as PartKind | null })}
+                className={inputClass}
+              >
+                <option value="">Sin definir</option>
+                <option value="ORIGINAL">{PART_KIND_LABELS.ORIGINAL}</option>
+                <option value="REEMPLAZO">{PART_KIND_LABELS.REEMPLAZO}</option>
+              </select>
+            </label>
+
+            {/* Texto libre con los valores ya usados a mano: sin una lista
+                cerrada, pero sin que el mismo rubro termine escrito de diez
+                maneras distintas. */}
+            <label className={cn(labelClass, 'col-span-3')}>
+              Rubro
+              <input
+                value={form.rubro ?? ''}
+                onChange={(e) => patch({ rubro: e.target.value.trim() === '' ? null : e.target.value.toUpperCase() })}
+                list="rubros-cargados"
+                className={inputClass}
+                placeholder="TOBERAS"
+              />
+              <datalist id="rubros-cargados">
+                {rubrosUsados.map((v) => <option key={v} value={v} />)}
+              </datalist>
+            </label>
+
+            <label className={cn(labelClass, 'col-span-3')}>
+              Familia
+              <input
+                value={form.familia ?? ''}
+                onChange={(e) => patch({ familia: e.target.value.trim() === '' ? null : e.target.value.toUpperCase() })}
+                list="familias-cargadas"
+                className={inputClass}
+                placeholder="COMMON RAIL"
+              />
+              <datalist id="familias-cargadas">
+                {familiasUsadas.map((v) => <option key={v} value={v} />)}
+              </datalist>
             </label>
           </div>
 

@@ -11,6 +11,12 @@ export interface Article {
    * venden la misma pieza con códigos distintos.
    */
   factoryCode: string | null;
+  /** Si es la pieza del fabricante o la que lo reemplaza. Null = no se sabe. */
+  partKind: PartKind | null;
+  /** Agrupación mayor: TOBERAS, BOMBAS... Texto libre. */
+  rubro: string | null;
+  /** Agrupación dentro del rubro: COMMON RAIL, CONVENCIONAL... Texto libre. */
+  familia: string | null;
   /** Precio de VENTA neto. Lo calcula la base: compra del preferido + utilidad. */
   unitPrice: number;
   tracksStock: boolean;
@@ -26,11 +32,23 @@ export interface Article {
   supplierCount: number;
 }
 
+export type PartKind = 'ORIGINAL' | 'REEMPLAZO';
+
+export const PART_KIND_LABELS: Record<PartKind, string> = {
+  ORIGINAL: 'Original',
+  REEMPLAZO: 'Reemplazo',
+};
+
 export interface ArticleInput {
+  /** Vacío al dar de alta: lo pone la base con la secuencia del catálogo. */
   code: string;
   description: string;
   brand: string | null;
   factoryCode: string | null;
+  /** Si es la pieza del fabricante o la que lo reemplaza. Null = no se sabe. */
+  partKind: PartKind | null;
+  rubro: string | null;
+  familia: string | null;
   tracksStock: boolean;
   stockQuantity: number;
   active: boolean;
@@ -53,6 +71,9 @@ function mapArticle(row: any): Article {
     description: row.description,
     brand: row.brand ?? null,
     factoryCode: row.factory_code ?? null,
+    partKind: (row.part_kind ?? null) as PartKind | null,
+    rubro: row.rubro ?? null,
+    familia: row.familia ?? null,
     unitPrice: Number(row.unit_price),
     tracksStock: row.tracks_stock,
     stockQuantity: Number(row.stock_quantity),
@@ -78,11 +99,18 @@ export async function fetchArticles(includeInactive = true): Promise<Article[]> 
 }
 
 function toRow(input: ArticleInput) {
+  const code = input.code.trim();
   return {
-    code: input.code,
+    // Se omite cuando está vacío: ahí lo pone el default de la columna, que
+    // toma el siguiente de la secuencia del catálogo. Mandarlo en blanco
+    // violaría el not null.
+    ...(code === '' ? {} : { code }),
     description: input.description,
     brand: input.brand,
     factory_code: input.factoryCode,
+    part_kind: input.partKind,
+    rubro: input.rubro,
+    familia: input.familia,
     tracks_stock: input.tracksStock,
     stock_quantity: input.tracksStock ? input.stockQuantity : 0,
     active: input.active,
