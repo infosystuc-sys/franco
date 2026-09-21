@@ -108,7 +108,8 @@ delete from notifications where id is not null;
 -- combo. El resto ya no tiene renglones que lo referencien.
 delete from article_components where combo_article_id is not null;
 delete from article_suppliers where article_id is not null;
-delete from unmatched_supplier_prices where id is not null;
+-- unmatched_supplier_prices ya no existe: la importacion de listas da de alta
+-- los articulos sola desde que se saco la cola de pendientes.
 delete from price_imports where id is not null;
 delete from articles where id is not null;
 
@@ -170,6 +171,6 @@ union all select 'clientes', count(*) from customers
 union all select 'ordenes', count(*) from work_orders
 union all select 'facturas', count(*) from invoices
 union all select 'PROVEEDORES (se quedan)', count(*) from suppliers
-union all select 'EMPLEADOS (se quedan)', count(*) from technicians
+union all select 'EMPLEADOS (se quedan)', count(*) from employees
 union all select 'MEDIOS DE PAGO (se quedan)', count(*) from payment_methods
 union all select 'ESTADOS DE OT (se quedan)', count(*) from work_order_statuses;
