@@ -7,8 +7,8 @@
 - Portal de ARCA: **PV 1 habilitado como Web Services y `wsfe` delegado a RIVAI**. Listo.
 - **Directo a producción, sin homologación.** (Se había elegido homologación y se
   revirtió.) Por eso la fase 1 es solo lectura: es la única red de seguridad.
-- **Punto de venta propio para la app: el 2.** El PV 1 lo sigue usando el sistema
-  actual. Ver punto 3.
+- **Punto de venta propio para la app: el 3.** El PV 1 lo sigue usando el sistema
+  actual y el 2 ya estaba ocupado. El 3 quedó dado de alta en ARCA (23/09). Ver punto 3.
 - **Nota de crédito después.** Fase 5 queda para una segunda etapa.
 
 ### Avance
@@ -18,10 +18,10 @@
   facturación. Verificado: rechaza sin sesión (401) y sin rol admin (403), y
   `FEDummy` de producción responde OK con el mismo sobre que arma la función.
 - **Falta de tu lado:** cargar el certificado de facturación y correr el
-  diagnóstico, que va a mostrar si el PV 2 está habilitado.
-- **`sales_point` sigue en 1 a propósito.** Se pasa a 2 en el mismo momento en
+  diagnóstico, que va a mostrar si el PV 3 está habilitado.
+- **`sales_point` sigue en 1 a propósito.** Se pasa a 3 en el mismo momento en
   que se enciende el CAE real (fase 3). Si se cambiara antes, cualquier factura
-  emitida con el CAE simulado tomaría un número del PV 2 que ARCA no conoce, y
+  emitida con el CAE simulado tomaría un número del PV 3 que ARCA no conoce, y
   la primera factura real chocaría contra ella en el índice único.
 
 Pedir el CAE a ARCA al emitir una factura, en vez del CAE simulado de hoy.
@@ -150,13 +150,13 @@ reciben "último = 1502" y los dos piden el 1503. Uno es rechazado. Se resuelve
 reintentando con número fresco ante el 10016, sin intervención.
 
 ### La alternativa limpia: un punto de venta propio
-**Recomendado.** Habilitar un PV nuevo (por ejemplo, el 2) solo para esta app.
+**Recomendado.** Habilitar un PV nuevo solo para esta app (quedó el 3: el 2 estaba ocupado).
 Cada sistema tiene su contador, no hay carreras y no hay que fijar números a
 mano nunca. Es la práctica habitual cuando se migra entre sistemas: el día que
 el sistema viejo deja de usarse, simplemente se deja de usar su PV.
 
 Cuesta un trámite más en el portal y que las facturas de la app salgan con otra
-numeración (`0002-…` en vez de `0001-…`). Legalmente no hay diferencia.
+numeración (`0003-…` en vez de `0001-…`). Legalmente no hay diferencia.
 
 ---
 
@@ -171,7 +171,7 @@ numeración (`0002-…` en vez de `0001-…`). Legalmente no hay diferencia.
    `E:\CERT` y descargar el `.crt` de homologación.
 2. En el mismo WSASS, crear la autorización del alias al servicio `wsfe`.
 
-**Si se decide un PV propio (ver punto 3):** habilitar el PV 2 como
+~~**PV propio:** habilitar el PV 3 como~~ Hecho (23/09). Se habilitó el PV 3 como
 "Factura Electrónica — Web Services".
 
 ---
