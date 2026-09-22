@@ -17,8 +17,10 @@
   "Probar conexión con ARCA" en Configuración, en la tarjeta del certificado de
   facturación. Verificado: rechaza sin sesión (401) y sin rol admin (403), y
   `FEDummy` de producción responde OK con el mismo sobre que arma la función.
-- **Falta de tu lado:** cargar el certificado de facturación y correr el
-  diagnóstico, que va a mostrar si el PV 3 está habilitado.
+- **Diagnóstico corrido y verificado (23/09).** Certificado cargado, CUIT
+  correcto, vence en 725 días. PV 0001 habilitado (2122 A / 74 B — el del
+  sistema actual). **PV 0003 habilitado, 0/0 — nunca facturó.** "Todo en
+  orden para facturar." Fase 1 cerrada.
 - **`sales_point` sigue en 1 a propósito.** Se pasa a 3 en el mismo momento en
   que se enciende el CAE real (fase 3). Si se cambiara antes, cualquier factura
   emitida con el CAE simulado tomaría un número del PV 3 que ARCA no conoce, y
