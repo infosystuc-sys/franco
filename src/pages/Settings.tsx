@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload, Activity } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -23,6 +23,7 @@ import {
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
 import { fetchYardCells, updateYardCells } from '@/src/lib/yardCapacity';
+import { diagnosticoFacturacion, type DiagnosticoArca } from '@/src/lib/arcaFacturacion';
 import {
   borrarCertificado,
   cuitDelCertificado,
@@ -1055,11 +1056,129 @@ function CertificadosArca() {
                     </Button>
                   )}
                 </div>
+
+                {proposito === 'FACTURACION' && estado?.cargado && <DiagnosticoFacturacion />}
               </div>
             );
           })}
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * Prueba la conexión de facturación contra ARCA sin emitir nada.
+ *
+ * Se va directo a producción, sin homologación de por medio, así que esto es la
+ * única forma de saber antes de facturar que el certificado sirve, que el
+ * servicio está delegado y que el punto de venta está habilitado. Si algo del
+ * portal quedó mal, aparece acá y no con un cliente enfrente.
+ */
+function DiagnosticoFacturacion() {
+  const [probando, setProbando] = React.useState(false);
+  const [resultado, setResultado] = React.useState<DiagnosticoArca | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function probar() {
+    setProbando(true);
+    setError(null);
+    setResultado(null);
+    try {
+      setResultado(await diagnosticoFacturacion());
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setProbando(false);
+    }
+  }
+
+  const serversOk = resultado ? Object.values(resultado.servidores).every((v) => v === 'OK') : false;
+
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <Button type="button" variant="ghost" disabled={probando} onClick={probar}>
+        <Activity size={16} /> {probando ? 'Consultando a ARCA…' : 'Probar conexión con ARCA'}
+      </Button>
+      <p className="mt-1 text-[12px] text-text-soft">Solo consulta. No emite ningún comprobante.</p>
+
+      {error && (
+        <div className="mt-2 rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>
+      )}
+
+      {resultado && (
+        <div className="mt-3 space-y-3 text-[13px]">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="text-text-soft">Servidores de ARCA</dt>
+            <dd className={serversOk ? 'font-semibold text-state-done' : 'font-semibold text-danger'}>
+              {serversOk
+                ? 'Funcionando'
+                : `App ${resultado.servidores.aplicacion} · Base ${resultado.servidores.baseDeDatos} · Auth ${resultado.servidores.autenticacion}`}
+            </dd>
+            {resultado.certificado && (
+              <>
+                <dt className="text-text-soft">Certificado</dt>
+                <dd className={resultado.certificado.coincideConTaller ? 'text-text' : 'font-semibold text-danger'}>
+                  CUIT {resultado.certificado.cuit} · vence {resultado.certificado.vence}
+                  {' '}({resultado.certificado.diasParaVencer} días)
+                </dd>
+              </>
+            )}
+          </dl>
+
+          {resultado.puntosDeVenta.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead className="text-[11px] font-bold uppercase tracking-wider text-text-soft">
+                  <tr className="border-b border-line">
+                    <th className="py-1 pr-2">Punto de venta</th>
+                    <th className="py-1 pr-2">Tipo</th>
+                    <th className="py-1 pr-2 text-right">Última A</th>
+                    <th className="py-1 pr-2 text-right">Última B</th>
+                    <th className="py-1">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resultado.puntosDeVenta.map((p) => {
+                    const esElNuestro = p.numero === resultado.puntoDeVentaConfigurado;
+                    const baja = p.bloqueado || p.fechaBaja;
+                    return (
+                      <tr key={p.numero} className={cn('border-b border-line', esElNuestro && 'bg-accent/10')}>
+                        <td className="py-1 pr-2 font-mono font-semibold">
+                          {String(p.numero).padStart(4, '0')}
+                          {esElNuestro && (
+                            <span className="ml-1.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">el de la app</span>
+                          )}
+                        </td>
+                        <td className="py-1 pr-2">{p.tipoEmision}</td>
+                        <td className="py-1 pr-2 text-right font-mono tabular-nums">{p.ultimos.A}</td>
+                        <td className="py-1 pr-2 text-right font-mono tabular-nums">{p.ultimos.B}</td>
+                        <td className={cn('py-1', baja ? 'text-danger' : 'text-state-done')}>
+                          {p.bloqueado ? 'Bloqueado' : p.fechaBaja ? `Baja ${p.fechaBaja}` : 'Habilitado'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {resultado.avisos.length > 0 ? (
+            <ul className="space-y-1">
+              {resultado.avisos.map((aviso) => (
+                <li key={aviso} className="flex gap-1.5 text-[13px] text-state-wait">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {aviso}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="flex items-center gap-1.5 font-semibold text-state-done">
+              <Check size={14} /> Todo en orden para facturar.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

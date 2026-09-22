@@ -110,7 +110,7 @@ export const PROPOSITO_AYUDA: Record<PropositoArca, string> = {
     'Puede estar a nombre de cualquier CUIT: ARCA solo mira quién firma la consulta.',
   FACTURACION:
     'Para pedir el CAE de cada comprobante. Este tiene que ser del CUIT que factura. ' +
-    'Todavía no se usa: la facturación no está conectada a ARCA.',
+    'Por ahora solo sirve para probar la conexión: las facturas todavía no piden CAE a ARCA.',
 };
 
 export interface EstadoCertificado {
