@@ -137,6 +137,55 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/** Los códigos de comprobante de ARCA. La X no tiene: no es fiscal. */
+const COD_COMPROBANTE: Partial<Record<InvoiceType, number>> = { A: 1, B: 6, C: 11 };
+
+/**
+ * El QR obligatorio de la RG 4892: un JSON con los datos del comprobante,
+ * en base64, colgado de la URL de ARCA. Quien lo escanea le pregunta al
+ * organismo si el comprobante que tiene en la mano existe de verdad.
+ *
+ * Devuelve null cuando el comprobante no lleva QR: la serie interna X, que no
+ * es fiscal, y cualquiera que todavía no tenga CAE.
+ */
+export function afipQrUrl(invoice: {
+  invoiceType: InvoiceType;
+  salesPoint: number;
+  number: number;
+  issueDate: string;
+  totalAmount: number;
+  issuerTaxId: string | null;
+  customerTaxId: string | null;
+  cae: string | null;
+}): string | null {
+  const tipoCmp = COD_COMPROBANTE[invoice.invoiceType];
+  const cuitEmisor = (invoice.issuerTaxId ?? '').replace(/\D/g, '');
+  if (!tipoCmp || !invoice.cae || cuitEmisor.length !== 11) return null;
+
+  const cuitReceptor = (invoice.customerTaxId ?? '').replace(/\D/g, '');
+
+  const datos: Record<string, string | number> = {
+    ver: 1,
+    fecha: invoice.issueDate.slice(0, 10),
+    cuit: Number(cuitEmisor),
+    ptoVta: invoice.salesPoint,
+    tipoCmp,
+    nroCmp: invoice.number,
+    importe: invoice.totalAmount,
+    moneda: 'PES',
+    ctz: 1,
+    // Sin CUIT del cliente el comprobante va a consumidor final sin
+    // identificar, y ARCA espera el tipo 99 con documento 0.
+    tipoDocRec: cuitReceptor.length === 11 ? 80 : 99,
+    nroDocRec: cuitReceptor.length === 11 ? Number(cuitReceptor) : 0,
+    // "E" es CAE; "A" sería CAEA, que es otro régimen y no usamos.
+    tipoCodAut: 'E',
+    codAut: Number(invoice.cae),
+  };
+
+  return `https://www.afip.gob.ar/fe/qr/?p=${btoa(JSON.stringify(datos))}`;
+}
+
 export interface InvoiceTotals {
   net: number;
   vat: number;

@@ -7,7 +7,9 @@ import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import QRCode from 'qrcode';
 import {
+  afipQrUrl,
   balanceOf,
   cambiarVencimiento,
   daysUntilDue,
@@ -537,9 +539,34 @@ function Metric({
  * congelada en la factura, no de joins al padrón: si el cliente cambió de
  * CUIT después, acá tiene que seguir figurando el que tenía al emitirse.
  */
+/**
+ * El QR de la RG 4892. Se dibuja acá y no en el servidor: el contenido sale
+ * de datos que ya tenemos, y mandarlo a un tercero para que lo dibuje seria
+ * contarle a alguien mas el CUIT y el importe de cada factura del taller.
+ */
+function AfipQr({ url }: { url: string }) {
+  const [svg, setSvg] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let vigente = true;
+    QRCode.toString(url, { type: 'svg', margin: 0 })
+      .then((s) => vigente && setSvg(s))
+      .catch(() => vigente && setSvg(null));
+    return () => {
+      vigente = false;
+    };
+  }, [url]);
+
+  if (!svg) return null;
+  // El SVG lo arma la librería a partir de la URL; no lleva nada del texto
+  // adentro, solo los módulos del código.
+  return <div className="h-21.5 w-21.5 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
 function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
   const voided = invoice.status === 'ANULADA';
   const discriminates = discriminatesVat(invoice.invoiceType);
+  const qrUrl = afipQrUrl(invoice);
 
   return (
     <div className="print-document relative border border-line bg-panel p-6 md:p-8">
@@ -692,16 +719,22 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
           Documento no fiscal: no reemplaza a la factura.
         </p>
       ) : invoice.cae ? (
-        <div className="mt-6 border-t border-line pt-3 text-center">
-          <p className="text-[12px] text-text-faint">
-            CAE <span className="font-mono text-text-soft">{invoice.cae}</span>
-            {invoice.caeDueDate && <> · Vence {formatDate(invoice.caeDueDate)}</>}
-          </p>
-          {invoice.caeSimulated && (
-            <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-danger">
-              CAE simulado — sin autorización de ARCA
+        <div className="mt-6 flex items-center gap-4 border-t border-line pt-3">
+          {/* El QR de ARCA solo se dibuja con un CAE real. Con uno simulado
+              apuntaría a un comprobante que el organismo no conoce, y quien lo
+              escaneara recibiría un error sin entender por qué. */}
+          {!invoice.caeSimulated && qrUrl && <AfipQr url={qrUrl} />}
+          <div className="flex-1 text-center">
+            <p className="text-[12px] text-text-faint">
+              CAE <span className="font-mono text-text-soft">{invoice.cae}</span>
+              {invoice.caeDueDate && <> · Vence {formatDate(invoice.caeDueDate)}</>}
             </p>
-          )}
+            {invoice.caeSimulated && (
+              <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-danger">
+                CAE simulado — sin autorización de ARCA
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <p className="mt-6 border-t border-line pt-3 text-center text-[12px] text-text-faint">
