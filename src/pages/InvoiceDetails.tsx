@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle } from 'lucide-react';
+import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle, Stamp } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -23,6 +23,7 @@ import {
   type InvoiceDetail,
 } from '@/src/lib/invoices';
 import { fetchRemitoByInvoice, type Remito } from '@/src/lib/remitos';
+import { emitirEnArca } from '@/src/lib/arcaFacturacion';
 
 /**
  * La factura emitida. Es a la vez el documento que se imprime: las reglas de
@@ -38,6 +39,10 @@ export function InvoiceDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const [pidiendoCae, setPidiendoCae] = React.useState(false);
+  // Un rechazo de ARCA no es un error del sistema, y no se muestra como tal:
+  // son los reparos concretos que hay que corregir para reintentar.
+  const [reparos, setReparos] = React.useState<string[] | null>(null);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
 
@@ -83,6 +88,42 @@ export function InvoiceDetails() {
   const overdue = isOverdue(invoice);
   const balance = balanceOf(invoice);
   const days = daysUntilDue(invoice.dueDate);
+
+  async function handlePedirCae() {
+    if (!invoice) return;
+    if (
+      !window.confirm(
+        `Pedirle a ARCA el CAE de la ${INVOICE_TYPE_LABELS[invoice.invoiceType]} ` +
+          `${invoice.fullNumber}, por ${formatMoney(invoice.totalAmount)}.\n\n` +
+          'Si ARCA la autoriza, el comprobante queda emitido y solo se puede ' +
+          'revertir con una nota de crédito.'
+      )
+    ) {
+      return;
+    }
+
+    setPidiendoCae(true);
+    setError(null);
+    setReparos(null);
+    try {
+      const r = await emitirEnArca(invoice.id);
+      if (r.autorizada) {
+        await load();
+      } else {
+        // La factura sigue pendiente con su número: se corrige y se reintenta.
+        const motivos = [...(r.errores ?? []), ...(r.observaciones ?? [])];
+        setReparos(
+          motivos.length
+            ? motivos
+            : [`ARCA respondió "${r.resultado ?? '?'}" sin detallar por qué.`]
+        );
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPidiendoCae(false);
+    }
+  }
 
   async function handleVoid() {
     if (!invoice) return;
@@ -167,6 +208,11 @@ export function InvoiceDetails() {
                   <XCircle size={16} /> Volver
                 </Button>
               </Link>
+              {pendiente && (
+                <Button type="button" onClick={handlePedirCae} disabled={pidiendoCae}>
+                  <Stamp size={16} /> {pidiendoCae ? 'Pidiendo el CAE…' : 'Pedir el CAE a ARCA'}
+                </Button>
+              )}
               {!pendiente && (
                 <Button variant="ghost" type="button" onClick={() => window.print()}>
                   <Printer size={16} /> Imprimir
@@ -220,6 +266,22 @@ export function InvoiceDetails() {
               dio el CAE. Hasta que lo dé no es un comprobante válido: no se
               imprime ni se manda al cliente.
             </span>
+          </div>
+        )}
+
+        {reparos && (
+          <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+            <p className="font-semibold">ARCA no autorizó la factura.</p>
+            <ul className="mt-2 list-disc pl-5">
+              {reparos.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-text-soft">
+              El número {invoice.fullNumber} sigue reservado para esta factura. Una
+              vez corregido lo que ARCA objeta, se vuelve a pedir el CAE con el
+              mismo número.
+            </p>
           </div>
         )}
 

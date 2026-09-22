@@ -6,7 +6,9 @@ import { supabase } from '@/src/lib/supabase';
   Todo pasa por la Edge Function facturacion-arca: es la única que puede leer
   la clave privada. Acá solo se arma el pedido y se interpreta la respuesta.
 
-  Por ahora hay una sola acción, el diagnóstico, que no emite nada.
+  El diagnóstico no emite nada. Emitir sí, y es la única operación de la app
+  que no se puede deshacer sola: un CAE otorgado solo se revierte con una nota
+  de crédito.
 */
 
 export interface PuntoDeVentaArca {
@@ -46,6 +48,36 @@ export async function diagnosticoFacturacion(): Promise<DiagnosticoArca> {
   if (error) throw new Error(await mensajeDeError(error));
   if (data?.error) throw new Error(String(data.error));
   return data as DiagnosticoArca;
+}
+
+/**
+ * Lo que contesta ARCA cuando se le pide el CAE de una factura pendiente.
+ *
+ * Un rechazo no es una falla del sistema: la factura se queda en PENDIENTE_CAE
+ * con su número reservado, y una vez corregido lo que ARCA objetó se reintenta
+ * con el mismo número. Por eso `autorizada: false` viaja como respuesta normal
+ * y no como excepción.
+ */
+export interface ResultadoEmision {
+  autorizada: boolean;
+  factura: string;
+  /** Con CAE solo si ARCA autorizó. */
+  cae?: string;
+  caeVence?: string;
+  /** El veredicto crudo de ARCA (A, R, P) cuando no autorizó. */
+  resultado?: string;
+  errores?: string[];
+  observaciones?: string[];
+}
+
+export async function emitirEnArca(invoiceId: string): Promise<ResultadoEmision> {
+  const { data, error } = await supabase.functions.invoke('facturacion-arca', {
+    body: { accion: 'emitir', invoice_id: invoiceId },
+  });
+
+  if (error) throw new Error(await mensajeDeError(error));
+  if (data?.error) throw new Error(String(data.error));
+  return data as ResultadoEmision;
 }
 
 async function mensajeDeError(error: unknown): Promise<string> {
