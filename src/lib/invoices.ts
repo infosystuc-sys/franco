@@ -22,7 +22,12 @@ import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 export { formatDate, todayLocal, toDateString };
 
 export type InvoiceType = 'A' | 'B' | 'C' | 'X';
-export type InvoiceStatus = 'EMITIDA' | 'ANULADA';
+/**
+ * PENDIENTE_CAE es el hueco entre reservar el número y que ARCA conteste. Una
+ * factura ahí todavía no es un comprobante: no se imprime, no se manda y no se
+ * cobra. La serie interna X nunca pasa por ese estado.
+ */
+export type InvoiceStatus = 'PENDIENTE_CAE' | 'EMITIDA' | 'ANULADA';
 
 /**
  * Las letras que se pueden elegir al emitir.
@@ -70,6 +75,7 @@ export const INVOICE_TYPE_REASON: Record<InvoiceType, string> = {
 };
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  PENDIENTE_CAE: 'Esperando CAE',
   EMITIDA: 'Emitida',
   ANULADA: 'Anulada',
 };
@@ -90,12 +96,16 @@ export const PAYMENT_STATE_BADGE: Record<PaymentState, string> = {
 };
 
 /** Color de la tira lateral, para leer el estado de un vistazo en el listado. */
-export const INVOICE_STRIP: Record<PaymentState | 'ANULADA' | 'VENCIDA', string> = {
+export const INVOICE_STRIP: Record<
+  PaymentState | 'ANULADA' | 'VENCIDA' | 'PENDIENTE_CAE',
+  string
+> = {
   IMPAGA: '#2b6cb0',
   PARCIAL: '#e07b1a',
   PAGADA: '#2e7d32',
   VENCIDA: '#c62828',
   ANULADA: '#9a9a9a',
+  PENDIENTE_CAE: '#8e24aa',
 };
 
 // ===========================================================================
@@ -163,8 +173,13 @@ export function paymentStateOf(invoice: Collectable): PaymentState {
   return 'PARCIAL';
 }
 
+/**
+ * Una pendiente de CAE no es deuda todavía: el cliente no recibió ningún
+ * comprobante, y cobranzas tampoco la ofrece. Contarla mostraría un saldo que
+ * nadie puede explicar ni cancelar.
+ */
 export function balanceOf(invoice: Collectable): number {
-  if (invoice.status === 'ANULADA') return 0;
+  if (invoice.status === 'ANULADA' || invoice.status === 'PENDIENTE_CAE') return 0;
   return round2(Math.max(0, invoice.totalAmount - invoice.paidAmount));
 }
 

@@ -53,6 +53,7 @@ function matchesFilter(invoice: InvoiceListRow, filter: Filter): boolean {
 /** El color de la tira: lo que hay que hacer con esa factura, de un vistazo. */
 function stripColor(invoice: InvoiceListRow): string {
   if (invoice.status === 'ANULADA') return INVOICE_STRIP.ANULADA;
+  if (invoice.status === 'PENDIENTE_CAE') return INVOICE_STRIP.PENDIENTE_CAE;
   if (isOverdue(invoice)) return INVOICE_STRIP.VENCIDA;
   return INVOICE_STRIP[paymentStateOf(invoice)];
 }
@@ -231,6 +232,10 @@ export function Invoices() {
                       {voided ? (
                         <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                           Anulada
+                        </span>
+                      ) : invoice.status === 'PENDIENTE_CAE' ? (
+                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                          Esperando CAE
                         </span>
                       ) : (
                         <span

@@ -77,6 +77,9 @@ export function InvoiceDetails() {
   }
 
   const voided = invoice.status === 'ANULADA';
+  // Todavía no es un comprobante: ARCA no le dio el CAE. No se imprime ni se
+  // manda. Anularla sí se puede, que es la salida si ARCA nunca la autorizó.
+  const pendiente = invoice.status === 'PENDIENTE_CAE';
   const overdue = isOverdue(invoice);
   const balance = balanceOf(invoice);
   const days = daysUntilDue(invoice.dueDate);
@@ -120,6 +123,10 @@ export function InvoiceDetails() {
               <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
                 <Ban size={14} /> Anulada
               </span>
+            ) : pendiente ? (
+              <span className="inline-flex items-center gap-1.5 rounded bg-panel-head px-2 py-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-text-soft">
+                <AlertTriangle size={14} /> Esperando CAE
+              </span>
             ) : (
               <span
                 className={cn(
@@ -160,10 +167,12 @@ export function InvoiceDetails() {
                   <XCircle size={16} /> Volver
                 </Button>
               </Link>
-              <Button variant="ghost" type="button" onClick={() => window.print()}>
-                <Printer size={16} /> Imprimir
-              </Button>
-              {!voided && (
+              {!pendiente && (
+                <Button variant="ghost" type="button" onClick={() => window.print()}>
+                  <Printer size={16} /> Imprimir
+                </Button>
+              )}
+              {!voided && !pendiente && (
                 <>
                   <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
                     <Mail size={16} /> Enviar por mail
@@ -203,7 +212,18 @@ export function InvoiceDetails() {
           </div>
         )}
 
-        {!voided && (
+        {pendiente && (
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-text-soft" />
+            <span>
+              El número {invoice.fullNumber} quedó reservado y ARCA todavía no le
+              dio el CAE. Hasta que lo dé no es un comprobante válido: no se
+              imprime ni se manda al cliente.
+            </span>
+          </div>
+        )}
+
+        {!voided && !pendiente && (
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
             <Metric label="Total" value={`$ ${formatMoney(invoice.totalAmount)}`} />
             <Metric label="Cobrado" value={`$ ${formatMoney(invoice.paidAmount)}`} />

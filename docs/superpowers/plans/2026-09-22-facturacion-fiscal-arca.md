@@ -21,10 +21,23 @@
   correcto, vence en 725 días. PV 0001 habilitado (2122 A / 74 B — el del
   sistema actual). **PV 0003 habilitado, 0/0 — nunca facturó.** "Todo en
   orden para facturar." Fase 1 cerrada.
-- **`sales_point` sigue en 1 a propósito.** Se pasa a 3 en el mismo momento en
-  que se enciende el CAE real (fase 3). Si se cambiara antes, cualquier factura
-  emitida con el CAE simulado tomaría un número del PV 3 que ARCA no conoce, y
-  la primera factura real chocaría contra ella en el índice único.
+- **Fase 2 hecha y aplicada (22/09).** Estado `PENDIENTE_CAE` en el enum;
+  `invoices_anulada_con_motivo` ampliado (rechazaba el estado nuevo);
+  `invoices_una_activa_por_ot` pasó a `<> 'ANULADA'` (si no, una OT con factura
+  pendiente se podía volver a facturar); disparador de transiciones válidas;
+  `confirmar_cae()`. `_create_invoice()` ya no inventa el CAE: la serie
+  electrónica nace en `PENDIENTE_CAE`. La interfaz conoce el estado y no deja
+  imprimir ni enviar una pendiente. Ver `supabase/pendiente-cae-*.sql`.
+- **`sales_point` pasó de 1 a 3 (22/09).** Se pudo hacer sin arrastrar nada:
+  en toda su historia la app emitió una sola factura y es de la serie interna
+  X, así que las secuencias A y B estaban en cero y el primer número del PV 3
+  va a ser el 1, que es lo que ARCA espera. Las secuencias huérfanas del PV 1
+  se borraron.
+- **Fase 3 escrita, sin desplegar.** `facturacion-arca` suma las acciones
+  `emitir` (FECompUltimoAutorizado para verificar que el número no derivó, y
+  después FECAESolicitar) y `parametros` (la tabla de condiciones frente al
+  IVA de ARCA, para contrastar el mapeo de RG 5616 antes de emitir en serio).
+  Falta desplegarla y correr la primera emisión real.
 
 Pedir el CAE a ARCA al emitir una factura, en vez del CAE simulado de hoy.
 

@@ -17,22 +17,25 @@ import {
 /*
   Facturación electrónica con ARCA (WSFEv1).
 
-  ── Fase 1: diagnóstico, y nada más ─────────────────────────────────────────
-  Por ahora esta función NO EMITE COMPROBANTES. Se va directo a producción, sin
-  pasar por homologación, así que lo primero es poder mirar el estado real de
-  ARCA sin tocar nada:
+  ── Las acciones ────────────────────────────────────────────────────────────
+  · diagnostico  — solo lectura: que ARCA esté arriba, que el certificado sirva
+                   y sea del CUIT del taller, qué puntos de venta hay
+                   habilitados y el último número de cada serie.
+  · parametros   — solo lectura: la tabla de condiciones frente al IVA del
+                   receptor, tal como la publica ARCA.
+  · emitir       — le pide el CAE a una factura que está en PENDIENTE_CAE.
 
-    · que los servidores de ARCA estén arriba;
-    · que el certificado cargado sirva y sea del CUIT del taller;
-    · qué puntos de venta tiene habilitados el taller para web services;
-    · cuál es el último comprobante autorizado de cada uno.
+  ── Por qué la emisión está partida ─────────────────────────────────────────
+  Pedir el CAE es una llamada a un tercero, y no puede vivir adentro de la
+  transacción que escribe la factura. Entonces la factura nace en
+  PENDIENTE_CAE con su número reservado (eso lo hace _create_invoice en la
+  base), acá se le pide el CAE, y recién si ARCA autoriza se la pasa a EMITIDA
+  con confirmar_cae().
 
-  Todo eso son consultas. Si algo del portal quedó mal —el punto de venta sin
-  habilitar, el servicio sin delegar—, aparece acá y no con un cliente
-  enfrente esperando la factura.
-
-  Las operaciones que emiten van a ser acciones nuevas de esta misma función,
-  en las fases siguientes.
+  Si esta función falla, tarda o se corta, la factura QUEDA PENDIENTE y no se
+  inventa nada. ARCA es la fuente de verdad, no nuestra base: ante la duda se
+  le pregunta con FECompConsultar, no se adivina. Esa es la regla que evita a
+  la vez el hueco en la numeración y el CAE duplicado.
 */
 
 const WSFE_URL = 'https://servicios1.afip.gov.ar/wsfev1/service.asmx';
@@ -195,6 +198,210 @@ async function diagnostico() {
   return { servidores, certificado, puntosDeVenta, puntoDeVentaConfigurado: configurado, avisos };
 }
 
+// ── Emitir: pedirle el CAE a ARCA ───────────────────────────────────────────
+
+/**
+ * RG 5616: desde 2024 el comprobante tiene que declarar la condición frente al
+ * IVA del receptor. Nuestras cuatro condiciones contra los códigos de ARCA.
+ * La acción `parametros` devuelve la tabla viva para poder contrastarla.
+ */
+const CONDICION_IVA_RECEPTOR: Record<string, number> = {
+  RESPONSABLE_INSCRIPTO: 1,
+  EXENTO: 4,
+  CONSUMIDOR_FINAL: 5,
+  MONOTRIBUTO: 6,
+};
+
+/** ARCA quiere las fechas como YYYYMMDD y los importes con dos decimales. */
+const aFechaArca = (iso: string) => String(iso).slice(0, 10).replace(/-/g, '');
+const deFechaArca = (v: string) => {
+  const s = String(v ?? '');
+  return s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
+};
+const importe = (v: unknown) => Number(v ?? 0).toFixed(2);
+
+async function parametros() {
+  const cred = await credencialArca('FACTURACION');
+  if (!cred) throw new Error('Todavía no está cargado el certificado de facturación.');
+
+  const delCert = datosDelCertificado(cred.certPem);
+  const ticket = await ticketDeArca(SERVICIO_WSFE, cred);
+  const auth = bloqueAuth(ticket, delCert.cuit ?? cred.cuit);
+
+  const r = await llamarWsfe('FEParamGetCondicionIvaReceptor', auth);
+  return {
+    condicionesIvaReceptor: comoLista<Record<string, string>>(
+      r.resultado?.ResultGet?.CondicionIvaReceptor,
+    ),
+    errores: r.errores,
+    /** Lo que esta función asume hoy, para poder comparar sin salir de acá. */
+    loQueAsumimos: CONDICION_IVA_RECEPTOR,
+  };
+}
+
+async function emitir(invoiceId: string) {
+  if (!invoiceId) throw new Error('Falta decir qué factura emitir.');
+
+  const { data: f, error } = await db
+    .from('invoices')
+    .select('id, invoice_type, sales_point, number, full_number, status, customer_tax_id, customer_tax_condition, issue_date, due_date, net_amount, vat_amount, total_amount')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo leer la factura: ${error.message}`);
+  if (!f) throw new Error('La factura no existe.');
+
+  if (f.status !== 'PENDIENTE_CAE') {
+    throw new Error(
+      `La factura ${f.full_number} no está esperando un CAE: está ${f.status}.`,
+    );
+  }
+
+  const cbteTipo = TIPOS_FACTURA.find((t) => t.letra === f.invoice_type)?.codigo;
+  if (!cbteTipo) {
+    throw new Error(
+      f.invoice_type === 'X'
+        ? 'La serie interna X no es fiscal y no va a ARCA.'
+        : `La factura ${f.invoice_type} todavía no está implementada.`,
+    );
+  }
+
+  const condicionIva = CONDICION_IVA_RECEPTOR[String(f.customer_tax_condition)];
+  if (!condicionIva) {
+    throw new Error(
+      `No sé qué condición frente al IVA declararle a ARCA para "${f.customer_tax_condition}".`,
+    );
+  }
+
+  // DocTipo 80 es CUIT; 99 es "consumidor final sin identificar", y solo se
+  // puede usar en la B. Una A sin CUIT del cliente no existe.
+  const cuitCliente = String(f.customer_tax_id ?? '').replace(/\D/g, '');
+  if (f.invoice_type === 'A' && cuitCliente.length !== 11) {
+    throw new Error(
+      'Una factura A necesita el CUIT del cliente, y este no lo tiene cargado.',
+    );
+  }
+  const docTipo = cuitCliente.length === 11 ? 80 : 99;
+  const docNro = cuitCliente.length === 11 ? cuitCliente : '0';
+
+  const cred = await credencialArca('FACTURACION');
+  if (!cred) throw new Error('Todavía no está cargado el certificado de facturación.');
+  const delCert = datosDelCertificado(cred.certPem);
+  const cuitEmisor = delCert.cuit ?? cred.cuit;
+
+  const ticket = await ticketDeArca(SERVICIO_WSFE, cred);
+  const auth = bloqueAuth(ticket, cuitEmisor);
+
+  // El número lo reservó la base. Antes de pedir el CAE se confirma contra
+  // ARCA que sea el que sigue: si los contadores se separaron, pedirlo igual
+  // deja un hueco en la numeración y todas las facturas siguientes son
+  // rechazadas. Mejor parar acá, que es reversible.
+  const ultimo = await llamarWsfe(
+    'FECompUltimoAutorizado',
+    `${auth}<ar:PtoVta>${f.sales_point}</ar:PtoVta><ar:CbteTipo>${cbteTipo}</ar:CbteTipo>`,
+  );
+  if (ultimo.errores.length) {
+    throw new Error(`ARCA no informa el último número: ${ultimo.errores.join('; ')}`);
+  }
+  const esperado = Number(ultimo.resultado?.CbteNro ?? 0) + 1;
+  if (esperado !== Number(f.number)) {
+    throw new Error(
+      `La numeración se desalineó: ARCA espera la ${esperado} en el punto de ` +
+        `venta ${f.sales_point} y esta factura tomó la ${f.number}. No se pidió ` +
+        'ningún CAE. Hay que corregir la numeración antes de emitir.',
+    );
+  }
+
+  const fch = aFechaArca(f.issue_date);
+  const detalle =
+    `<ar:Concepto>3</ar:Concepto>` +
+    `<ar:DocTipo>${docTipo}</ar:DocTipo>` +
+    `<ar:DocNro>${docNro}</ar:DocNro>` +
+    `<ar:CbteDesde>${f.number}</ar:CbteDesde>` +
+    `<ar:CbteHasta>${f.number}</ar:CbteHasta>` +
+    `<ar:CbteFch>${fch}</ar:CbteFch>` +
+    `<ar:ImpTotal>${importe(f.total_amount)}</ar:ImpTotal>` +
+    `<ar:ImpTotConc>0.00</ar:ImpTotConc>` +
+    `<ar:ImpNeto>${importe(f.net_amount)}</ar:ImpNeto>` +
+    `<ar:ImpOpEx>0.00</ar:ImpOpEx>` +
+    `<ar:ImpTrib>0.00</ar:ImpTrib>` +
+    `<ar:ImpIVA>${importe(f.vat_amount)}</ar:ImpIVA>` +
+    // Concepto 3 es productos y servicios, que es lo que hace el taller, y
+    // obliga a declarar el período del servicio y el vencimiento del pago.
+    `<ar:FchServDesde>${fch}</ar:FchServDesde>` +
+    `<ar:FchServHasta>${fch}</ar:FchServHasta>` +
+    `<ar:FchVtoPago>${aFechaArca(f.due_date)}</ar:FchVtoPago>` +
+    `<ar:MonId>PES</ar:MonId>` +
+    `<ar:MonCotiz>1</ar:MonCotiz>` +
+    `<ar:CondicionIVAReceptorId>${condicionIva}</ar:CondicionIVAReceptorId>` +
+    // Id 5 es la alícuota del 21%. Hoy el taller factura todo al 21%; el día
+    // que haya otra, acá van varios AlicIva y la base tiene que traerlos
+    // discriminados en vez de un único vat_amount.
+    `<ar:Iva><ar:AlicIva>` +
+    `<ar:Id>5</ar:Id>` +
+    `<ar:BaseImp>${importe(f.net_amount)}</ar:BaseImp>` +
+    `<ar:Importe>${importe(f.vat_amount)}</ar:Importe>` +
+    `</ar:AlicIva></ar:Iva>`;
+
+  const cuerpo =
+    `${auth}<ar:FeCAEReq>` +
+    `<ar:FeCabReq>` +
+    `<ar:CantReg>1</ar:CantReg>` +
+    `<ar:PtoVta>${f.sales_point}</ar:PtoVta>` +
+    `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+    `</ar:FeCabReq>` +
+    `<ar:FeDetReq><ar:FECAEDetRequest>${detalle}</ar:FECAEDetRequest></ar:FeDetReq>` +
+    `</ar:FeCAEReq>`;
+
+  const { resultado, errores } = await llamarWsfe('FECAESolicitar', cuerpo);
+  const det = comoLista<Record<string, any>>(resultado?.FeDetResp?.FECAEDetResponse)[0];
+  const observaciones = comoLista<{ Code?: string; Msg?: string }>(det?.Observaciones?.Obs)
+    .map((o) => `${o.Code ?? '?'}: ${o.Msg ?? 'sin detalle'}`);
+  const aprobada = String(resultado?.FeCabResp?.Resultado ?? '') === 'A';
+
+  if (!aprobada || !det?.CAE) {
+    // Rechazada: la factura sigue en PENDIENTE_CAE con su número intacto, así
+    // que se puede corregir el dato que ARCA objetó y reintentar sin pedir
+    // otro número.
+    return {
+      autorizada: false,
+      factura: f.full_number,
+      resultado: String(resultado?.FeCabResp?.Resultado ?? '?'),
+      errores,
+      observaciones,
+    };
+  }
+
+  const cae = String(det.CAE);
+  const caeVence = deFechaArca(det.CAEFchVto);
+
+  const { error: errConfirmar } = await db.rpc('confirmar_cae', {
+    p_invoice_id: f.id,
+    p_cae: cae,
+    p_cae_due_date: caeVence,
+    p_simulado: false,
+  });
+
+  if (errConfirmar) {
+    // El peor caso: ARCA autorizó y nosotros no pudimos anotarlo. El CAE va en
+    // el error para que no se pierda, y la factura queda pendiente hasta que
+    // la reconciliación la resuelva contra FECompConsultar.
+    throw new Error(
+      `ARCA autorizó la factura ${f.full_number} con el CAE ${cae} (vence ` +
+        `${caeVence}) pero no se pudo guardar: ${errConfirmar.message}. ` +
+        'La factura sigue pendiente y NO hay que volver a pedir el CAE.',
+    );
+  }
+
+  return {
+    autorizada: true,
+    factura: f.full_number,
+    cae,
+    caeVence,
+    observaciones,
+  };
+}
+
 // ── Entrada ─────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -207,17 +414,22 @@ Deno.serve(async (req) => {
     return json({ error: 'Solo un administrador puede usar la facturación electrónica.' }, 403);
   }
 
-  let accion = '';
+  let pedido: Record<string, unknown> = {};
   try {
-    accion = String((await req.json())?.accion ?? '');
+    pedido = (await req.json()) ?? {};
   } catch {
     return json({ error: 'Pedido mal formado.' }, 400);
   }
+  const accion = String(pedido.accion ?? '');
 
   try {
     switch (accion) {
       case 'diagnostico':
         return json(await diagnostico());
+      case 'parametros':
+        return json(await parametros());
+      case 'emitir':
+        return json(await emitir(String(pedido.invoice_id ?? '')));
       default:
         return json({ error: `Acción desconocida: ${accion || '(vacía)'}.` }, 400);
     }
