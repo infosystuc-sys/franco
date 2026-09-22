@@ -109,8 +109,8 @@ export const PROPOSITO_AYUDA: Record<PropositoArca, string> = {
     'Trae razón social, condición de IVA y domicilio al dar de alta un cliente o proveedor. ' +
     'Puede estar a nombre de cualquier CUIT: ARCA solo mira quién firma la consulta.',
   FACTURACION:
-    'Para pedir el CAE de cada comprobante. Este tiene que ser del CUIT que factura. ' +
-    'Por ahora solo sirve para probar la conexión: las facturas todavía no piden CAE a ARCA.',
+    'Para pedir el CAE de cada comprobante. Este tiene que ser del CUIT que factura: ' +
+    'el CAE se pide a nombre de quien emite.',
 };
 
 export interface EstadoCertificado {
