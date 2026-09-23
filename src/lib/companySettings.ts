@@ -26,6 +26,11 @@ export interface CompanySettings {
   addressZip: string | null;
   phone: string | null;
   email: string | null;
+  /**
+   * Logo del comprobante, como data URL. No es un dato fiscal y no se congela
+   * en la factura: cambiarlo cambia también cómo se reimprime una vieja.
+   */
+  logo: string | null;
 }
 
 export interface CompanySettingsInput {
@@ -47,7 +52,7 @@ export interface CompanySettingsInput {
 
 const SELECT =
   'legal_name, trade_name, tax_id, tax_condition, sales_point, sales_point_internal, gross_income, ' +
-  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email';
+  'activity_start_date, address_street, address_city, address_state, address_zip, phone, email, logo';
 
 function mapCompanySettings(row: any): CompanySettings {
   return {
@@ -65,6 +70,7 @@ function mapCompanySettings(row: any): CompanySettings {
     addressZip: row.address_zip,
     phone: row.phone,
     email: row.email,
+    logo: row.logo ?? null,
   };
 }
 
@@ -85,7 +91,10 @@ export async function fetchCompanySettings(): Promise<CompanySettings | null> {
  * y el encabezado lo necesitan también el cliente que abre el link del
  * presupuesto —sin sesión— y el operario que lo imprime desde la orden.
  */
-export type TallerHeader = Omit<CompanySettings, 'salesPoint' | 'salesPointInternal'>;
+// Sin el logo: datos_del_taller() no lo devuelve. El presupuesto que abre un
+// cliente desde el link público sigue saliendo sin logo hasta que esa función
+// también lo traiga.
+export type TallerHeader = Omit<CompanySettings, 'salesPoint' | 'salesPointInternal' | 'logo'>;
 
 export async function fetchTallerHeader(): Promise<TallerHeader | null> {
   const { data, error } = await supabase.rpc('datos_del_taller');
@@ -130,6 +139,79 @@ export async function updateCompanySettings(
       phone: nullIfBlank(input.phone),
       email: nullIfBlank(input.email),
     })
+    .eq('id', true)
+    .select(SELECT)
+    .single();
+
+  if (error) throw error;
+  return mapCompanySettings(data);
+}
+
+/**
+ * Cuánto puede pesar el logo ya convertido. La base rechaza por encima de
+ * 400.000 caracteres de data URL; acá se corta antes para no llegar nunca a
+ * que el error lo tire Postgres, que lo diría en otro idioma.
+ */
+const LOGO_MAX_CHARS = 380_000;
+
+/** Más ancho que esto no aporta nada impreso y solo engorda la fila. */
+const LOGO_MAX_ANCHO = 600;
+
+/**
+ * Convierte el archivo elegido en un data URL listo para guardar,
+ * achicándolo si hace falta.
+ *
+ * Se reescala en vez de rechazar los archivos grandes: el logo del taller
+ * suele ser una foto o un PNG enorme, y pedirle a quien lo sube que lo
+ * achique por su cuenta es pedirle que sepa usar un editor de imágenes.
+ */
+export async function prepararLogo(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('El logo tiene que ser una imagen.');
+  }
+
+  const original = await new Promise<string>((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result));
+    lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+    lector.readAsDataURL(file);
+  });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('El archivo no es una imagen que se pueda abrir.'));
+    el.src = original;
+  });
+
+  const escala = Math.min(1, LOGO_MAX_ANCHO / img.width);
+  if (escala === 1 && original.length <= LOGO_MAX_CHARS) return original;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.width * escala);
+  canvas.height = Math.round(img.height * escala);
+  canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // PNG primero, que conserva el fondo transparente —un logo casi siempre lo
+  // tiene—. Si aun así no entra, JPEG, que pesa mucho menos pero lo pierde.
+  const png = canvas.toDataURL('image/png');
+  if (png.length <= LOGO_MAX_CHARS) return png;
+
+  const jpeg = canvas.toDataURL('image/jpeg', 0.85);
+  if (jpeg.length > LOGO_MAX_CHARS) {
+    throw new Error('La imagen es demasiado pesada incluso achicada. Probá con una más simple.');
+  }
+  return jpeg;
+}
+
+/**
+ * El logo va aparte del formulario: no es un campo que se edite y se guarde
+ * con el resto, sino un archivo que se reemplaza o se saca.
+ */
+export async function updateCompanyLogo(logo: string | null): Promise<CompanySettings> {
+  const { data, error } = await supabase
+    .from('company_settings')
+    .update({ logo })
     .eq('id', true)
     .select(SELECT)
     .single();

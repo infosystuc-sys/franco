@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload, Activity } from 'lucide-react';
+import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload, Activity, Image as ImageIcon } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -13,15 +13,22 @@ import {
   fijarProximoNumero,
   invoiceTypeFor,
   INVOICE_TYPE_LABELS,
+  todayLocal,
+  type InvoiceDetail,
   type SerieNumeracion,
 } from '@/src/lib/invoices';
 import { hasGmailCredential, setGmailCredential } from '@/src/lib/invoiceSending';
 import {
   companySettingsToForm,
   fetchCompanySettings,
+  formatAddress,
+  prepararLogo,
+  updateCompanyLogo,
   updateCompanySettings,
+  type CompanySettings,
   type CompanySettingsInput,
 } from '@/src/lib/companySettings';
+import { InvoiceDocument } from '@/src/pages/InvoiceDetails';
 import { fetchYardCells, updateYardCells } from '@/src/lib/yardCapacity';
 import { diagnosticoFacturacion, type DiagnosticoArca } from '@/src/lib/arcaFacturacion';
 import {
@@ -523,6 +530,8 @@ export function Settings() {
 
       <NumeracionFacturas />
 
+      <LogoDelComprobante />
+
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Mail size={14} /> Envío de facturas por mail</h3>
         <p className="text-xs text-text-soft">
@@ -877,6 +886,168 @@ function NumeracionFacturas() {
             })}
           </tbody>
         </table>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * Una factura inventada para mirar el logo puesto. El emisor son los datos
+ * reales del taller —es lo que va arriba del papel, al lado del logo—; el
+ * cliente y los renglones son de ejemplo.
+ *
+ * Sin CAE a propósito: un CAE de mentira dibujaría un QR que apunta a un
+ * comprobante que ARCA no conoce.
+ */
+function facturaDeMuestra(taller: CompanySettings): InvoiceDetail {
+  const hoy = todayLocal();
+  return {
+    id: 'muestra',
+    fullNumber: `${String(taller.salesPoint).padStart(4, '0')}-00000001`,
+    invoiceType: 'B',
+    status: 'EMITIDA',
+    customerName: 'Cliente de ejemplo',
+    workOrderNumber: null,
+    issueDate: hoy,
+    dueDate: hoy,
+    totalAmount: 121,
+    paidAmount: 0,
+    salesPoint: taller.salesPoint,
+    number: 1,
+    paymentTermsDays: 0,
+    netAmount: 100,
+    vatAmount: 21,
+    notes: null,
+    voidedAt: null,
+    voidedReason: null,
+    createdAt: hoy,
+    workOrderId: null,
+    workOrderComponent: null,
+    customerLegalName: null,
+    customerTaxId: null,
+    customerTaxCondition: 'CONSUMIDOR_FINAL',
+    customerAddress: null,
+    customerEmail: null,
+    customerPhone: null,
+    issuerLegalName: taller.legalName || 'Razón social del taller',
+    issuerTaxId: taller.taxId,
+    issuerTaxCondition: taller.taxCondition,
+    issuerAddress: formatAddress(taller) || null,
+    issuerGrossIncome: taller.grossIncome,
+    issuerActivityStartDate: taller.activityStartDate,
+    cae: null,
+    caeDueDate: null,
+    caeSimulated: false,
+    items: [
+      { code: '000001', description: 'Reparación de bomba inyectora', quantity: 1, unitPrice: 100, subtotal: 100 },
+    ],
+  };
+}
+
+/**
+ * El logo del comprobante.
+ *
+ * La vista previa usa el mismo componente que imprime la factura de verdad,
+ * no una maqueta parecida: si acá se ve bien, así sale en el papel. Y el logo
+ * elegido se muestra antes de guardarlo, porque el tamaño y el recorte recién
+ * se entienden viéndolo en su lugar.
+ */
+function LogoDelComprobante() {
+  const [taller, setTaller] = React.useState<CompanySettings | null>(null);
+  const [elegido, setElegido] = React.useState<string | null>(null);
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [aviso, setAviso] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    fetchCompanySettings()
+      .then(setTaller)
+      .catch((e) => setError(getErrorMessage(e)));
+  }, []);
+
+  const enPantalla = elegido ?? taller?.logo ?? null;
+
+  async function handleArchivo(file: File | null) {
+    if (!file) return;
+    setError(null);
+    setAviso(null);
+    try {
+      setElegido(await prepararLogo(file));
+    } catch (e) {
+      setError(getErrorMessage(e));
+    }
+  }
+
+  async function aplicar(logo: string | null, mensaje: string) {
+    setGuardando(true);
+    setError(null);
+    setAviso(null);
+    try {
+      setTaller(await updateCompanyLogo(logo));
+      setElegido(null);
+      setAviso(mensaje);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Panel className="space-y-4 p-5">
+      <h3 className={sectionTitleClass}><ImageIcon size={14} /> Logo del comprobante</h3>
+      <p className="text-xs text-text-soft">
+        Va arriba de la razón social, en la factura impresa. No es un dato fiscal:
+        cambiarlo cambia también cómo se reimprime una factura vieja.
+      </p>
+
+      {error && (
+        <div className="rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>
+      )}
+      {aviso && !error && (
+        <div className="rounded-md border border-line-strong bg-panel-alt px-3 py-2 text-xs text-text">{aviso}</div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label className={cn(labelClass, 'block')}>
+          Imagen
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleArchivo(e.target.files?.[0] ?? null)}
+            className="mt-1 w-full text-[13px] font-normal normal-case text-text-soft file:mr-2 file:border file:border-line file:bg-panel file:px-2 file:py-1 file:text-[13px] file:font-bold file:uppercase file:tracking-wider"
+          />
+        </label>
+
+        {elegido && (
+          <Button type="button" onClick={() => aplicar(elegido, 'Logo guardado.')} disabled={guardando}>
+            <Save size={16} /> {guardando ? 'Guardando…' : 'Guardar logo'}
+          </Button>
+        )}
+        {elegido && (
+          <Button variant="ghost" type="button" onClick={() => setElegido(null)} disabled={guardando}>
+            Descartar
+          </Button>
+        )}
+        {!elegido && taller?.logo && (
+          <Button variant="danger" type="button" onClick={() => aplicar(null, 'Logo sacado.')} disabled={guardando}>
+            <Trash2 size={16} /> Sacar el logo
+          </Button>
+        )}
+      </div>
+
+      {elegido && (
+        <p className="text-xs text-text-soft">
+          Todavía no está guardado. Así va a salir impreso:
+        </p>
+      )}
+
+      {taller && (
+        <div className="no-print overflow-x-auto border border-line bg-panel-alt p-3">
+          <div className="w-190">
+            <InvoiceDocument invoice={facturaDeMuestra(taller)} logo={enPantalla} />
+          </div>
+        </div>
       )}
     </Panel>
   );

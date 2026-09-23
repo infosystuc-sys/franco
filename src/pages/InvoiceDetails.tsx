@@ -26,6 +26,7 @@ import {
 } from '@/src/lib/invoices';
 import { fetchRemitoByInvoice, type Remito } from '@/src/lib/remitos';
 import { emitirEnArca } from '@/src/lib/arcaFacturacion';
+import { fetchCompanySettings } from '@/src/lib/companySettings';
 
 /**
  * La factura emitida. Es a la vez el documento que se imprime: las reglas de
@@ -38,6 +39,7 @@ export function InvoiceDetails() {
 
   const [invoice, setInvoice] = React.useState<InvoiceDetail | null>(null);
   const [remito, setRemito] = React.useState<Remito | null>(null);
+  const [logo, setLogo] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
@@ -55,6 +57,9 @@ export function InvoiceDetails() {
     try {
       const data = await fetchInvoiceById(id);
       setInvoice(data);
+      // El logo es decoración: si no se puede leer, el comprobante sale sin él
+      // y sigue siendo válido. No vale la pena hacer fallar la pantalla.
+      setLogo((await fetchCompanySettings().catch(() => null))?.logo ?? null);
       // El remito es opcional: si falla la consulta, la factura se sigue viendo igual.
       setRemito(data ? await fetchRemitoByInvoice(data.id).catch(() => null) : null);
     } catch (err) {
@@ -306,7 +311,7 @@ export function InvoiceDetails() {
       </div>
 
       <div ref={documentRef}>
-        <InvoiceDocument invoice={invoice} />
+        <InvoiceDocument invoice={invoice} logo={logo} />
         {remito && <RemitoDocument remito={remito} />}
       </div>
 
@@ -563,7 +568,14 @@ function AfipQr({ url }: { url: string }) {
   return <div className="h-21.5 w-21.5 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
+export function InvoiceDocument({
+  invoice,
+  logo,
+}: {
+  invoice: InvoiceDetail;
+  /** El del taller. No viene en la factura: no es un dato fiscal congelado. */
+  logo?: string | null;
+}) {
   const voided = invoice.status === 'ANULADA';
   const discriminates = discriminatesVat(invoice.invoiceType);
   const qrUrl = afipQrUrl(invoice);
@@ -584,6 +596,13 @@ function InvoiceDocument({ invoice }: { invoice: InvoiceDetail }) {
       {/* Cabecera: emisor · letra · datos del comprobante */}
       <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-[1fr_auto_1fr]">
         <div>
+          {logo && (
+            <img
+              src={logo}
+              alt=""
+              className="mb-3 max-h-20 max-w-55 object-contain object-left"
+            />
+          )}
           <h2 className="font-display text-2xl font-medium uppercase leading-tight text-text">
             {invoice.issuerLegalName}
           </h2>

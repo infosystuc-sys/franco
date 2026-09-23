@@ -304,7 +304,7 @@ export interface InvoiceDetail extends InvoiceListRow {
   issuerGrossIncome: string | null;
   issuerActivityStartDate: string | null;
 
-  /** CAE de ARCA. Mientras la integración no exista viene simulado. */
+  /** CAE de ARCA. Null mientras la factura está esperando que lo otorgue. */
   cae: string | null;
   caeDueDate: string | null;
   caeSimulated: boolean;
