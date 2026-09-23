@@ -80,6 +80,52 @@ export async function emitirEnArca(invoiceId: string): Promise<ResultadoEmision>
   return data as ResultadoEmision;
 }
 
+/** Los reparos de ARCA en un texto, para avisarlos en el momento. */
+export function motivoDelRechazo(r: ResultadoEmision): string {
+  const motivos = [...(r.errores ?? []), ...(r.observaciones ?? [])];
+  return motivos.length
+    ? motivos.join('\n')
+    : `ARCA respondió "${r.resultado ?? '?'}" sin detallar por qué.`;
+}
+
+/**
+ * El CAE como parte del acto de emitir, no como un trámite posterior.
+ *
+ * Devuelve true solo si ARCA autorizó. Cuando no, avisa y devuelve false: la
+ * factura ya tomó su número y quedó esperando, así que lo importante es que
+ * quien emitió entienda que no hay comprobante todavía y que el camino es
+ * reintentar con ese mismo número, no rehacer la factura.
+ *
+ * Vive acá y no en cada pantalla para que las dos digan exactamente lo mismo.
+ */
+export async function pedirCaeAlEmitir(invoiceId: string, fullNumber: string): Promise<boolean> {
+  let resultado: ResultadoEmision;
+
+  try {
+    resultado = await emitirEnArca(invoiceId);
+  } catch (err) {
+    window.alert(
+      `La factura ${fullNumber} tomó su número, pero no se pudo hablar con ARCA:\n\n` +
+        `${err instanceof Error ? err.message : String(err)}\n\n` +
+        'Quedó esperando el CAE con ese mismo número. Volvé a pedirlo desde ' +
+        'Facturación cuando se resuelva; no hace falta rehacer la factura.'
+    );
+    return false;
+  }
+
+  if (!resultado.autorizada) {
+    window.alert(
+      `La factura ${fullNumber} tomó su número, pero ARCA no la autorizó:\n\n` +
+        `${motivoDelRechazo(resultado)}\n\n` +
+        'Quedó esperando el CAE con ese mismo número. Corregí lo que ARCA objeta y ' +
+        'volvé a pedirlo desde Facturación.'
+    );
+    return false;
+  }
+
+  return true;
+}
+
 async function mensajeDeError(error: unknown): Promise<string> {
   const contexto = (error as { context?: Response })?.context;
   if (contexto && typeof contexto.json === 'function') {

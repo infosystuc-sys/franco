@@ -6,6 +6,7 @@ import { Button, PageHeader } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { describeRemitoError, fetchRemitoById, isPending, voidRemito, type Remito } from '@/src/lib/remitos';
 import { RemitoDocument } from '@/src/pages/InvoiceDetails';
+import { fetchCompanySettings } from '@/src/lib/companySettings';
 
 /** Ficha de un remito, con o sin factura. Es también el documento imprimible. */
 export function RemitoDetails() {
@@ -16,6 +17,7 @@ export function RemitoDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const [logo, setLogo] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -23,6 +25,8 @@ export function RemitoDetails() {
     setError(null);
     try {
       setRemito(await fetchRemitoById(id));
+      // Decoración: si no se puede leer, el remito sale sin logo y sirve igual.
+      setLogo((await fetchCompanySettings().catch(() => null))?.logo ?? null);
     } catch (err) {
       setError(describeRemitoError(getErrorMessage(err)));
     } finally {
@@ -102,7 +106,7 @@ export function RemitoDetails() {
         )}
       </div>
 
-      <RemitoDocument remito={remito} />
+      <RemitoDocument remito={remito} logo={logo} />
     </div>
   );
 }

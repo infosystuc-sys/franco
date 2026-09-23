@@ -44,9 +44,6 @@ export function InvoiceDetails() {
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
   const [pidiendoCae, setPidiendoCae] = React.useState(false);
-  // Un rechazo de ARCA no es un error del sistema, y no se muestra como tal:
-  // son los reparos concretos que hay que corregir para reintentar.
-  const [reparos, setReparos] = React.useState<string[] | null>(null);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
 
@@ -111,20 +108,12 @@ export function InvoiceDetails() {
 
     setPidiendoCae(true);
     setError(null);
-    setReparos(null);
     try {
-      const r = await emitirEnArca(invoice.id);
-      if (r.autorizada) {
-        await load();
-      } else {
-        // La factura sigue pendiente con su número: se corrige y se reintenta.
-        const motivos = [...(r.errores ?? []), ...(r.observaciones ?? [])];
-        setReparos(
-          motivos.length
-            ? motivos
-            : [`ARCA respondió "${r.resultado ?? '?'}" sin detallar por qué.`]
-        );
-      }
+      await emitirEnArca(invoice.id);
+      // Autorizada o rechazada, lo que hay que mostrar quedó guardado: el CAE
+      // o el motivo. Se relee en vez de creerle a la respuesta, así la
+      // pantalla dice lo mismo que diría si se volviera a abrir mañana.
+      await load();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -217,7 +206,12 @@ export function InvoiceDetails() {
               </Link>
               {pendiente && (
                 <Button type="button" onClick={handlePedirCae} disabled={pidiendoCae}>
-                  <Stamp size={16} /> {pidiendoCae ? 'Pidiendo el CAE…' : 'Pedir el CAE a ARCA'}
+                  <Stamp size={16} />{' '}
+                  {pidiendoCae
+                    ? 'Pidiendo el CAE…'
+                    : invoice.caeRechazo
+                      ? 'Reintentar el CAE'
+                      : 'Pedir el CAE a ARCA'}
                 </Button>
               )}
               {!pendiente && (
@@ -276,11 +270,14 @@ export function InvoiceDetails() {
           </div>
         )}
 
-        {reparos && (
+        {invoice.caeRechazo && (
           <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
-            <p className="font-semibold">ARCA no autorizó la factura.</p>
+            <p className="font-semibold">
+              ARCA no autorizó la factura
+              {invoice.caeRechazadoAt && ` el ${formatDate(invoice.caeRechazadoAt.slice(0, 10))}`}.
+            </p>
             <ul className="mt-2 list-disc pl-5">
-              {reparos.map((r) => (
+              {invoice.caeRechazo.split(' · ').map((r) => (
                 <li key={r}>{r}</li>
               ))}
             </ul>
@@ -312,7 +309,7 @@ export function InvoiceDetails() {
 
       <div ref={documentRef}>
         <InvoiceDocument invoice={invoice} logo={logo} />
-        {remito && <RemitoDocument remito={remito} />}
+        {remito && <RemitoDocument remito={remito} logo={logo} />}
       </div>
 
       {sendModal && (
@@ -339,7 +336,7 @@ export function InvoiceDetails() {
  * con la factura (comparte la clase print-document) porque en la práctica
  * viajan juntos con la mercadería.
  */
-export function RemitoDocument({ remito }: { remito: Remito }) {
+export function RemitoDocument({ remito, logo }: { remito: Remito; logo?: string | null }) {
   const voided = remito.status === 'ANULADO';
   return (
     <div className="print-document relative mt-6 border border-line bg-panel p-6 md:p-8">
@@ -356,6 +353,9 @@ export function RemitoDocument({ remito }: { remito: Remito }) {
 
       <div className="flex items-start justify-between border-b-2 border-ink pb-4">
         <div>
+          {logo && (
+            <img src={logo} alt="" className="mb-3 max-h-16 max-w-45 object-contain object-left" />
+          )}
           <h3 className="font-display text-xl uppercase tracking-[0.08em] text-text-faint">Remito</h3>
           <p className="mt-1 font-mono text-lg font-semibold text-text">{remito.fullNumber}</p>
         </div>

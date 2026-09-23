@@ -264,6 +264,8 @@ export interface InvoiceListRow {
   dueDate: string;
   totalAmount: number;
   paidAmount: number;
+  /** Por qué ARCA rechazó el último pedido de CAE. Null si nunca rechazó. */
+  caeRechazo: string | null;
 }
 
 export interface InvoiceItem {
@@ -308,13 +310,14 @@ export interface InvoiceDetail extends InvoiceListRow {
   cae: string | null;
   caeDueDate: string | null;
   caeSimulated: boolean;
+  caeRechazadoAt: string | null;
 
   items: InvoiceItem[];
 }
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_name, issue_date, due_date, ' +
-  'total_amount, paid_amount, work_order:work_orders(number)';
+  'total_amount, paid_amount, cae_rechazo, work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
   return {
@@ -328,6 +331,7 @@ function mapListRow(row: any): InvoiceListRow {
     dueDate: row.due_date,
     totalAmount: Number(row.total_amount),
     paidAmount: Number(row.paid_amount),
+    caeRechazo: row.cae_rechazo ?? null,
   };
 }
 
@@ -352,7 +356,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
        net_amount, vat_amount, total_amount, paid_amount,
-       cae, cae_due_date, cae_simulated,
+       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
@@ -397,6 +401,8 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     cae: row.cae,
     caeDueDate: row.cae_due_date,
     caeSimulated: row.cae_simulated ?? false,
+    caeRechazo: row.cae_rechazo ?? null,
+    caeRechazadoAt: row.cae_rechazado_at ?? null,
 
     items: ((row.items ?? []) as any[])
       .sort((a, b) => a.line_number - b.line_number)

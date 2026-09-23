@@ -32,6 +32,7 @@ import {
   type WorkOrderInvoiceRef,
   reasignarClienteDeOrden,
 } from '@/src/lib/invoices';
+import { pedirCaeAlEmitir } from '@/src/lib/arcaFacturacion';
 import {
   fetchWorkOrderByNumber,
   getErrorMessage,
@@ -387,7 +388,10 @@ export function InvoiceNew() {
     const confirmed = window.confirm(
       `Emitir ${INVOICE_TYPE_LABELS[invoiceType]} por $ ${formatMoney(totals.total)} ` +
         `a ${order.customer?.name ?? 'el cliente'}${isCash ? ' y cobrarla de contado' : ''}?\n\n` +
-        `Una vez emitida no se puede editar: solo anular.`
+        (invoiceType === 'X'
+          ? 'Es un comprobante interno, sin validez fiscal.\n\nUna vez emitido no se puede editar: solo anular.'
+          : 'Se le va a pedir el CAE a ARCA en este mismo paso. Si lo autoriza, el ' +
+            'comprobante queda emitido y solo se puede revertir con una nota de crédito.')
     );
     if (!confirmed) return;
 
@@ -398,6 +402,14 @@ export function InvoiceNew() {
         order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
         isCash ? null : (vencimiento || null)
       );
+
+      // El CAE va en el mismo acto, no en un paso posterior. La X no pasa por
+      // acá: no es fiscal y nace emitida.
+      if (invoiceType !== 'X' && !(await pedirCaeAlEmitir(issued.id, issued.fullNumber))) {
+        navigate(`/factura/${issued.id}`);
+        return;
+      }
+
       if (isCash) {
         try {
           const values = checkDrafts?.length

@@ -363,6 +363,15 @@ async function emitir(invoiceId: string) {
     // Rechazada: la factura sigue en PENDIENTE_CAE con su número intacto, así
     // que se puede corregir el dato que ARCA objetó y reintentar sin pedir
     // otro número.
+    const motivos = [...errores, ...observaciones];
+    const motivo = motivos.length
+      ? motivos.join(' · ')
+      : `ARCA respondió "${String(resultado?.FeCabResp?.Resultado ?? '?')}" sin detallar por qué.`;
+
+    // El motivo se guarda, no solo se devuelve: es lo que hay que corregir, y
+    // quien cierra la pantalla y vuelve más tarde necesita seguir viéndolo.
+    await db.rpc('registrar_rechazo_cae', { p_invoice_id: f.id, p_motivo: motivo });
+
     return {
       autorizada: false,
       factura: f.full_number,

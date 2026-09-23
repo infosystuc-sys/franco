@@ -91,10 +91,7 @@ export async function fetchCompanySettings(): Promise<CompanySettings | null> {
  * y el encabezado lo necesitan también el cliente que abre el link del
  * presupuesto —sin sesión— y el operario que lo imprime desde la orden.
  */
-// Sin el logo: datos_del_taller() no lo devuelve. El presupuesto que abre un
-// cliente desde el link público sigue saliendo sin logo hasta que esa función
-// también lo traiga.
-export type TallerHeader = Omit<CompanySettings, 'salesPoint' | 'salesPointInternal' | 'logo'>;
+export type TallerHeader = Omit<CompanySettings, 'salesPoint' | 'salesPointInternal'>;
 
 export async function fetchTallerHeader(): Promise<TallerHeader | null> {
   const { data, error } = await supabase.rpc('datos_del_taller');
@@ -115,6 +112,7 @@ export async function fetchTallerHeader(): Promise<TallerHeader | null> {
     addressZip: row.address_zip,
     phone: row.phone,
     email: row.email,
+    logo: row.logo ?? null,
   };
 }
 

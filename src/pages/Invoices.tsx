@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight } from 'lucide-react';
+import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight, Stamp } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -21,6 +21,7 @@ import {
   type InvoiceListRow,
   type PendingToInvoice,
 } from '@/src/lib/invoices';
+import { emitirEnArca } from '@/src/lib/arcaFacturacion';
 
 type Filter = 'TODAS' | 'IMPAGAS' | 'VENCIDAS' | 'PAGADAS' | 'ANULADAS';
 
@@ -66,6 +67,7 @@ export function Invoices() {
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState<Filter>('TODAS');
   const [pending, setPending] = React.useState<PendingToInvoice[]>([]);
+  const [reintentando, setReintentando] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -81,6 +83,37 @@ export function Invoices() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Volver a pedir el CAE sin salir del listado. Es el caso de la factura que
+   * ARCA rechazó por algo que ya se corrigió, o que quedó pendiente porque se
+   * cortó la conexión en el peor momento.
+   */
+  async function reintentarCae(invoice: InvoiceListRow) {
+    const motivo = invoice.caeRechazo
+      ? `\n\nLa vez anterior ARCA dijo:\n${invoice.caeRechazo}`
+      : '';
+    if (
+      !window.confirm(
+        `Pedirle a ARCA el CAE de la ${invoice.fullNumber}, por $ ${formatMoney(invoice.totalAmount)}.` +
+          `${motivo}\n\nSi ARCA la autoriza, el comprobante queda emitido y solo se ` +
+          'puede revertir con una nota de crédito.'
+      )
+    ) {
+      return;
+    }
+
+    setReintentando(invoice.id);
+    setError(null);
+    try {
+      await emitirEnArca(invoice.id);
+      setInvoices(await fetchInvoices());
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setReintentando(null);
+    }
+  }
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -283,13 +316,39 @@ export function Invoices() {
                     </td>
 
                     <td className="px-3 py-1 text-center">
-                      <Link
-                        to={`/factura/${invoice.id}`}
-                        aria-label={`Ver factura ${invoice.fullNumber}`}
-                        className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
-                      >
-                        <Eye size={16} />
-                      </Link>
+                      <div className="inline-flex items-center gap-2">
+                        {invoice.status === 'PENDIENTE_CAE' && (
+                          <button
+                            type="button"
+                            onClick={() => reintentarCae(invoice)}
+                            disabled={reintentando !== null}
+                            title={
+                              invoice.caeRechazo
+                                ? `ARCA la rechazó: ${invoice.caeRechazo}`
+                                : 'Todavía no tiene CAE. Pedírselo a ARCA.'
+                            }
+                            aria-label={`Pedir el CAE de la factura ${invoice.fullNumber}`}
+                            className={cn(
+                              'inline-flex transition-colors disabled:opacity-40',
+                              invoice.caeRechazo
+                                ? 'text-danger hover:text-danger/70'
+                                : 'text-text-soft hover:text-accent-deep'
+                            )}
+                          >
+                            <Stamp
+                              size={16}
+                              className={cn(reintentando === invoice.id && 'animate-pulse')}
+                            />
+                          </button>
+                        )}
+                        <Link
+                          to={`/factura/${invoice.id}`}
+                          aria-label={`Ver factura ${invoice.fullNumber}`}
+                          className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
+                        >
+                          <Eye size={16} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );

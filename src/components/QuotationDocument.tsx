@@ -1,7 +1,7 @@
 import { formatDate, formatMoney } from '@/src/lib/utils';
 import { formatCuit, TAX_CONDITION_LABELS, type TaxCondition } from '@/src/lib/fiscal';
 import { formatAddress, type TallerHeader } from '@/src/lib/companySettings';
-import logo from '@/src/assets/logo-luciano-diesel.png';
+import logoPorDefecto from '@/src/assets/logo-luciano-diesel.png';
 
 const IVA_RATE = 0.21;
 
@@ -63,7 +63,14 @@ export function QuotationDocument({
       {/* Membrete: el taller a la izquierda, el comprobante a la derecha */}
       <div className="grid grid-cols-1 gap-6 border-b-2 border-ink pb-5 sm:grid-cols-[1fr_auto]">
         <div>
-          <img src={logo} alt={taller?.tradeName ?? 'Luciano Diesel'} className="h-12 w-auto" />
+          {/* El configurado en Configuración manda. El del bundle queda como
+              respaldo: si el taller todavía no subió el suyo, el presupuesto
+              no tiene por qué salir peor de lo que salía antes. */}
+          <img
+            src={taller?.logo ?? logoPorDefecto}
+            alt={taller?.tradeName ?? ''}
+            className="h-12 w-auto object-contain"
+          />
           {taller && (
             <>
               <h2 className="mt-3 font-display text-2xl font-medium uppercase leading-tight text-text">
