@@ -1,7 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
-import { GoogleGenAI } from 'npm:@google/genai@2.4.0';
+// 2.23: la 2.4 no conoce thinkingLevel, que es lo que apaga el "pensamiento"
+// en los modelos 3.5 y es de donde salía casi toda la demora de la lectura.
+import { GoogleGenAI, ThinkingLevel } from 'npm:@google/genai@2.23.0';
 
 /*
   Lee una factura de compra (PDF o foto) y arma un borrador en
@@ -84,8 +86,16 @@ const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * que la plataforma mató la función: el usuario vio "non-2xx" y el borrador
  * quedó huérfano, sin lectura y sin error que explicara nada. Vale más cortar
  * y decirlo que esperar a que nos corten.
+ *
+ * Eran 45 segundos, y quedaban por debajo de lo que la lectura tardaba de
+ * verdad: los logs de un día dieron 24,5 · 25,3 · 43,7. La tercera rozaba el
+ * tope, y una que lo cruza no se reintenta —se da por perdida— y arranca de
+ * cero con el otro proveedor, así que una lectura lenta se volvía larguísima.
+ *
+ * 60 deja margen sobre lo peor medido sin acercarse al límite de la
+ * plataforma, que corta la función entera a los 150.
  */
-const LIMITE_POR_INTENTO_MS = 45_000;
+const LIMITE_POR_INTENTO_MS = 60_000;
 
 function conLimite<T>(promesa: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -301,6 +311,13 @@ async function leerConGemini({ apiKey, mimeType, base64, kind, ownTaxId }: Pedid
       systemInstruction: promptFor(kind, ownTaxId),
       responseMimeType: 'application/json',
       responseSchema: aEsquemaGemini(esquemaFor(kind)),
+      // Leer una factura es transcribir lo que está impreso, no razonar: el
+      // "pensamiento" del modelo no mejora el resultado y era de donde salía
+      // el grueso de los 25 a 44 segundos que tardaba cada lectura.
+      //
+      // Va thinkingLevel y no thinkingBudget: desde los modelos 3.5 el budget
+      // no se acepta más y mandarlo da error.
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
     },
   });
   return respuesta.text ?? '';
@@ -382,8 +399,12 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'Método no permitido.' }, 405);
 
   const autorizacion = await verificarAdmin(req);
-  if (autorizacion.estado === 'sin-sesion') return json({ error: 'No autorizado.' }, 401);
-  if (autorizacion.estado === 'sin-permiso') return json({ error: 'No autorizado.' }, 403);
+  // Un solo control contra 'admin' en vez de dos contra los otros dos estados:
+  // así queda claro, para quien lee y para el compilador, que más abajo
+  // autorizacion es la variante que tiene userId.
+  if (autorizacion.estado !== 'admin') {
+    return json({ error: 'No autorizado.' }, autorizacion.estado === 'sin-sesion' ? 401 : 403);
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -417,9 +438,13 @@ Deno.serve(async (req: Request) => {
     return json({ error: `No se pudo crear el borrador: ${errorDraft?.message}` }, 500);
   }
 
+  // El id se guarda aparte: adentro de la función de abajo, draft vuelve a ser
+  // "puede ser null" para el compilador aunque arriba ya se haya descartado.
+  const draftId = draft.id;
+
   async function marcarError(mensaje: string): Promise<Response> {
-    await db.from('purchase_invoice_extractions').update({ status: 'ERROR', error_message: mensaje }).eq('id', draft.id);
-    return json({ id: draft.id, error: mensaje }, 200); // 200: el borrador existe, el cliente lee su status ERROR
+    await db.from('purchase_invoice_extractions').update({ status: 'ERROR', error_message: mensaje }).eq('id', draftId);
+    return json({ id: draftId, error: mensaje }, 200); // 200: el borrador existe, el cliente lee su status ERROR
   }
 
   // Todo lo que sigue va adentro de un try: cualquier excepción inesperada
@@ -495,7 +520,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Matcheo de renglones por código exacto de proveedor (solo ARTICULOS).
-    let renglonesConMatch = extraccion.renglones;
+    // Admite null porque article_id puede no resolverse: sin esto el tipo sale
+    // de extraccion.renglones, que no lo contempla.
+    let renglonesConMatch: Record<string, string | number | null>[] = extraccion.renglones;
     if (kind === 'ARTICULOS' && supplierId) {
       renglonesConMatch = await Promise.all(
         extraccion.renglones.map(async (renglon) => {
@@ -513,7 +540,8 @@ Deno.serve(async (req: Request) => {
               p_codigo: codigo,
             })
             .maybeSingle();
-          return { ...renglon, article_id: resuelto?.article_id ?? null };
+          const fila = resuelto as { article_id: string | null } | null;
+          return { ...renglon, article_id: fila?.article_id ?? null };
         })
       );
     } else if (kind === 'ARTICULOS') {
