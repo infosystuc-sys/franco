@@ -44,6 +44,7 @@ import {
 import {
   AI_PROVIDER_CONSOLES,
   AI_PROVIDER_LABELS,
+  AI_PROVIDER_POR_DEFECTO,
   AI_PROVIDERS,
   deleteAiKey,
   fetchAiKeyStatus,
@@ -92,7 +93,7 @@ export function Settings() {
 
   // Lectura de comprobantes con IA. La clave no se puede traer: solo se sabe
   // si está cargada y sus últimos cuatro caracteres.
-  const [aiProvider, setAiProvider] = React.useState<AiProvider>('GEMINI');
+  const [aiProvider, setAiProvider] = React.useState<AiProvider>(AI_PROVIDER_POR_DEFECTO);
   const [aiKeys, setAiKeys] = React.useState<AiKeyStatus[]>([]);
   const [aiNuevaClave, setAiNuevaClave] = React.useState<Record<string, string>>({});
   const [aiGuardando, setAiGuardando] = React.useState<string | null>(null);
@@ -609,7 +610,10 @@ export function Settings() {
             className={cn(inputClass, 'bg-panel')}
           >
             {AI_PROVIDERS.map((p) => (
-              <option key={p} value={p}>{AI_PROVIDER_LABELS[p]}</option>
+              <option key={p} value={p}>
+                {AI_PROVIDER_LABELS[p]}
+                {p === AI_PROVIDER_POR_DEFECTO ? ' — predeterminada' : ''}
+              </option>
             ))}
           </select>
         </label>

@@ -416,9 +416,26 @@ async function credenciales(): Promise<Record<Proveedor, string | null>> {
   };
 }
 
+/**
+ * Con cuál se lee si nadie eligió.
+ *
+ * Es Anthropic por medición, no por preferencia: leyendo el mismo comprobante,
+ * Gemini devolvió 503 por saturación, 429 por cuota y tiempos de 3 a 75
+ * segundos, mientras que Anthropic resolvía parejo. Para algo que alguien está
+ * esperando en pantalla, importa más que tarde siempre lo mismo.
+ *
+ * El otro queda de respaldo igual, así que esto no es dejar a Gemini afuera:
+ * es decidir cuál se intenta primero.
+ */
+const PROVEEDOR_POR_DEFECTO: Proveedor = 'ANTHROPIC';
+
 async function proveedorElegido(): Promise<Proveedor> {
   const { data } = await db.from('app_settings').select('value').eq('key', 'ai_provider').maybeSingle();
-  return data?.value === 'ANTHROPIC' ? 'ANTHROPIC' : 'GEMINI';
+  // Cualquier valor que no sea uno de los dos cae en el predeterminado: una
+  // fila vieja o mal escrita no debería decidir con qué se lee.
+  return data?.value === 'GEMINI' || data?.value === 'ANTHROPIC'
+    ? data.value
+    : PROVEEDOR_POR_DEFECTO;
 }
 
 Deno.serve(async (req: Request) => {

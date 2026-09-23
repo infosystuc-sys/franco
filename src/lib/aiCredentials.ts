@@ -12,7 +12,25 @@ import { supabase } from '@/src/lib/supabase';
 
 export type AiProvider = 'GEMINI' | 'ANTHROPIC';
 
-export const AI_PROVIDERS: AiProvider[] = ['GEMINI', 'ANTHROPIC'];
+/**
+ * Con cuál se lee si nadie eligió.
+ *
+ * Es Anthropic por medición, no por preferencia: leyendo el mismo comprobante,
+ * Gemini devolvió 503 por saturación, 429 por cuota y tiempos de 3 a 75
+ * segundos, mientras que Anthropic resolvía parejo. Para algo que alguien está
+ * esperando en pantalla, importa más que tarde siempre lo mismo que que a
+ * veces tarde poco.
+ */
+export const AI_PROVIDER_POR_DEFECTO: AiProvider = 'ANTHROPIC';
+
+// El predeterminado primero: es el que se va a usar salvo que se cambie, y la
+// lista es también el orden en que se muestran en Configuración.
+export const AI_PROVIDERS: AiProvider[] = ['ANTHROPIC', 'GEMINI'];
+
+/** Lo guardado solo vale si es uno de los dos; cualquier otra cosa es el default. */
+export function comoProveedor(valor: unknown): AiProvider {
+  return AI_PROVIDERS.includes(valor as AiProvider) ? (valor as AiProvider) : AI_PROVIDER_POR_DEFECTO;
+}
 
 export const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   GEMINI: 'Gemini (Google)',
@@ -63,7 +81,7 @@ export async function fetchAiProvider(): Promise<AiProvider> {
     .eq('key', 'ai_provider')
     .maybeSingle();
   if (error) throw error;
-  return data?.value === 'ANTHROPIC' ? 'ANTHROPIC' : 'GEMINI';
+  return comoProveedor(data?.value);
 }
 
 export async function saveAiProvider(provider: AiProvider): Promise<void> {
