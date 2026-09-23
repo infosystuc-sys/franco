@@ -51,6 +51,9 @@ const TIPOS_FACTURA = [
   { codigo: 6, letra: 'B' },
 ] as const;
 
+/** Las notas de crédito. Cada tipo lleva su propio correlativo en ARCA. */
+const TIPOS_NOTA_CREDITO: Record<string, number> = { A: 3, B: 8, C: 13 };
+
 function escaparXml(valor: string): string {
   return valor.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -239,6 +242,126 @@ async function parametros() {
   };
 }
 
+interface PedidoDeCae {
+  auth: string;
+  cbteTipo: number;
+  ptoVta: number;
+  numero: number;
+  docTipo: number;
+  docNro: string;
+  fecha: string;
+  vencimientoPago: string;
+  neto: unknown;
+  iva: unknown;
+  total: unknown;
+  condicionIva: number;
+  /** El comprobante que esta nota de crédito revierte. */
+  asociado?: { tipo: number; ptoVta: number; numero: number; cuit: string; fecha: string };
+}
+
+interface RespuestaDeCae {
+  aprobada: boolean;
+  cae: string | null;
+  caeVence: string | null;
+  resultado: string;
+  errores: string[];
+  observaciones: string[];
+}
+
+/**
+ * FECAESolicitar, que es igual para los dos comprobantes que emitimos: lo
+ * único que cambia es el tipo, y que la nota de crédito arrastra el
+ * comprobante asociado. Una sola función para que no existan dos armados del
+ * mismo sobre que después se corrigen por separado.
+ */
+async function solicitarCae(p: PedidoDeCae): Promise<RespuestaDeCae> {
+  const asociado = p.asociado
+    ? `<ar:CbtesAsoc><ar:CbteAsoc>` +
+      `<ar:Tipo>${p.asociado.tipo}</ar:Tipo>` +
+      `<ar:PtoVta>${p.asociado.ptoVta}</ar:PtoVta>` +
+      `<ar:Nro>${p.asociado.numero}</ar:Nro>` +
+      `<ar:Cuit>${p.asociado.cuit}</ar:Cuit>` +
+      `<ar:CbteFch>${p.asociado.fecha}</ar:CbteFch>` +
+      `</ar:CbteAsoc></ar:CbtesAsoc>`
+    : '';
+
+  const detalle =
+    `<ar:Concepto>3</ar:Concepto>` +
+    `<ar:DocTipo>${p.docTipo}</ar:DocTipo>` +
+    `<ar:DocNro>${p.docNro}</ar:DocNro>` +
+    `<ar:CbteDesde>${p.numero}</ar:CbteDesde>` +
+    `<ar:CbteHasta>${p.numero}</ar:CbteHasta>` +
+    `<ar:CbteFch>${p.fecha}</ar:CbteFch>` +
+    `<ar:ImpTotal>${importe(p.total)}</ar:ImpTotal>` +
+    `<ar:ImpTotConc>0.00</ar:ImpTotConc>` +
+    `<ar:ImpNeto>${importe(p.neto)}</ar:ImpNeto>` +
+    `<ar:ImpOpEx>0.00</ar:ImpOpEx>` +
+    `<ar:ImpTrib>0.00</ar:ImpTrib>` +
+    `<ar:ImpIVA>${importe(p.iva)}</ar:ImpIVA>` +
+    // Concepto 3 es productos y servicios, que es lo que hace el taller, y
+    // obliga a declarar el período del servicio y el vencimiento del pago.
+    `<ar:FchServDesde>${p.fecha}</ar:FchServDesde>` +
+    `<ar:FchServHasta>${p.fecha}</ar:FchServHasta>` +
+    `<ar:FchVtoPago>${p.vencimientoPago}</ar:FchVtoPago>` +
+    `<ar:MonId>PES</ar:MonId>` +
+    `<ar:MonCotiz>1</ar:MonCotiz>` +
+    `<ar:CondicionIVAReceptorId>${p.condicionIva}</ar:CondicionIVAReceptorId>` +
+    asociado +
+    // Id 5 es la alícuota del 21%. Hoy el taller factura todo al 21%; el día
+    // que haya otra, acá van varios AlicIva y la base tiene que traerlos
+    // discriminados en vez de un único importe de IVA.
+    `<ar:Iva><ar:AlicIva>` +
+    `<ar:Id>5</ar:Id>` +
+    `<ar:BaseImp>${importe(p.neto)}</ar:BaseImp>` +
+    `<ar:Importe>${importe(p.iva)}</ar:Importe>` +
+    `</ar:AlicIva></ar:Iva>`;
+
+  const cuerpo =
+    `${p.auth}<ar:FeCAEReq>` +
+    `<ar:FeCabReq>` +
+    `<ar:CantReg>1</ar:CantReg>` +
+    `<ar:PtoVta>${p.ptoVta}</ar:PtoVta>` +
+    `<ar:CbteTipo>${p.cbteTipo}</ar:CbteTipo>` +
+    `</ar:FeCabReq>` +
+    `<ar:FeDetReq><ar:FECAEDetRequest>${detalle}</ar:FECAEDetRequest></ar:FeDetReq>` +
+    `</ar:FeCAEReq>`;
+
+  const { resultado, errores } = await llamarWsfe('FECAESolicitar', cuerpo);
+  const det = comoLista<Record<string, any>>(resultado?.FeDetResp?.FECAEDetResponse)[0];
+
+  return {
+    aprobada: String(resultado?.FeCabResp?.Resultado ?? '') === 'A' && !!det?.CAE,
+    cae: det?.CAE ? String(det.CAE) : null,
+    caeVence: det?.CAEFchVto ? deFechaArca(det.CAEFchVto) : null,
+    resultado: String(resultado?.FeCabResp?.Resultado ?? '?'),
+    errores,
+    observaciones: comoLista<{ Code?: string; Msg?: string }>(det?.Observaciones?.Obs)
+      .map((o) => `${o.Code ?? '?'}: ${o.Msg ?? 'sin detalle'}`),
+  };
+}
+
+/** El número que sigue en ARCA para ese punto de venta y tipo. */
+async function ultimoAutorizado(auth: string, ptoVta: number, cbteTipo: number): Promise<number> {
+  const r = await llamarWsfe(
+    'FECompUltimoAutorizado',
+    `${auth}<ar:PtoVta>${ptoVta}</ar:PtoVta><ar:CbteTipo>${cbteTipo}</ar:CbteTipo>`,
+  );
+  if (r.errores.length) {
+    throw new Error(`ARCA no informa el último número: ${r.errores.join('; ')}`);
+  }
+  return Number(r.resultado?.CbteNro ?? 0);
+}
+
+/** El certificado, el ticket y el bloque de autenticación, que todo pedido usa. */
+async function credencialYAuth() {
+  const cred = await credencialArca('FACTURACION');
+  if (!cred) throw new Error('Todavía no está cargado el certificado de facturación.');
+  const delCert = datosDelCertificado(cred.certPem);
+  const cuit = delCert.cuit ?? cred.cuit;
+  const ticket = await ticketDeArca(SERVICIO_WSFE, cred);
+  return { cuit, auth: bloqueAuth(ticket, cuit) };
+}
+
 async function emitir(invoiceId: string) {
   if (!invoiceId) throw new Error('Falta decir qué factura emitir.');
 
@@ -284,26 +407,13 @@ async function emitir(invoiceId: string) {
   const docTipo = cuitCliente.length === 11 ? 80 : 99;
   const docNro = cuitCliente.length === 11 ? cuitCliente : '0';
 
-  const cred = await credencialArca('FACTURACION');
-  if (!cred) throw new Error('Todavía no está cargado el certificado de facturación.');
-  const delCert = datosDelCertificado(cred.certPem);
-  const cuitEmisor = delCert.cuit ?? cred.cuit;
-
-  const ticket = await ticketDeArca(SERVICIO_WSFE, cred);
-  const auth = bloqueAuth(ticket, cuitEmisor);
+  const { auth } = await credencialYAuth();
 
   // El número lo reservó la base. Antes de pedir el CAE se confirma contra
   // ARCA que sea el que sigue: si los contadores se separaron, pedirlo igual
   // deja un hueco en la numeración y todas las facturas siguientes son
   // rechazadas. Mejor parar acá, que es reversible.
-  const ultimo = await llamarWsfe(
-    'FECompUltimoAutorizado',
-    `${auth}<ar:PtoVta>${f.sales_point}</ar:PtoVta><ar:CbteTipo>${cbteTipo}</ar:CbteTipo>`,
-  );
-  if (ultimo.errores.length) {
-    throw new Error(`ARCA no informa el último número: ${ultimo.errores.join('; ')}`);
-  }
-  const esperado = Number(ultimo.resultado?.CbteNro ?? 0) + 1;
+  const esperado = (await ultimoAutorizado(auth, Number(f.sales_point), cbteTipo)) + 1;
   if (esperado !== Number(f.number)) {
     throw new Error(
       `La numeración se desalineó: ARCA espera la ${esperado} en el punto de ` +
@@ -313,60 +423,29 @@ async function emitir(invoiceId: string) {
   }
 
   const fch = aFechaArca(f.issue_date);
-  const detalle =
-    `<ar:Concepto>3</ar:Concepto>` +
-    `<ar:DocTipo>${docTipo}</ar:DocTipo>` +
-    `<ar:DocNro>${docNro}</ar:DocNro>` +
-    `<ar:CbteDesde>${f.number}</ar:CbteDesde>` +
-    `<ar:CbteHasta>${f.number}</ar:CbteHasta>` +
-    `<ar:CbteFch>${fch}</ar:CbteFch>` +
-    `<ar:ImpTotal>${importe(f.total_amount)}</ar:ImpTotal>` +
-    `<ar:ImpTotConc>0.00</ar:ImpTotConc>` +
-    `<ar:ImpNeto>${importe(f.net_amount)}</ar:ImpNeto>` +
-    `<ar:ImpOpEx>0.00</ar:ImpOpEx>` +
-    `<ar:ImpTrib>0.00</ar:ImpTrib>` +
-    `<ar:ImpIVA>${importe(f.vat_amount)}</ar:ImpIVA>` +
-    // Concepto 3 es productos y servicios, que es lo que hace el taller, y
-    // obliga a declarar el período del servicio y el vencimiento del pago.
-    `<ar:FchServDesde>${fch}</ar:FchServDesde>` +
-    `<ar:FchServHasta>${fch}</ar:FchServHasta>` +
-    `<ar:FchVtoPago>${aFechaArca(f.due_date)}</ar:FchVtoPago>` +
-    `<ar:MonId>PES</ar:MonId>` +
-    `<ar:MonCotiz>1</ar:MonCotiz>` +
-    `<ar:CondicionIVAReceptorId>${condicionIva}</ar:CondicionIVAReceptorId>` +
-    // Id 5 es la alícuota del 21%. Hoy el taller factura todo al 21%; el día
-    // que haya otra, acá van varios AlicIva y la base tiene que traerlos
-    // discriminados en vez de un único vat_amount.
-    `<ar:Iva><ar:AlicIva>` +
-    `<ar:Id>5</ar:Id>` +
-    `<ar:BaseImp>${importe(f.net_amount)}</ar:BaseImp>` +
-    `<ar:Importe>${importe(f.vat_amount)}</ar:Importe>` +
-    `</ar:AlicIva></ar:Iva>`;
+  const r = await solicitarCae({
+    auth,
+    cbteTipo,
+    ptoVta: Number(f.sales_point),
+    numero: Number(f.number),
+    docTipo,
+    docNro,
+    fecha: fch,
+    vencimientoPago: aFechaArca(f.due_date),
+    neto: f.net_amount,
+    iva: f.vat_amount,
+    total: f.total_amount,
+    condicionIva,
+  });
 
-  const cuerpo =
-    `${auth}<ar:FeCAEReq>` +
-    `<ar:FeCabReq>` +
-    `<ar:CantReg>1</ar:CantReg>` +
-    `<ar:PtoVta>${f.sales_point}</ar:PtoVta>` +
-    `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
-    `</ar:FeCabReq>` +
-    `<ar:FeDetReq><ar:FECAEDetRequest>${detalle}</ar:FECAEDetRequest></ar:FeDetReq>` +
-    `</ar:FeCAEReq>`;
-
-  const { resultado, errores } = await llamarWsfe('FECAESolicitar', cuerpo);
-  const det = comoLista<Record<string, any>>(resultado?.FeDetResp?.FECAEDetResponse)[0];
-  const observaciones = comoLista<{ Code?: string; Msg?: string }>(det?.Observaciones?.Obs)
-    .map((o) => `${o.Code ?? '?'}: ${o.Msg ?? 'sin detalle'}`);
-  const aprobada = String(resultado?.FeCabResp?.Resultado ?? '') === 'A';
-
-  if (!aprobada || !det?.CAE) {
+  if (!r.aprobada || !r.cae) {
     // Rechazada: la factura sigue en PENDIENTE_CAE con su número intacto, así
     // que se puede corregir el dato que ARCA objetó y reintentar sin pedir
     // otro número.
-    const motivos = [...errores, ...observaciones];
+    const motivos = [...r.errores, ...r.observaciones];
     const motivo = motivos.length
       ? motivos.join(' · ')
-      : `ARCA respondió "${String(resultado?.FeCabResp?.Resultado ?? '?')}" sin detallar por qué.`;
+      : `ARCA respondió "${r.resultado}" sin detallar por qué.`;
 
     // El motivo se guarda, no solo se devuelve: es lo que hay que corregir, y
     // quien cierra la pantalla y vuelve más tarde necesita seguir viéndolo.
@@ -375,14 +454,15 @@ async function emitir(invoiceId: string) {
     return {
       autorizada: false,
       factura: f.full_number,
-      resultado: String(resultado?.FeCabResp?.Resultado ?? '?'),
-      errores,
-      observaciones,
+      resultado: r.resultado,
+      errores: r.errores,
+      observaciones: r.observaciones,
     };
   }
 
-  const cae = String(det.CAE);
-  const caeVence = deFechaArca(det.CAEFchVto);
+  const cae = r.cae;
+  const caeVence = r.caeVence!;
+  const observaciones = r.observaciones;
 
   const { error: errConfirmar } = await db.rpc('confirmar_cae', {
     p_invoice_id: f.id,
@@ -408,6 +488,116 @@ async function emitir(invoiceId: string) {
     cae,
     caeVence,
     observaciones,
+  };
+}
+
+async function emitirNotaCredito(creditNoteId: string) {
+  if (!creditNoteId) throw new Error('Falta decir qué nota de crédito emitir.');
+
+  const { data: nc, error } = await db
+    .from('credit_notes')
+    .select('id, invoice_id, invoice_type, sales_point, number, full_number, status, customer_tax_id, customer_tax_condition, issue_date, net_amount, vat_amount, total_amount, invoice:invoices(sales_point, number, invoice_type, issue_date, cae)')
+    .eq('id', creditNoteId)
+    .maybeSingle();
+
+  if (error) throw new Error(`No se pudo leer la nota de crédito: ${error.message}`);
+  if (!nc) throw new Error('La nota de crédito no existe.');
+  if (nc.status !== 'PENDIENTE_CAE') {
+    throw new Error(`La nota de crédito ${nc.full_number} no está esperando un CAE: está ${nc.status}.`);
+  }
+
+  const factura = nc.invoice as any;
+  if (!factura?.cae) {
+    throw new Error('La factura de referencia todavía no tiene CAE: ARCA no la conoce.');
+  }
+
+  const cbteTipo = TIPOS_NOTA_CREDITO[String(nc.invoice_type)];
+  if (!cbteTipo) throw new Error(`No hay nota de crédito para la serie ${nc.invoice_type}.`);
+
+  const condicionIva = CONDICION_IVA_RECEPTOR[String(nc.customer_tax_condition)];
+  if (!condicionIva) {
+    throw new Error(`No sé qué condición frente al IVA declararle a ARCA para "${nc.customer_tax_condition}".`);
+  }
+
+  const cuitCliente = String(nc.customer_tax_id ?? '').replace(/\D/g, '');
+  if (nc.invoice_type === 'A' && cuitCliente.length !== 11) {
+    throw new Error('Una nota de crédito A necesita el CUIT del cliente.');
+  }
+
+  const { cuit: cuitEmisor, auth } = await credencialYAuth();
+
+  const esperado = (await ultimoAutorizado(auth, Number(nc.sales_point), cbteTipo)) + 1;
+  if (esperado !== Number(nc.number)) {
+    throw new Error(
+      `La numeración se desalineó: ARCA espera la ${esperado} en el punto de venta ` +
+        `${nc.sales_point} y esta nota de crédito tomó la ${nc.number}. No se pidió ningún CAE.`,
+    );
+  }
+
+  const fch = aFechaArca(nc.issue_date);
+  const r = await solicitarCae({
+    auth,
+    cbteTipo,
+    ptoVta: Number(nc.sales_point),
+    numero: Number(nc.number),
+    docTipo: cuitCliente.length === 11 ? 80 : 99,
+    docNro: cuitCliente.length === 11 ? cuitCliente : '0',
+    fecha: fch,
+    // Una nota de crédito no se cobra: el vencimiento de pago es su misma
+    // fecha. ARCA lo pide igual porque el concepto 3 lo exige siempre.
+    vencimientoPago: fch,
+    neto: nc.net_amount,
+    iva: nc.vat_amount,
+    total: nc.total_amount,
+    condicionIva,
+    // Lo que la vincula fiscalmente con la factura que revierte. Sin esto ARCA
+    // la toma como un comprobante suelto y no revierte nada.
+    asociado: {
+      tipo: TIPOS_FACTURA.find((t) => t.letra === factura.invoice_type)?.codigo ?? 0,
+      ptoVta: Number(factura.sales_point),
+      numero: Number(factura.number),
+      cuit: cuitEmisor,
+      fecha: aFechaArca(factura.issue_date),
+    },
+  });
+
+  if (!r.aprobada || !r.cae) {
+    const motivos = [...r.errores, ...r.observaciones];
+    const motivo = motivos.length
+      ? motivos.join(' · ')
+      : `ARCA respondió "${r.resultado}" sin detallar por qué.`;
+
+    await db.rpc('registrar_rechazo_cae_nc', { p_credit_note_id: nc.id, p_motivo: motivo });
+
+    return {
+      autorizada: false,
+      factura: nc.full_number,
+      resultado: r.resultado,
+      errores: r.errores,
+      observaciones: r.observaciones,
+    };
+  }
+
+  const { error: errConfirmar } = await db.rpc('confirmar_cae_nc', {
+    p_credit_note_id: nc.id,
+    p_cae: r.cae,
+    p_cae_due_date: r.caeVence,
+  });
+
+  if (errConfirmar) {
+    throw new Error(
+      `ARCA autorizó la nota de crédito ${nc.full_number} con el CAE ${r.cae} (vence ` +
+        `${r.caeVence}) pero no se pudo guardar: ${errConfirmar.message}. ` +
+        'Sigue pendiente y NO hay que volver a pedir el CAE.',
+    );
+  }
+
+  return {
+    autorizada: true,
+    factura: nc.full_number,
+    cae: r.cae,
+    caeVence: r.caeVence,
+    observaciones: r.observaciones,
   };
 }
 
@@ -439,6 +629,8 @@ Deno.serve(async (req) => {
         return json(await parametros());
       case 'emitir':
         return json(await emitir(String(pedido.invoice_id ?? '')));
+      case 'emitir-nota-credito':
+        return json(await emitirNotaCredito(String(pedido.credit_note_id ?? '')));
       default:
         return json({ error: `Acción desconocida: ${accion || '(vacía)'}.` }, 400);
     }

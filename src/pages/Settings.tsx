@@ -940,6 +940,7 @@ function facturaDeMuestra(taller: CompanySettings): InvoiceDetail {
     caeSimulated: false,
     caeRechazo: null,
     caeRechazadoAt: null,
+    creditedAmount: 0,
     items: [
       { code: '000001', description: 'Reparación de bomba inyectora', quantity: 1, unitPrice: 100, subtotal: 100 },
     ],

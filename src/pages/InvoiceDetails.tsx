@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle, Stamp } from 'lucide-react';
+import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle, Stamp, FileMinus } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -89,6 +89,8 @@ export function InvoiceDetails() {
   // Todavía no es un comprobante: ARCA no le dio el CAE. No se imprime ni se
   // manda. Anularla sí se puede, que es la salida si ARCA nunca la autorizó.
   const pendiente = invoice.status === 'PENDIENTE_CAE';
+  // Con CAE real ARCA la conoce, y eso cambia cómo se deshace.
+  const esFiscal = !!invoice.cae && !invoice.caeSimulated;
   const overdue = isOverdue(invoice);
   const balance = balanceOf(invoice);
   const days = daysUntilDue(invoice.dueDate);
@@ -229,7 +231,19 @@ export function InvoiceDetails() {
                   </Button>
                 </>
               )}
-              {!voided && (
+              {/* Una factura que ARCA autorizó no se anula cambiándole un
+                  estado acá adentro: existe en el Libro IVA Ventas y lo único
+                  que la revierte es una nota de crédito. La base también lo
+                  rechaza, así que el botón lleva a donde corresponde en vez de
+                  ofrecer algo que va a fallar. */}
+              {!voided && esFiscal && (
+                <Link to={`/notas-credito/nueva?factura=${invoice.id}`}>
+                  <Button variant="danger" type="button">
+                    <FileMinus size={16} /> Emitir nota de crédito
+                  </Button>
+                </Link>
+              )}
+              {!voided && !esFiscal && (
                 <Button variant="danger" type="button" onClick={handleVoid} disabled={voiding}>
                   <Ban size={16} /> {voiding ? 'Anulando…' : 'Anular'}
                 </Button>

@@ -10,6 +10,9 @@ import { Dashboard } from './pages/Dashboard';
 import { WorkOrders } from './pages/WorkOrders';
 import { Users } from './pages/Users';
 import { ExpenseConcepts } from './pages/ExpenseConcepts';
+import { CreditNotes } from '@/src/pages/CreditNotes';
+import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
+import { CreditNoteDetails } from '@/src/pages/CreditNoteDetails';
 import { InvoiceDetails } from './pages/InvoiceDetails';
 import { InvoiceNew } from './pages/InvoiceNew';
 import { Invoices } from './pages/Invoices';
@@ -104,6 +107,9 @@ export default function App() {
                     <Route path="/facturas/nueva" element={<InvoiceNewFree />} />
                     <Route path="/facturar/:otNumber" element={<InvoiceNew />} />
                     <Route path="/factura/:id" element={<InvoiceDetails />} />
+                    <Route path="/notas-credito" element={<CreditNotes />} />
+                    <Route path="/notas-credito/nueva" element={<CreditNoteNew />} />
+                    <Route path="/nota-credito/:id" element={<CreditNoteDetails />} />
                     <Route path="/compras" element={<Purchases />} />
                     <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />

@@ -148,17 +148,25 @@ const COD_COMPROBANTE: Partial<Record<InvoiceType, number>> = { A: 1, B: 6, C: 1
  * Devuelve null cuando el comprobante no lleva QR: la serie interna X, que no
  * es fiscal, y cualquiera que todavía no tenga CAE.
  */
-export function afipQrUrl(invoice: {
-  invoiceType: InvoiceType;
-  salesPoint: number;
-  number: number;
-  issueDate: string;
-  totalAmount: number;
-  issuerTaxId: string | null;
-  customerTaxId: string | null;
-  cae: string | null;
-}): string | null {
-  const tipoCmp = COD_COMPROBANTE[invoice.invoiceType];
+export function afipQrUrl(
+  invoice: {
+    invoiceType: InvoiceType;
+    salesPoint: number;
+    number: number;
+    issueDate: string;
+    totalAmount: number;
+    issuerTaxId: string | null;
+    customerTaxId: string | null;
+    cae: string | null;
+  },
+  /**
+   * El código de comprobante de ARCA, para lo que no es una factura. La nota
+   * de crédito comparte letra con la factura que revierte pero es otro tipo:
+   * la A es la 3 y no la 1.
+   */
+  codigoComprobante?: number
+): string | null {
+  const tipoCmp = codigoComprobante ?? COD_COMPROBANTE[invoice.invoiceType];
   const cuitEmisor = (invoice.issuerTaxId ?? '').replace(/\D/g, '');
   if (!tipoCmp || !invoice.cae || cuitEmisor.length !== 11) return null;
 
@@ -214,6 +222,8 @@ interface Collectable {
   paidAmount: number;
   dueDate: string;
   status: InvoiceStatus;
+  /** Opcional: las pantallas de cobranza arman su propia fila sin este dato. */
+  creditedAmount?: number;
 }
 
 export function paymentStateOf(invoice: Collectable): PaymentState {
@@ -229,7 +239,9 @@ export function paymentStateOf(invoice: Collectable): PaymentState {
  */
 export function balanceOf(invoice: Collectable): number {
   if (invoice.status === 'ANULADA' || invoice.status === 'PENDIENTE_CAE') return 0;
-  return round2(Math.max(0, invoice.totalAmount - invoice.paidAmount));
+  return round2(
+    Math.max(0, invoice.totalAmount - invoice.paidAmount - (invoice.creditedAmount ?? 0))
+  );
 }
 
 /**
@@ -266,6 +278,8 @@ export interface InvoiceListRow {
   paidAmount: number;
   /** Por qué ARCA rechazó el último pedido de CAE. Null si nunca rechazó. */
   caeRechazo: string | null;
+  /** Cuánto revirtieron notas de crédito ya emitidas. */
+  creditedAmount: number;
 }
 
 export interface InvoiceItem {
@@ -317,7 +331,7 @@ export interface InvoiceDetail extends InvoiceListRow {
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_name, issue_date, due_date, ' +
-  'total_amount, paid_amount, cae_rechazo, work_order:work_orders(number)';
+  'total_amount, paid_amount, credited_amount, cae_rechazo, work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
   return {
@@ -332,6 +346,7 @@ function mapListRow(row: any): InvoiceListRow {
     totalAmount: Number(row.total_amount),
     paidAmount: Number(row.paid_amount),
     caeRechazo: row.cae_rechazo ?? null,
+    creditedAmount: Number(row.credited_amount ?? 0),
   };
 }
 
@@ -356,7 +371,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
        net_amount, vat_amount, total_amount, paid_amount,
-       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at,
+       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, credited_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
@@ -403,6 +418,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     caeSimulated: row.cae_simulated ?? false,
     caeRechazo: row.cae_rechazo ?? null,
     caeRechazadoAt: row.cae_rechazado_at ?? null,
+    creditedAmount: Number(row.credited_amount ?? 0),
 
     items: ((row.items ?? []) as any[])
       .sort((a, b) => a.line_number - b.line_number)

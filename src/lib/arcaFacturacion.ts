@@ -80,6 +80,21 @@ export async function emitirEnArca(invoiceId: string): Promise<ResultadoEmision>
   return data as ResultadoEmision;
 }
 
+/**
+ * El CAE de una nota de crédito. Va por la misma función y devuelve lo mismo
+ * que la factura: la diferencia está del lado de ARCA, que recibe el
+ * comprobante asociado.
+ */
+export async function emitirNcEnArca(creditNoteId: string): Promise<ResultadoEmision> {
+  const { data, error } = await supabase.functions.invoke('facturacion-arca', {
+    body: { accion: 'emitir-nota-credito', credit_note_id: creditNoteId },
+  });
+
+  if (error) throw new Error(await mensajeDeError(error));
+  if (data?.error) throw new Error(String(data.error));
+  return data as ResultadoEmision;
+}
+
 /** Los reparos de ARCA en un texto, para avisarlos en el momento. */
 export function motivoDelRechazo(r: ResultadoEmision): string {
   const motivos = [...(r.errores ?? []), ...(r.observaciones ?? [])];
@@ -98,27 +113,34 @@ export function motivoDelRechazo(r: ResultadoEmision): string {
  *
  * Vive acá y no en cada pantalla para que las dos digan exactamente lo mismo.
  */
-export async function pedirCaeAlEmitir(invoiceId: string, fullNumber: string): Promise<boolean> {
+export async function pedirCaeAlEmitir(
+  id: string,
+  fullNumber: string,
+  /** Qué se está emitiendo. Cambia solo cómo se lo nombra en el aviso. */
+  clase: 'factura' | 'nota de crédito' = 'factura'
+): Promise<boolean> {
+  const emisor = clase === 'factura' ? emitirEnArca : emitirNcEnArca;
+  const donde = clase === 'factura' ? 'Facturación' : 'Notas de crédito';
   let resultado: ResultadoEmision;
 
   try {
-    resultado = await emitirEnArca(invoiceId);
+    resultado = await emisor(id);
   } catch (err) {
     window.alert(
-      `La factura ${fullNumber} tomó su número, pero no se pudo hablar con ARCA:\n\n` +
+      `La ${clase} ${fullNumber} tomó su número, pero no se pudo hablar con ARCA:\n\n` +
         `${err instanceof Error ? err.message : String(err)}\n\n` +
-        'Quedó esperando el CAE con ese mismo número. Volvé a pedirlo desde ' +
-        'Facturación cuando se resuelva; no hace falta rehacer la factura.'
+        `Quedó esperando el CAE con ese mismo número. Volvé a pedirlo desde ${donde} ` +
+        `cuando se resuelva; no hace falta rehacerla.`
     );
     return false;
   }
 
   if (!resultado.autorizada) {
     window.alert(
-      `La factura ${fullNumber} tomó su número, pero ARCA no la autorizó:\n\n` +
+      `La ${clase} ${fullNumber} tomó su número, pero ARCA no la autorizó:\n\n` +
         `${motivoDelRechazo(resultado)}\n\n` +
-        'Quedó esperando el CAE con ese mismo número. Corregí lo que ARCA objeta y ' +
-        'volvé a pedirlo desde Facturación.'
+        `Quedó esperando el CAE con ese mismo número. Corregí lo que ARCA objeta y ` +
+        `volvé a pedirlo desde ${donde}.`
     );
     return false;
   }
