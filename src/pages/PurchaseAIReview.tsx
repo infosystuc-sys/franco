@@ -1,7 +1,7 @@
 // src/pages/PurchaseAIReview.tsx
 import React from 'react';
 import { AI_PROVIDER_LABELS } from '@/src/lib/aiCredentials';
-import { Plus, Save, XCircle, AlertTriangle, CheckCircle2, Package, Trash2 } from 'lucide-react';
+import { Plus, Save, XCircle, AlertTriangle, CheckCircle2, Package, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -253,6 +253,9 @@ export function PurchaseAIReview() {
   const [rates, setRates] = React.useState<TaxRate[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  // El original al costado mientras se revisa. Se puede esconder para que los
+  // renglones tengan la pantalla entera, que en una factura larga hace falta.
+  const [verOriginal, setVerOriginal] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [showPicker, setShowPicker] = React.useState(false);
   const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
@@ -842,6 +845,12 @@ export function PurchaseAIReview() {
         }
         actions={
           <>
+            {attachmentUrl && (
+              <Button variant="ghost" type="button" onClick={() => setVerOriginal((v) => !v)}>
+                {verOriginal ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}{' '}
+                {verOriginal ? 'Ocultar original' : 'Ver original'}
+              </Button>
+            )}
             <Button variant="ghost" type="button" onClick={handleDiscard}><XCircle size={16} /> Descartar</Button>
             <Button onClick={handleSave} disabled={!canSave}>
               <Save size={16} /> {saving ? 'Guardando…' : 'Confirmar y guardar'}
@@ -852,16 +861,30 @@ export function PurchaseAIReview() {
 
       {error && <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>}
 
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Panel className="p-2">
-          {attachmentUrl && draft.attachmentMimeType === 'application/pdf' ? (
-            <embed src={attachmentUrl} type="application/pdf" className="h-[70vh] w-full" />
-          ) : attachmentUrl ? (
-            <img src={attachmentUrl} alt="Factura original" className="max-h-[70vh] w-full object-contain" />
-          ) : null}
-        </Panel>
+      {/* El original a la izquierda y la revisión a la derecha, cada uno con su
+          propio scroll: cotejar es ir y venir entre los dos, y con una sola
+          barra de scroll para todo se pierde de vista el renglón que se está
+          mirando cada vez que se busca el dato en el papel. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {verOriginal && attachmentUrl && (
+          <Panel className="p-2 lg:sticky lg:w-1/2 lg:shrink-0" style={{ top: 'calc(4rem + var(--safe-top))' }}>
+            {draft.attachmentMimeType === 'application/pdf' ? (
+              <embed
+                src={attachmentUrl}
+                type="application/pdf"
+                className="h-[60vh] w-full lg:h-[calc(100vh-9rem)]"
+              />
+            ) : (
+              <img
+                src={attachmentUrl}
+                alt="Factura original"
+                className="max-h-[60vh] w-full object-contain lg:max-h-[calc(100vh-9rem)]"
+              />
+            )}
+          </Panel>
+        )}
 
-        <div>
+        <div className="min-w-0 flex-1">
           <Panel className="mb-4 p-5">
             <SectionHeader title="Encabezado" />
             <div className="grid grid-cols-1 gap-3">
@@ -988,8 +1011,6 @@ export function PurchaseAIReview() {
               )}
             </div>
           </Panel>
-        </div>
-      </div>
 
       <Panel className="mb-6 p-5">
         <SectionHeader
@@ -1227,6 +1248,8 @@ export function PurchaseAIReview() {
           className="w-full resize-y rounded-md border border-line bg-panel px-3 py-2 text-sm focus:border-accent-deep focus:outline-none"
         />
       </Panel>
+        </div>
+      </div>
 
       {showPicker && (
         <PurchaseArticlePicker
