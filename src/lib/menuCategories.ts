@@ -21,6 +21,7 @@ import {
   Settings,
   CalendarClock,
   ArrowRightLeft,
+  Link2,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -99,6 +100,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
           { icon: FileMinus, label: 'Notas de crédito', path: '/notas-credito', newPath: '/notas-credito/nueva', adminOnly: true },
+          { icon: Link2, label: 'Imputación de comprobantes', path: '/imputaciones', adminOnly: true },
           { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
         ],
       },

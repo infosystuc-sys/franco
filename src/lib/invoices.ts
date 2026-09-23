@@ -222,6 +222,8 @@ interface Collectable {
   paidAmount: number;
   dueDate: string;
   status: InvoiceStatus;
+  /** Opcional: cobranzas arma su propia fila y ahí ya viene descontado. */
+  creditedAmount?: number;
 }
 
 export function paymentStateOf(invoice: Collectable): PaymentState {
@@ -235,12 +237,15 @@ export function paymentStateOf(invoice: Collectable): PaymentState {
  * comprobante, y cobranzas tampoco la ofrece. Contarla mostraría un saldo que
  * nadie puede explicar ni cancelar.
  *
- * Una nota de crédito NO baja esto: queda a cuenta del cliente y se aplica
- * en la cobranza, contra esta factura o contra otra.
+ * Lo acreditado sí baja el saldo, pero solo lo que una nota de crédito
+ * IMPUTADA canceló. Una nota emitida y sin imputar no toca esta cuenta: queda
+ * a cuenta del cliente hasta que alguien decida contra qué va.
  */
 export function balanceOf(invoice: Collectable): number {
   if (invoice.status === 'ANULADA' || invoice.status === 'PENDIENTE_CAE') return 0;
-  return round2(Math.max(0, invoice.totalAmount - invoice.paidAmount));
+  return round2(
+    Math.max(0, invoice.totalAmount - invoice.paidAmount - (invoice.creditedAmount ?? 0))
+  );
 }
 
 /**
@@ -277,6 +282,11 @@ export interface InvoiceListRow {
   paidAmount: number;
   /** Por qué ARCA rechazó el último pedido de CAE. Null si nunca rechazó. */
   caeRechazo: string | null;
+  /**
+   * Cuánto cancelaron notas de crédito IMPUTADAS a esta factura. Una nota
+   * emitida y sin imputar no lo toca: queda a cuenta del cliente.
+   */
+  creditedAmount: number;
 }
 
 export interface InvoiceItem {
@@ -333,7 +343,7 @@ export interface InvoiceDetail extends InvoiceListRow {
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_name, issue_date, due_date, ' +
-  'total_amount, paid_amount, cae_rechazo, work_order:work_orders(number)';
+  'total_amount, paid_amount, credited_amount, cae_rechazo, work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
   return {
@@ -348,6 +358,7 @@ function mapListRow(row: any): InvoiceListRow {
     totalAmount: Number(row.total_amount),
     paidAmount: Number(row.paid_amount),
     caeRechazo: row.cae_rechazo ?? null,
+    creditedAmount: Number(row.credited_amount ?? 0),
   };
 }
 
@@ -372,7 +383,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
        net_amount, vat_amount, total_amount, paid_amount,
-       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc,
+       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc, credited_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
@@ -420,6 +431,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     caeRechazo: row.cae_rechazo ?? null,
     caeRechazadoAt: row.cae_rechazado_at ?? null,
     revertidaPorNc: row.revertida_por_nc ?? false,
+    creditedAmount: Number(row.credited_amount ?? 0),
 
     items: ((row.items ?? []) as any[])
       .sort((a, b) => a.line_number - b.line_number)
