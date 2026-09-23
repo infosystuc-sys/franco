@@ -168,6 +168,33 @@ export async function emitirNotaCredito(
   };
 }
 
+export interface CobroReversible {
+  receiptId: string;
+  fullNumber: string;
+  totalAmount: number;
+}
+
+/**
+ * Los recibos que una nota de crédito total va a dar de baja, devolviendo la
+ * plata a donde entró.
+ *
+ * Se consulta antes de emitir y no después: quien emite tiene que saber que
+ * además de revertir el comprobante va a salir plata de la caja. Solo devuelve
+ * los recibos que cobran esta factura y ninguna otra; los compartidos los
+ * resuelve una persona.
+ */
+export async function fetchCobrosReversibles(invoiceId: string): Promise<CobroReversible[]> {
+  const { data, error } = await supabase.rpc('cobros_reversibles_de_factura', {
+    p_invoice_id: invoiceId,
+  });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    receiptId: row.receipt_id,
+    fullNumber: row.full_number,
+    totalAmount: Number(row.total_amount),
+  }));
+}
+
 /** Los mensajes de la base, dichos como los diría alguien del taller. */
 export function describeCreditNoteError(message: string): string {
   if (message.includes('admite hasta')) return message;

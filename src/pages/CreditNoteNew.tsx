@@ -17,7 +17,12 @@ import {
   type InvoiceDetail,
   type InvoiceListRow,
 } from '@/src/lib/invoices';
-import { describeCreditNoteError, emitirNotaCredito } from '@/src/lib/creditNotes';
+import {
+  describeCreditNoteError,
+  emitirNotaCredito,
+  fetchCobrosReversibles,
+  type CobroReversible,
+} from '@/src/lib/creditNotes';
 import { pedirCaeAlEmitir } from '@/src/lib/arcaFacturacion';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { FieldBox, selectCabecera } from '@/src/pages/InvoiceNew';
@@ -54,6 +59,8 @@ export function CreditNoteNew() {
   const [cancelaTotal, setCancelaTotal] = React.useState<boolean | null>(null);
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [motivo, setMotivo] = React.useState('');
+  // Los recibos que se van a dar de baja si cancela la factura entera.
+  const [cobros, setCobros] = React.useState<CobroReversible[]>([]);
   const [emitiendo, setEmitiendo] = React.useState(false);
 
   React.useEffect(() => {
@@ -87,6 +94,7 @@ export function CreditNoteNew() {
     setFactura(f);
     setCancelaTotal(null);
     setItems([]);
+    fetchCobrosReversibles(f.id).then(setCobros).catch(() => setCobros([]));
   }
 
   /** Los renglones de la factura, tal cual, como punto de partida. */
@@ -131,6 +139,11 @@ export function CreditNoteNew() {
         (cancelaTotal
           ? 'Cancela la factura entera: el cliente deja de deber ese comprobante.\n\n'
           : 'Es una nota de crédito parcial: baja el saldo de la factura en ese importe.\n\n') +
+        (cancelaTotal && cobros.length
+          ? `Además se va a dar de baja el cobro ${cobros.map((c) => c.fullNumber).join(', ')} ` +
+            `por $ ${formatMoney(cobros.reduce((s, c) => s + c.totalAmount, 0))}: esa plata ` +
+            'sale de donde entró.\n\n'
+          : '') +
         'Se le va a pedir el CAE a ARCA en este mismo paso. Una vez autorizada, la ' +
         'nota de crédito es un comprobante fiscal y no se puede deshacer.'
     );
@@ -289,6 +302,19 @@ export function CreditNoteNew() {
                 No, es parcial
               </Button>
             </div>
+
+            {cancelaTotal === true && cobros.length > 0 && (
+              <p className="mt-3 flex items-start gap-2 rounded-md border border-line-strong bg-panel-alt px-3 py-2 text-xs text-text">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  Esta factura se cobró de contado con el recibo{' '}
+                  {cobros.map((c) => c.fullNumber).join(', ')} por ${' '}
+                  {formatMoney(cobros.reduce((s, c) => s + c.totalAmount, 0))}. Al
+                  autorizarse la nota de crédito ese cobro se da de baja y la plata
+                  sale de donde entró: caja, banco o cartera de cheques.
+                </span>
+              </p>
+            )}
 
             {cancelaTotal === false && disponible > 0 && (
               <p className="mt-3 flex items-start gap-2 text-xs text-text-soft">
