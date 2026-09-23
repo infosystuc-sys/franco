@@ -1,9 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
-// 2.23: la 2.4 no conoce thinkingLevel, que es lo que apaga el "pensamiento"
-// en los modelos 3.5 y es de donde salía casi toda la demora de la lectura.
-import { GoogleGenAI, ThinkingLevel } from 'npm:@google/genai@2.23.0';
+// Ya no se importa el SDK de Gemini: la lectura va por REST. El porqué está
+// en leerConGemini.
 
 /*
   Lee una factura de compra (PDF o foto) y arma un borrador en
@@ -299,28 +298,56 @@ interface PedidoDeLectura {
   ownTaxId: string | null;
 }
 
+const GEMINI_MODELO = 'gemini-3.5-flash';
+
+/**
+ * Va por REST y no por el SDK, y el motivo es uno solo: thinkingLevel.
+ *
+ * Leer una factura es transcribir lo que está impreso, no razonar. Medido
+ * contra el PDF real, el mismo pedido tarda 27,7 segundos pensando y 2,0 sin
+ * pensar —859 tokens de pensamiento contra 0—, con idéntica salida. Es de
+ * lejos lo que más pesaba en la espera.
+ *
+ * El SDK no deja apagarlo: con una clave de la API de desarrollador tira
+ * "thinkingLevel parameter is only supported in Gemini Enterprise Agent
+ * Platform mode". La API REST sí lo acepta. Y thinkingBudget, que el SDK sí
+ * mandaría, no sirve: desde los modelos 3.5 da error.
+ *
+ * Entre perder el SDK en esta llamada y perder 25 segundos por lectura, se
+ * pierde el SDK. Lo que aporta acá es armar un JSON.
+ */
 async function leerConGemini({ apiKey, mimeType, base64, kind, ownTaxId }: PedidoDeLectura): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey });
-  const respuesta = await ai.models.generateContent({
-    model: 'gemini-3.5-flash',
-    contents: [
-      { text: 'Extraé los datos de este comprobante según el schema.' },
-      { inlineData: { mimeType, data: base64 } },
-    ],
-    config: {
-      systemInstruction: promptFor(kind, ownTaxId),
-      responseMimeType: 'application/json',
-      responseSchema: aEsquemaGemini(esquemaFor(kind)),
-      // Leer una factura es transcribir lo que está impreso, no razonar: el
-      // "pensamiento" del modelo no mejora el resultado y era de donde salía
-      // el grueso de los 25 a 44 segundos que tardaba cada lectura.
-      //
-      // Va thinkingLevel y no thinkingBudget: desde los modelos 3.5 el budget
-      // no se acepta más y mandarlo da error.
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-    },
-  });
-  return respuesta.text ?? '';
+  const respuesta = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELO}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: promptFor(kind, ownTaxId) }] },
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Extraé los datos de este comprobante según el schema.' },
+            { inlineData: { mimeType, data: base64 } },
+          ],
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: aEsquemaGemini(esquemaFor(kind)),
+          thinkingConfig: { thinkingLevel: 'MINIMAL' },
+        },
+      }),
+    }
+  );
+
+  if (!respuesta.ok) {
+    // El código va en el mensaje para que esFallaPasajera lo reconozca, igual
+    // que en el lector de Anthropic.
+    throw new Error(`${respuesta.status} ${await respuesta.text()}`);
+  }
+
+  const cuerpo = await respuesta.json();
+  return cuerpo?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
 /**
