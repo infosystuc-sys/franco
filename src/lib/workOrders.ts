@@ -394,7 +394,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        employee:employees!work_orders_employee_id_fkey(name),
        quotation:quotations!work_orders_quotation_id_fkey(items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
-       invoice:invoices!invoices_work_order_id_fkey(full_number, status)`
+       invoice:invoices!invoices_work_order_id_fkey(full_number, status, revertida_por_nc)`
     )
     .order('created_at', { ascending: false });
 
@@ -415,7 +415,9 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
     // Según la forma de la relación, PostgREST devuelve arreglo u objeto. Se
     // normaliza acá para no depender de cuál eligió.
     const facturas = Array.isArray(row.invoice) ? row.invoice : row.invoice ? [row.invoice] : [];
-    const emitida = facturas.find((f: any) => f.status === 'EMITIDA');
+    // La revertida por una nota de crédito total no cuenta: la orden volvió a
+    // quedar sin facturar, y mostrar su número haría creer lo contrario.
+    const emitida = facturas.find((f: any) => f.status === 'EMITIDA' && !f.revertida_por_nc);
 
     return {
       ...mapWorkOrderListRow(row),

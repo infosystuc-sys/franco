@@ -236,7 +236,7 @@ export function InvoiceDetails() {
                   que la revierte es una nota de crédito. La base también lo
                   rechaza, así que el botón lleva a donde corresponde en vez de
                   ofrecer algo que va a fallar. */}
-              {!voided && esFiscal && (
+              {!voided && esFiscal && !invoice.revertidaPorNc && (
                 <Link to={`/notas-credito/nueva?factura=${invoice.id}`}>
                   <Button variant="danger" type="button">
                     <FileMinus size={16} /> Emitir nota de crédito
@@ -280,6 +280,26 @@ export function InvoiceDetails() {
               El número {invoice.fullNumber} quedó reservado y ARCA todavía no le
               dio el CAE. Hasta que lo dé no es un comprobante válido: no se
               imprime ni se manda al cliente.
+            </span>
+          </div>
+        )}
+
+        {invoice.revertidaPorNc && (
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
+            <FileMinus size={16} className="mt-0.5 shrink-0 text-text-soft" />
+            <span>
+              Una nota de crédito la canceló entera. La factura sigue siendo válida
+              ante ARCA —tiene CAE y va en el Libro IVA Ventas— pero ya no respalda
+              nada
+              {invoice.workOrderNumber && (
+                <>
+                  , y la orden {invoice.workOrderNumber} volvió a quedar sin facturar
+                </>
+              )}
+              .{' '}
+              <Link to="/notas-credito" className="text-accent-deep underline">
+                Ver las notas de crédito
+              </Link>
             </span>
           </div>
         )}

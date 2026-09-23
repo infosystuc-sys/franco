@@ -322,6 +322,11 @@ export interface InvoiceDetail extends InvoiceListRow {
   caeDueDate: string | null;
   caeSimulated: boolean;
   caeRechazadoAt: string | null;
+  /**
+   * Una nota de crédito la canceló entera. Sigue siendo válida ante ARCA, pero
+   * ya no respalda su orden, que vuelve a quedar facturable.
+   */
+  revertidaPorNc: boolean;
 
   items: InvoiceItem[];
 }
@@ -367,7 +372,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
        net_amount, vat_amount, total_amount, paid_amount,
-       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at,
+       cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
@@ -414,6 +419,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     caeSimulated: row.cae_simulated ?? false,
     caeRechazo: row.cae_rechazo ?? null,
     caeRechazadoAt: row.cae_rechazado_at ?? null,
+    revertidaPorNc: row.revertida_por_nc ?? false,
 
     items: ((row.items ?? []) as any[])
       .sort((a, b) => a.line_number - b.line_number)
@@ -455,14 +461,20 @@ export async function fetchPendingToInvoice(): Promise<PendingToInvoice[]> {
        status:work_order_statuses(is_terminal),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
-       invoices(status)`
+       invoices(status, revertida_por_nc)`
     )
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
   return ((data ?? []) as any[])
-    .filter((row) => (row.status as any)?.is_terminal && !(row.invoices ?? []).some((i: any) => i.status === 'EMITIDA'))
+    // Una factura revertida por una nota de crédito total sigue existiendo
+    // ante ARCA, pero ya no respalda el trabajo: la orden vuelve a la cola.
+    .filter(
+      (row) =>
+        (row.status as any)?.is_terminal &&
+        !(row.invoices ?? []).some((i: any) => i.status === 'EMITIDA' && !i.revertida_por_nc)
+    )
     .map((row) => {
       const name = [row.vehicle?.brand, row.vehicle?.model].filter(Boolean).join(' ');
       return {
@@ -495,6 +507,7 @@ export async function fetchInvoiceForWorkOrder(
     .select('id, full_number, invoice_type')
     .eq('work_order_id', workOrderId)
     .eq('status', 'EMITIDA')
+    .eq('revertida_por_nc', false)
     .maybeSingle();
 
   if (error) throw error;
