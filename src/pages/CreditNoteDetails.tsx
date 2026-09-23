@@ -98,6 +98,12 @@ export function CreditNoteDetails() {
             </span>
           }
           subtitle={
+            <>
+            <span className="mt-1 block text-text-soft">
+              {nc.devuelveFondos
+                ? 'La plata se devolvió por tesorería.'
+                : 'Queda a cuenta del cliente: se aplica en una cobranza, contra esta factura o contra otra.'}
+            </span>
             <Link
               to={`/factura/${nc.invoiceId}`}
               className="inline-flex items-center gap-1.5 text-accent-deep hover:underline"
@@ -105,6 +111,7 @@ export function CreditNoteDetails() {
               <Receipt size={14} /> Revierte la factura {nc.invoiceFullNumber}
               {nc.cancelaTotal ? ' (la cancela entera)' : ' (parcial)'}
             </Link>
+            </>
           }
           actions={
             <>

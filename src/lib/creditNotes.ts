@@ -22,6 +22,8 @@ export interface CreditNoteListRow {
   issueDate: string;
   totalAmount: number;
   cancelaTotal: boolean;
+  /** Si devolvió la plata por un medio de pago, o quedó a cuenta del cliente. */
+  devuelveFondos: boolean;
   caeRechazo: string | null;
   /** La factura que revierte. */
   invoiceFullNumber: string;
@@ -57,7 +59,7 @@ export interface CreditNoteDetail extends CreditNoteListRow {
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_name, issue_date, total_amount, ' +
-  'cancela_total, cae_rechazo, invoice_id, invoice:invoices(full_number)';
+  'cancela_total, devuelve_fondos, cae_rechazo, invoice_id, invoice:invoices(full_number)';
 
 function mapListRow(row: any): CreditNoteListRow {
   return {
@@ -69,6 +71,7 @@ function mapListRow(row: any): CreditNoteListRow {
     issueDate: row.issue_date,
     totalAmount: Number(row.total_amount),
     cancelaTotal: row.cancela_total ?? false,
+    devuelveFondos: row.devuelve_fondos ?? false,
     caeRechazo: row.cae_rechazo ?? null,
     invoiceId: row.invoice_id,
     invoiceFullNumber: row.invoice?.full_number ?? '',
@@ -90,7 +93,7 @@ export async function fetchCreditNoteById(id: string): Promise<CreditNoteDetail 
   const { data, error } = await supabase
     .from('credit_notes')
     .select(
-      'id, full_number, invoice_type, status, customer_name, issue_date, total_amount, cancela_total, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
+      'id, full_number, invoice_type, status, customer_name, issue_date, total_amount, cancela_total, devuelve_fondos, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
     )
     .eq('id', id)
     .maybeSingle();
@@ -140,11 +143,24 @@ export interface CreditNoteItemInput {
   unitPrice: number;
 }
 
+/**
+ * Qué hace la nota con la plata.
+ *
+ * Solo se elige cuando la factura de origen ya estaba cobrada: si no hay plata
+ * entrada, no hay nada que devolver y la nota queda a cuenta sí o sí.
+ */
+export interface DestinoDeLosFondos {
+  devuelveFondos: boolean;
+  /** El medio por el que sale la plata. Obligatorio si devuelve. */
+  paymentMethodId: string | null;
+}
+
 export async function emitirNotaCredito(
   invoiceId: string,
   items: CreditNoteItemInput[],
   cancelaTotal: boolean,
-  motivo: string
+  motivo: string,
+  fondos: DestinoDeLosFondos = { devuelveFondos: false, paymentMethodId: null }
 ): Promise<{ id: string; fullNumber: string; letter: InvoiceType }> {
   const { data, error } = await supabase.rpc('emitir_nota_credito', {
     p_invoice_id: invoiceId,
@@ -157,6 +173,8 @@ export async function emitirNotaCredito(
     })),
     p_cancela_total: cancelaTotal,
     p_motivo: motivo.trim() || null,
+    p_devuelve_fondos: fondos.devuelveFondos,
+    p_payment_method_id: fondos.devuelveFondos ? fondos.paymentMethodId : null,
   });
 
   if (error) throw error;
@@ -166,33 +184,6 @@ export async function emitirNotaCredito(
     fullNumber: row.credit_note_full_number,
     letter: row.credit_note_letter,
   };
-}
-
-export interface CobroReversible {
-  receiptId: string;
-  fullNumber: string;
-  totalAmount: number;
-}
-
-/**
- * Los recibos que una nota de crédito total va a dar de baja, devolviendo la
- * plata a donde entró.
- *
- * Se consulta antes de emitir y no después: quien emite tiene que saber que
- * además de revertir el comprobante va a salir plata de la caja. Solo devuelve
- * los recibos que cobran esta factura y ninguna otra; los compartidos los
- * resuelve una persona.
- */
-export async function fetchCobrosReversibles(invoiceId: string): Promise<CobroReversible[]> {
-  const { data, error } = await supabase.rpc('cobros_reversibles_de_factura', {
-    p_invoice_id: invoiceId,
-  });
-  if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    receiptId: row.receipt_id,
-    fullNumber: row.full_number,
-    totalAmount: Number(row.total_amount),
-  }));
 }
 
 /** Los mensajes de la base, dichos como los diría alguien del taller. */

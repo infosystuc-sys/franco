@@ -17,12 +17,8 @@ import {
   type InvoiceDetail,
   type InvoiceListRow,
 } from '@/src/lib/invoices';
-import {
-  describeCreditNoteError,
-  emitirNotaCredito,
-  fetchCobrosReversibles,
-  type CobroReversible,
-} from '@/src/lib/creditNotes';
+import { describeCreditNoteError, emitirNotaCredito } from '@/src/lib/creditNotes';
+import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import { pedirCaeAlEmitir } from '@/src/lib/arcaFacturacion';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
 import { FieldBox, selectCabecera } from '@/src/pages/InvoiceNew';
@@ -59,13 +55,19 @@ export function CreditNoteNew() {
   const [cancelaTotal, setCancelaTotal] = React.useState<boolean | null>(null);
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [motivo, setMotivo] = React.useState('');
-  // Los recibos que se van a dar de baja si cancela la factura entera.
-  const [cobros, setCobros] = React.useState<CobroReversible[]>([]);
+  // Solo se pregunta cuando la factura de origen ya estaba cobrada: si no
+  // entró plata, no hay nada que devolver.
+  const [devuelveFondos, setDevuelveFondos] = React.useState(false);
+  const [paymentMethodId, setPaymentMethodId] = React.useState('');
+  const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
   const [emitiendo, setEmitiendo] = React.useState(false);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
+    fetchPaymentMethods(true)
+      .then((data) => !cancelled && setPaymentMethods(data))
+      .catch(() => {/* sin medios no se puede devolver, pero sí dejar a cuenta */});
     Promise.all([fetchInvoices(), fetchArticles(false)])
       .then(([invoices, articleRows]) => {
         if (cancelled) return;
@@ -94,7 +96,8 @@ export function CreditNoteNew() {
     setFactura(f);
     setCancelaTotal(null);
     setItems([]);
-    fetchCobrosReversibles(f.id).then(setCobros).catch(() => setCobros([]));
+    setDevuelveFondos(false);
+    setPaymentMethodId('');
   }
 
   /** Los renglones de la factura, tal cual, como punto de partida. */
@@ -121,14 +124,14 @@ export function CreditNoteNew() {
     ? computeTotals(items, factura.invoiceType)
     : { net: 0, vat: 0, total: 0 };
 
-  const disponible = factura
-    ? Math.round((factura.totalAmount - factura.creditedAmount) * 100) / 100
-    : 0;
+  // La factura ya estaba cobrada: hay plata que decidir qué hacer con ella.
+  const cobrada = !!factura && factura.paidAmount > 0;
 
   const renglonesVacios = items.filter((i) => i.description.trim() === '').length;
   const puedeEmitir =
     !!factura && cancelaTotal !== null && items.length > 0 &&
-    totals.total > 0 && renglonesVacios === 0 && !emitiendo;
+    totals.total > 0 && renglonesVacios === 0 &&
+    (!devuelveFondos || !!paymentMethodId) && !emitiendo;
 
   async function handleEmitir() {
     if (!factura || cancelaTotal === null || !puedeEmitir) return;
@@ -136,14 +139,11 @@ export function CreditNoteNew() {
     const confirmado = window.confirm(
       `Emitir una nota de crédito ${factura.invoiceType} por $ ${formatMoney(totals.total)} ` +
         `que revierte la ${factura.fullNumber} de ${factura.customerName}.\n\n` +
-        (cancelaTotal
-          ? 'Cancela la factura entera: el cliente deja de deber ese comprobante.\n\n'
-          : 'Es una nota de crédito parcial: baja el saldo de la factura en ese importe.\n\n') +
-        (cancelaTotal && cobros.length
-          ? `Además se va a dar de baja el cobro ${cobros.map((c) => c.fullNumber).join(', ')} ` +
-            `por $ ${formatMoney(cobros.reduce((s, c) => s + c.totalAmount, 0))}: esa plata ` +
-            'sale de donde entró.\n\n'
-          : '') +
+        (devuelveFondos
+          ? `La plata se devuelve por ${paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? 'el medio elegido'}: ` +
+            'sale de ahí cuando ARCA autorice.\n\n'
+          : 'Queda a cuenta del cliente: se aplica en una cobranza, contra esta ' +
+            'factura o contra otra.\n\n') +
         'Se le va a pedir el CAE a ARCA en este mismo paso. Una vez autorizada, la ' +
         'nota de crédito es un comprobante fiscal y no se puede deshacer.'
     );
@@ -162,7 +162,8 @@ export function CreditNoteNew() {
           unitPrice: i.unitPrice,
         })),
         cancelaTotal,
-        motivo
+        motivo,
+        { devuelveFondos, paymentMethodId: paymentMethodId || null }
       );
 
       await pedirCaeAlEmitir(nc.id, nc.fullNumber, 'nota de crédito');
@@ -303,31 +304,70 @@ export function CreditNoteNew() {
               </Button>
             </div>
 
-            {cancelaTotal === true && cobros.length > 0 && (
-              <p className="mt-3 flex items-start gap-2 rounded-md border border-line-strong bg-panel-alt px-3 py-2 text-xs text-text">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                <span>
-                  Esta factura se cobró de contado con el recibo{' '}
-                  {cobros.map((c) => c.fullNumber).join(', ')} por ${' '}
-                  {formatMoney(cobros.reduce((s, c) => s + c.totalAmount, 0))}. Al
-                  autorizarse la nota de crédito ese cobro se da de baja y la plata
-                  sale de donde entró: caja, banco o cartera de cheques.
-                </span>
-              </p>
-            )}
-
-            {cancelaTotal === false && disponible > 0 && (
+            {!cobrada && cancelaTotal !== null && (
               <p className="mt-3 flex items-start gap-2 text-xs text-text-soft">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                Esta factura admite hasta $ {formatMoney(disponible)} de nota de
-                crédito. Por encima de eso el cliente quedaría con saldo a favor
-                salido de la nada, y la base lo rechaza.
+                La {factura.fullNumber} está en cuenta corriente y todavía no se
+                cobró, así que no hay plata que devolver: la nota queda a cuenta
+                del cliente y se aplica en una cobranza, contra esta factura o
+                contra otra.
               </p>
             )}
           </Panel>
         )}
 
-        {/* Paso 3: los renglones */}
+        {/* Paso 3: qué se hace con la plata, solo si entró */}
+        {factura && cancelaTotal !== null && cobrada && (
+          <Panel className="p-5">
+            <SectionHeader title="¿Qué se hace con la plata?" />
+            <p className="mt-1 text-xs text-text-soft">
+              La {factura.fullNumber} se cobró de contado por ${' '}
+              {formatMoney(factura.paidAmount)}. El recibo no se toca —ese cobro
+              ocurrió—, pero hay que decidir qué pasa con el importe de la nota.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant={!devuelveFondos ? undefined : 'ghost'}
+                onClick={() => { setDevuelveFondos(false); setPaymentMethodId(''); }}
+              >
+                Queda a cuenta del cliente
+              </Button>
+              <Button
+                type="button"
+                variant={devuelveFondos ? undefined : 'ghost'}
+                onClick={() => setDevuelveFondos(true)}
+              >
+                Se le devuelve la plata
+              </Button>
+            </div>
+
+            {devuelveFondos && (
+              <label className="mt-3 block text-xs text-text-soft">
+                Por qué medio sale
+                <select
+                  value={paymentMethodId}
+                  onChange={(e) => setPaymentMethodId(e.target.value)}
+                  className={cn(selectCabecera, 'mt-1 block w-full max-w-sm')}
+                >
+                  <option value="">Elegí un medio…</option>
+                  {paymentMethods
+                    .filter((m) => m.kind !== 'CARTERA_CHEQUES')
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                </select>
+                <span className="mt-1 block">
+                  Se registra un egreso de tesorería por ${' '}
+                  {formatMoney(totals.total)} cuando ARCA autorice la nota, no
+                  antes: si la rechaza, la plata no se movió.
+                </span>
+              </label>
+            )}
+          </Panel>
+        )}
+
+        {/* Paso 4: los renglones */}
         {factura && cancelaTotal !== null && (
           <>
             <ItemsEditor
