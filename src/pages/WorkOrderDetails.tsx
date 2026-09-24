@@ -686,6 +686,17 @@ export function WorkOrderDetails() {
             <Button variant="ghost" type="button" onClick={handleVolver} disabled={saving}>
               <ArrowLeft size={16} /> {saving ? 'Guardando…' : 'Volver'}
             </Button>
+            {/* Para el mostrador o el taller trabajando sin la pantalla a
+                mano: los datos del cliente y del vehículo ya van impresos, y
+                el renglón del trabajo queda en blanco para completar a lápiz
+                y cargar después. */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => navigate(`/orden/${order.number}/imprimir-blanco`)}
+            >
+              <Printer size={16} /> Imprimir en blanco
+            </Button>
             {/* El link de seguimiento sale solo al dar de alta la orden. Si ese
                 mensaje no llegó —teléfono mal cargado, cola parada, el cliente
                 lo borró— esto lo repite. Va en la barra con el resto de los

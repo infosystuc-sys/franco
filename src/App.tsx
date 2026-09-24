@@ -12,6 +12,7 @@ import { Users } from './pages/Users';
 import { ExpenseConcepts } from './pages/ExpenseConcepts';
 import { Imputaciones } from '@/src/pages/Imputaciones';
 import { ArticulosDuplicados } from '@/src/pages/ArticulosDuplicados';
+import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
@@ -104,6 +105,7 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/orden/:id" element={<WorkOrderDetails />} />
+                    <Route path="/orden/:id/imprimir-blanco" element={<WorkOrderPrintBlank />} />
                     <Route path="/cotizaciones" element={<Quotations />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/facturas" element={<Invoices />} />
