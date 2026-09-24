@@ -44,6 +44,12 @@ export interface ImportResult {
   linkedRows: number;
   /** Artículos nuevos dados de alta en esta importación. */
   createdRows: number;
+  /**
+   * Filas donde no se le pudo copiar la marca al artículo porque con esa marca
+   * quedaría idéntico a otro: la misma pieza cargada dos veces en el catálogo,
+   * una con marca y otra sin. El precio y la descripción sí se actualizaron.
+   */
+  conflictedRows: number;
   importId: string;
 }
 
@@ -204,6 +210,7 @@ export async function importSupplierPrices(
     matchedRows: Number(result.matched_rows),
     linkedRows: Number(result.linked_rows ?? 0),
     createdRows: Number(result.unmatched_rows),
+    conflictedRows: Number(result.conflicted_rows ?? 0),
     importId: result.import_id,
   };
 }

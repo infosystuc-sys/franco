@@ -157,6 +157,13 @@ export function PriceLists() {
               result.createdRows > 0
                 ? ` y ${result.createdRows} artículo(s) nuevo(s) dado(s) de alta.`
                 : '.',
+              // Se nombra aparte porque no es un error de la importación sino
+              // un duplicado viejo del catálogo que alguien tiene que unificar.
+              result.conflictedRows > 0
+                ? ` A ${result.conflictedRows} artículo(s) no se les pudo copiar la marca: ` +
+                  'ya existe otro con el mismo número de fábrica y esa marca. ' +
+                  'Es la misma pieza cargada dos veces; el precio sí se actualizó.'
+                : '',
             ].join('')
           );
           setError(null);
