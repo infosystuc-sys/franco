@@ -6,7 +6,14 @@ import { PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
-import { ExcelFormatError, parseWithMapping, previewSheet, type ParsedSheet, type RawGrid } from '@/src/lib/excelImport';
+import {
+  detectarMapeo,
+  ExcelFormatError,
+  parseWithMapping,
+  previewSheet,
+  type ParsedSheet,
+  type RawGrid,
+} from '@/src/lib/excelImport';
 import {
   describePriceError,
   fetchDefaultMarkup,
@@ -220,17 +227,51 @@ function ImportSection({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
 
+  /**
+   * Abre la pantalla de mapeo con algo ya elegido, para no obligar a marcar
+   * las cuatro columnas a mano.
+   *
+   * Cuál se prefiere depende de por qué se llegó acá. Si el mapeo guardado
+   * funciona y solo se lo quiere mirar, ese manda: ya demostró servir, y una
+   * lista con varias columnas de precio haría que la detección proponga otra.
+   * Si no hay mapeo, o el guardado no sirvió para este archivo, entonces sí
+   * conviene lo que diga el encabezado.
+   */
+  async function pedirMapeo(
+    selected: File,
+    guardado: ColumnMapping | null,
+    preferirDeteccion: boolean
+  ) {
+    const vista = await previewSheet(selected);
+    const detectado = detectarMapeo(vista);
+    setGrid(vista);
+    setMapping(preferirDeteccion ? (detectado ?? guardado) : (guardado ?? detectado));
+  }
+
   async function loadForFile(selected: File, currentSupplierId: string) {
     setParsed(null);
     setGrid(null);
     setMapping(null);
     try {
       const profile = await fetchSupplierImportProfile(currentSupplierId);
-      if (profile) {
-        setMapping(profile);
+      if (!profile) {
+        await pedirMapeo(selected, null, true);
+        return;
+      }
+
+      setMapping(profile);
+      try {
         setParsed(await parseWithMapping(selected, profile));
-      } else {
-        setGrid(await previewSheet(selected));
+      } catch (err) {
+        // El mapeo guardado no sirve para ESTE archivo: el proveedor cambió el
+        // formato. Antes esto descartaba el archivo y no había forma de llegar
+        // a corregir el mapeo, así que la lista quedaba imposible de importar.
+        if (!(err instanceof ExcelFormatError)) throw err;
+        await pedirMapeo(selected, profile, true);
+        onError(
+          'El mapeo guardado para este proveedor no coincide con este archivo: ' +
+            'probablemente cambió el formato de la lista. Revisá las columnas y guardá el mapeo nuevo.'
+        );
       }
     } catch (err) {
       onError(
@@ -265,7 +306,7 @@ function ImportSection({
     if (!file) return;
     setParsed(null);
     try {
-      setGrid(await previewSheet(file));
+      await pedirMapeo(file, mapping, false);
     } catch (err) {
       onError(getErrorMessage(err));
     }

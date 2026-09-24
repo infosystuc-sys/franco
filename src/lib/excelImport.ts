@@ -93,6 +93,54 @@ export async function previewSheet(file: File, maxRows = 15): Promise<RawGrid> {
 }
 
 /**
+ * Adivina qué columna es cada dato leyendo el encabezado.
+ *
+ * Las listas casi siempre traen un preámbulo —razón social, "Precios no
+ * incluyen IVA", el rubro— y recién después la fila con los títulos. Así que
+ * no se busca en la fila 1: se busca LA fila que tenga a la vez algo parecido
+ * a "código" y algo parecido a "precio", que es la única que puede ser el
+ * encabezado.
+ *
+ * Devuelve null si no encuentra esa fila. Es una sugerencia para ahorrarle
+ * trabajo a quien importa, no una decisión: el mapeo se confirma a mano.
+ */
+export function detectarMapeo(grid: RawGrid): ColumnMapping | null {
+  const sinAcentos = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+  const buscar = (fila: string[], re: RegExp) =>
+    fila.findIndex((celda) => re.test(sinAcentos(celda)));
+
+  for (const fila of grid.rows) {
+    const codigo = buscar(fila, /^cod(igo)?\.?$/);
+
+    // Una lista puede traer varias columnas de precio —lista, neto, oferta,
+    // promoción, "mejor precio"—. Se prefiere la que se llama exactamente
+    // "precio"; si no hay, la primera que empiece así. Cuál corresponde no lo
+    // puede saber el programa: por eso esto es una sugerencia y la pantalla la
+    // muestra para confirmar.
+    const precio = (() => {
+      const exacto = buscar(fila, /^precio$/);
+      return exacto !== -1 ? exacto : buscar(fila, /^precio/);
+    })();
+
+    if (codigo === -1 || precio === -1) continue;
+
+    const descripcion = buscar(fila, /^descrip/);
+    const marca = buscar(fila, /^marca$/);
+
+    return {
+      codeColumn: codigo,
+      descriptionColumn: descripcion === -1 ? null : descripcion,
+      brandColumn: marca === -1 ? null : marca,
+      priceColumn: precio,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Aplica el mapeo de columnas (guardado o recién definido) a todo el
  * archivo. Una fila de título o separadora no tiene a la vez código y
  * precio numérico válido en las columnas mapeadas, así que queda
