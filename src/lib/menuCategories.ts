@@ -22,6 +22,7 @@ import {
   CalendarClock,
   ArrowRightLeft,
   Link2,
+  Merge,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -189,6 +190,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         cards: [
           { icon: Package, label: 'Inventario', path: '/inventario', newPath: '/inventario?nuevo=1', adminOnly: true },
           { icon: Tags, label: 'Listas de precios', path: '/listas-precios', adminOnly: true },
+          { icon: Merge, label: 'Artículos duplicados', path: '/articulos-duplicados', adminOnly: true },
         ],
       },
       {
