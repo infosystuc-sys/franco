@@ -749,6 +749,25 @@ export async function setWorkOrderStatus(workOrderId: string, statusId: string) 
   if (error) throw error;
 }
 
+/**
+ * Borra el último avance: la orden vuelve al estado anterior y el paso
+ * equivocado desaparece de la línea de tiempo.
+ *
+ * No es lo mismo que volver a elegir el estado anterior. Eso agrega dos pasos
+ * más —el equivocado y el de vuelta— y le suma al informe de tiempos por etapa
+ * un tramo que nunca existió. Esto corrige.
+ */
+export async function deshacerAvanceDeOrden(
+  workOrderId: string
+): Promise<{ deshecho: string; volvioA: string }> {
+  const { data, error } = await supabase.rpc('deshacer_avance_de_orden', {
+    p_work_order_id: workOrderId,
+  });
+  if (error) throw error;
+  const r = (data ?? {}) as any;
+  return { deshecho: r.deshecho ?? '', volvioA: r.volvio_a ?? '' };
+}
+
 /** Qué contestó el reenvío del link de seguimiento. */
 export type ReenvioLinkResultado =
   | 'ENCOLADO'

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer } from 'lucide-react';
+import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer, Undo2 } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -55,6 +55,7 @@ import {
   type WorkOrderItemInput,
   type WorkOrderPhoto,
   type WorkOrderStatusDef,
+  deshacerAvanceDeOrden,
 } from '@/src/lib/workOrders';
 
 export function WorkOrderDetails() {
@@ -70,6 +71,7 @@ export function WorkOrderDetails() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [history, setHistory] = useState<StatusChange[]>([]);
   const [changingStatus, setChangingStatus] = useState(false);
+  const [deshaciendo, setDeshaciendo] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [assigningEmployee, setAssigningEmployee] = useState(false);
   const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
@@ -242,6 +244,39 @@ export function WorkOrderDetails() {
     if (!order?.customer?.id || order.quotationNumber) { setCandidatas([]); return; }
     fetchUnlinkedQuotations(order.customer.id).then(setCandidatas).catch(() => setCandidatas([]));
   }, [order?.customer?.id, order?.quotationNumber]);
+
+  /**
+   * Borra el último avance en vez de agregar uno de vuelta. Se avisa qué paso
+   * se va y a dónde vuelve la orden: son dos estados con nombres parecidos y
+   * conviene leerlos antes de confirmar.
+   */
+  async function handleDeshacerAvance() {
+    if (!order) return;
+    const ultimo = history[history.length - 1];
+    const anterior = history[history.length - 2];
+    if (
+      !window.confirm(
+        `Deshacer el avance a "${ultimo?.toStatus?.label ?? 'el estado actual'}".
+
+` +
+          `La orden vuelve a "${anterior?.toStatus?.label ?? 'el estado anterior'}" y ese paso ` +
+          'desaparece de la línea de tiempo, como si nunca se hubiera marcado.'
+      )
+    ) {
+      return;
+    }
+
+    setDeshaciendo(true);
+    setError(null);
+    try {
+      await deshacerAvanceDeOrden(order.id);
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setDeshaciendo(false);
+    }
+  }
 
   async function handleStatusChange(statusId: string) {
     if (!order) return;
@@ -965,6 +1000,19 @@ export function WorkOrderDetails() {
               );
             })}
           </div>
+
+          {isAdmin && history.length > 1 && (
+            <div className="mt-4 flex justify-end border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={handleDeshacerAvance}
+                disabled={deshaciendo}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-soft hover:text-danger disabled:opacity-50"
+              >
+                <Undo2 size={14} /> {deshaciendo ? 'Deshaciendo…' : 'Deshacer el último avance'}
+              </button>
+            </div>
+          )}
 
           {isAdmin && (
             <StatusControls
