@@ -274,6 +274,7 @@ export interface InvoiceListRow {
   fullNumber: string;
   invoiceType: InvoiceType;
   status: InvoiceStatus;
+  customerId: string;
   customerName: string;
   workOrderNumber: string | null;
   issueDate: string;
@@ -342,7 +343,7 @@ export interface InvoiceDetail extends InvoiceListRow {
 }
 
 const LIST_SELECT =
-  'id, full_number, invoice_type, status, customer_name, issue_date, due_date, ' +
+  'id, full_number, invoice_type, status, customer_id, customer_name, issue_date, due_date, ' +
   'total_amount, paid_amount, credited_amount, cae_rechazo, work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
@@ -351,6 +352,7 @@ function mapListRow(row: any): InvoiceListRow {
     fullNumber: row.full_number,
     invoiceType: row.invoice_type,
     status: row.status,
+    customerId: row.customer_id,
     customerName: row.customer_name,
     workOrderNumber: row.work_order?.number ?? null,
     issueDate: row.issue_date,

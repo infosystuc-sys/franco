@@ -1,6 +1,6 @@
 import React from 'react';
 import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle, Stamp, FileMinus } from 'lucide-react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
@@ -36,6 +36,8 @@ import { fetchCompanySettings } from '@/src/lib/companySettings';
 export function InvoiceDetails() {
   const { role } = useAuth();
   const { id } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [invoice, setInvoice] = React.useState<InvoiceDetail | null>(null);
   const [remito, setRemito] = React.useState<Remito | null>(null);
@@ -69,6 +71,39 @@ export function InvoiceDetails() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * Llegar con ?imprimir=1 o ?enviar=email|whatsapp dispara la acción sola: es
+   * el botón "Reimprimir" o "Enviar" del listado, y desde ahí se quiere el
+   * resultado, no esta pantalla. Mismo mecanismo que el presupuesto.
+   *
+   * Van arriba, con el resto de los hooks: más abajo hay returns tempranos —
+   * cargando, no encontrada— y un hook detrás de un return se saltea en esos
+   * renders, así que el orden de hooks se rompería si estuvieran después.
+   */
+  const yaImprimio = React.useRef(false);
+  React.useEffect(() => {
+    if (yaImprimio.current) return;
+    if (searchParams.get('imprimir') !== '1') return;
+    if (loading || !invoice || invoice.status !== 'EMITIDA') return;
+    const t = setTimeout(() => {
+      if (yaImprimio.current) return;
+      yaImprimio.current = true;
+      window.addEventListener('afterprint', () => navigate('/facturas'), { once: true });
+      window.print();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [loading, invoice, searchParams, navigate]);
+
+  const yaAbrioEnvio = React.useRef(false);
+  React.useEffect(() => {
+    if (yaAbrioEnvio.current) return;
+    const canal = searchParams.get('enviar');
+    if (canal !== 'email' && canal !== 'whatsapp') return;
+    if (loading || !invoice || invoice.status !== 'EMITIDA') return;
+    yaAbrioEnvio.current = true;
+    setSendModal(canal);
+  }, [loading, invoice, searchParams]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 

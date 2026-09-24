@@ -907,6 +907,7 @@ function facturaDeMuestra(taller: CompanySettings): InvoiceDetail {
   const hoy = todayLocal();
   return {
     id: 'muestra',
+    customerId: 'muestra',
     fullNumber: `${String(taller.salesPoint).padStart(4, '0')}-00000001`,
     invoiceType: 'B',
     status: 'EMITIDA',

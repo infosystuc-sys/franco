@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight, Stamp } from 'lucide-react';
+import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight, Stamp, HandCoins, Printer, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -207,7 +207,7 @@ export function Invoices() {
               <th className="px-3 py-1 w-32">Vencimiento</th>
               <th className="px-3 py-1 w-32 text-right">Total</th>
               <th className="px-3 py-1 w-32 text-right">Saldo</th>
-              <th className="px-3 py-1 w-12"></th>
+              <th className="px-3 py-1 w-36"></th>
             </tr>
           </thead>
           <tbody>
@@ -341,9 +341,54 @@ export function Invoices() {
                             />
                           </button>
                         )}
+
+                        {/* Sobre un comprobante ya emitido: cobrar, reimprimir
+                            y mandar, sin tener que abrir la ficha primero. Son
+                            las acciones que ya existían adentro de la ficha
+                            —esto solo les da un atajo desde acá—. */}
+                        {invoice.status === 'EMITIDA' && (
+                          <>
+                            {balance > 0 && (
+                              <Link
+                                to={`/cobranzas/nueva?cliente=${invoice.customerId}&factura=${invoice.id}`}
+                                aria-label={`Cobrar la factura ${invoice.fullNumber}`}
+                                title={`Cobrar — debe $ ${formatMoney(balance)}`}
+                                className="inline-flex text-text-soft transition-colors hover:text-state-ok"
+                              >
+                                <HandCoins size={16} />
+                              </Link>
+                            )}
+                            <Link
+                              to={`/factura/${invoice.id}?imprimir=1`}
+                              aria-label={`Reimprimir la factura ${invoice.fullNumber}`}
+                              title="Reimprimir"
+                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
+                            >
+                              <Printer size={16} />
+                            </Link>
+                            <Link
+                              to={`/factura/${invoice.id}?enviar=email`}
+                              aria-label={`Enviar por mail la factura ${invoice.fullNumber}`}
+                              title="Enviar por mail"
+                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
+                            >
+                              <Mail size={16} />
+                            </Link>
+                            <Link
+                              to={`/factura/${invoice.id}?enviar=whatsapp`}
+                              aria-label={`Enviar por WhatsApp la factura ${invoice.fullNumber}`}
+                              title="Enviar por WhatsApp"
+                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
+                            >
+                              <MessageCircle size={16} />
+                            </Link>
+                          </>
+                        )}
+
                         <Link
                           to={`/factura/${invoice.id}`}
                           aria-label={`Ver factura ${invoice.fullNumber}`}
+                          title="Ver ficha"
                           className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
                         >
                           <Eye size={16} />
@@ -356,11 +401,6 @@ export function Invoices() {
           </tbody>
         </table>
       </Panel>
-
-      <p className="text-xs text-text-soft">
-        Los cobros todavía no se registran: el saldo de cada factura es su total.
-        Eso lo resuelve el módulo de cobranzas.
-      </p>
       </>
       )}
     </div>

@@ -122,12 +122,22 @@ export function ReceiptNew() {
     };
   }, [role]);
 
-  // Doble click en "Cuenta corriente" (Cobranzas) manda para acá con el
-  // cliente ya elegido.
+  // Doble click en "Cuenta corriente" (Cobranzas), o el botón "Cobrar" del
+  // listado de facturas, mandan para acá con el cliente ya elegido.
   React.useEffect(() => {
     const fromQuery = searchParams.get('cliente');
     if (fromQuery) setCustomerId(fromQuery);
   }, [searchParams]);
+
+  /**
+   * El botón "Cobrar" de una factura además manda ?factura=<id>: se imputa
+   * sola por su saldo entero apenas se conoce, así que abre directo con esa
+   * factura marcada y solo falta elegir el medio de pago.
+   *
+   * Una vez por factura, no en cada carga: si quien cobra borra el importe a
+   * mano, no tiene sentido devolvérselo solo porque el cliente se recargó.
+   */
+  const facturaPreseleccionada = React.useRef<string | null>(null);
 
   // Al cambiar de cliente se recarga todo lo suyo y se limpia lo cargado: las
   // imputaciones de un cliente no tienen sentido para otro.
@@ -146,6 +156,15 @@ export function ReceiptNew() {
         if (cancelled) return;
         setInvoices(inv);
         setCredit(cr);
+
+        const facturaId = searchParams.get('factura');
+        if (facturaId && facturaPreseleccionada.current !== facturaId) {
+          const factura = inv.find((i) => i.id === facturaId);
+          if (factura) {
+            facturaPreseleccionada.current = facturaId;
+            setAllocations({ [facturaId]: String(factura.balance) });
+          }
+        }
       })
       .catch((err) => !cancelled && setError(describeReceiptError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoadingCustomer(false));
