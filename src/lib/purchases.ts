@@ -477,10 +477,21 @@ export async function savePurchaseInvoice(
   return { id: row.purchase_id, fullNumber: row.purchase_full_number };
 }
 
-export async function voidPurchaseInvoice(id: string, reason: string): Promise<void> {
-  const { error } = await supabase.rpc('void_purchase_invoice', {
+/**
+ * Un comprobante de compra se elimina, no se anula.
+ *
+ * El comprobante es del proveedor; lo nuestro es apenas el registro de haberlo
+ * recibido. Uno cargado por error no es un hecho fiscal que haya que
+ * preservar, es una fila mal tipeada: dejarla anulada ensucia el listado, el
+ * Libro IVA Compras y la cuenta del proveedor.
+ *
+ * La base valida antes de borrar —pagos imputados, órdenes de pago que lo
+ * referencian, notas de crédito provisorias apareadas— y devuelve el stock que
+ * el comprobante hubiera movido.
+ */
+export async function eliminarComprobanteDeCompra(id: string): Promise<void> {
+  const { error } = await supabase.rpc('eliminar_comprobante_de_compra', {
     p_purchase_invoice_id: id,
-    p_reason: reason,
   });
   if (error) throw error;
 }
@@ -497,7 +508,7 @@ export function describePurchaseError(message: string): string {
     return 'Ese proveedor ya tiene otro artículo cargado con el mismo código. Revisá el vínculo en Inventario antes de cargar la compra.';
   }
   if (message.includes('Stock insuficiente')) {
-    return `${message}. No se puede devolver ni anular más mercadería de la que queda en stock.`;
+    return `${message}. No se puede devolver ni eliminar más mercadería de la que queda en stock.`;
   }
   if (message.includes('schema cache') || message.includes('does not exist')) {
     return 'Falta aplicar la migración de compras en la base (supabase/purchases.sql y purchases-articles.sql).';

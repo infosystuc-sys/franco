@@ -1,6 +1,8 @@
 import React from 'react';
-import { XCircle, Ban, AlertTriangle, Printer, Boxes } from 'lucide-react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+// Ban sigue: ya no se anula, pero los comprobantes anulados antes de este
+// cambio existen y la ficha los tiene que seguir mostrando como tales.
+import { XCircle, Ban, AlertTriangle, Printer, Boxes, Trash2 } from 'lucide-react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
@@ -16,13 +18,14 @@ import {
   PURCHASE_DOC_TYPE_LABELS,
   PURCHASE_KIND_LABELS,
   signOf,
-  voidPurchaseInvoice,
+  eliminarComprobanteDeCompra,
   type PurchaseDetail,
 } from '@/src/lib/purchases';
 
 export function PurchaseDetails() {
   const { role } = useAuth();
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const [doc, setDoc] = React.useState<PurchaseDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -65,27 +68,31 @@ export function PurchaseDetails() {
   const overdue = isOverdue(doc);
   const isCredit = doc.docType === 'NOTA_CREDITO';
 
-  async function handleVoid() {
+  async function handleEliminar() {
     if (!doc) return;
-    const reason = window.prompt(
-      `Anular ${PURCHASE_DOC_TYPE_LABELS[doc.docType]} ${doc.letter} ${doc.fullNumber} de ${doc.supplierName}.\n\n` +
-        `Deja de contar en la cuenta corriente y libera el número para volver a cargarlo.\n` +
-        `Indicá el motivo:`
-    );
-    if (reason === null) return;
-    if (reason.trim() === '') {
-      setError('Indicá el motivo de la anulación.');
+    // Sin pedir motivo: la fila desaparece, no queda dónde anotarlo. Lo que sí
+    // tiene que quedar claro es que esto no se deshace.
+    if (
+      !window.confirm(
+        `Eliminar ${PURCHASE_DOC_TYPE_LABELS[doc.docType]} ${doc.letter} ${doc.fullNumber} ` +
+          `de ${doc.supplierName}.\n\n` +
+          'Se borra del listado, del Libro IVA Compras y de la cuenta del proveedor, ' +
+          'junto con sus renglones. ' +
+          (doc.movesStock ? 'El stock que movió se devuelve. ' : '') +
+          '\n\nNo se puede deshacer.'
+      )
+    ) {
       return;
     }
 
     setVoiding(true);
     setError(null);
     try {
-      await voidPurchaseInvoice(doc.id, reason);
-      await load();
+      await eliminarComprobanteDeCompra(doc.id);
+      // No se recarga: la ficha quedaría apuntando a algo que ya no existe.
+      navigate('/compras');
     } catch (err) {
       setError(describePurchaseError(getErrorMessage(err)));
-    } finally {
       setVoiding(false);
     }
   }
@@ -146,8 +153,8 @@ export function PurchaseDetails() {
                 <Printer size={16} /> Imprimir
               </Button>
               {!voided && (
-                <Button variant="danger" type="button" onClick={handleVoid} disabled={voiding}>
-                  <Ban size={16} /> {voiding ? 'Anulando…' : 'Anular'}
+                <Button variant="danger" type="button" onClick={handleEliminar} disabled={voiding}>
+                  <Trash2 size={16} /> {voiding ? 'Eliminando…' : 'Eliminar'}
                 </Button>
               )}
             </>
