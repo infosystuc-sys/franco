@@ -1,10 +1,11 @@
 import React from 'react';
-import { XCircle, Printer, Ban, FileCheck } from 'lucide-react';
+import { XCircle, Printer, Ban, FileCheck, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import {
   CHANGE_KIND_LABELS,
   describeReceiptError,
@@ -28,6 +29,9 @@ export function ReceiptDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  // El nodo del comprobante impreso: es lo que se convierte en PDF para mandar.
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -120,6 +124,16 @@ export function ReceiptDetails() {
                 <Printer size={16} /> Imprimir
               </Button>
               {!voided && (
+                <>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                    <Mail size={16} /> Enviar por mail
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </Button>
+                </>
+              )}
+              {!voided && (
                 <Button variant="danger" type="button" onClick={handleVoid} disabled={voiding}>
                   <Ban size={16} /> {voiding ? 'Anulando…' : 'Anular'}
                 </Button>
@@ -154,7 +168,7 @@ export function ReceiptDetails() {
         )}
       </div>
 
-      <div className="print-document border border-line bg-panel p-6 md:p-8">
+      <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
         <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
           <div>
             <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.08em] text-text-faint">
@@ -286,6 +300,21 @@ export function ReceiptDetails() {
           </div>
         </div>
       </div>
+
+      {sendModal && (
+        <SendDocumentModal
+          channel={sendModal}
+          defaultDestino={sendModal === 'email' ? receipt.customerEmail : receipt.customerPhone}
+          fileName={`Recibo ${receipt.fullNumber}.pdf`}
+          documentRef={documentRef}
+          subject={`Recibo ${receipt.fullNumber}`}
+          text={
+            `Te enviamos el recibo ${receipt.fullNumber} por $ ${formatMoney(receipt.totalAmount)}. ` +
+            'Gracias por tu pago.'
+          }
+          onClose={() => setSendModal(null)}
+        />
+      )}
     </div>
   );
 }

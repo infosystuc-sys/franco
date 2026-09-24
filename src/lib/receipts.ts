@@ -81,6 +81,9 @@ export interface Receipt {
   status: ReceiptStatus;
   customerId: string;
   customerName: string;
+  /** Contacto vigente del cliente, para mandarle el recibo. */
+  customerEmail: string | null;
+  customerPhone: string | null;
   receiptDate: string;
   totalAmount: number;
   appliedAmount: number;
@@ -97,6 +100,7 @@ export interface Receipt {
 const SELECT =
   `id, full_number, status, customer_id, customer_name, receipt_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
+   customer:customers(email, phone_e164, phone),
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
           method:payment_methods(name), rate:tax_rates(name),
@@ -111,6 +115,10 @@ function mapReceipt(row: any): Receipt {
     status: row.status,
     customerId: row.customer_id,
     customerName: row.customer_name,
+    // Contacto vigente del cliente: no es un dato del comprobante, se lee en
+    // vivo, igual que en la factura. Es a dónde se manda el recibo.
+    customerEmail: row.customer?.email ?? null,
+    customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
     receiptDate: row.receipt_date,
     totalAmount: Number(row.total_amount),
     appliedAmount: Number(row.applied_amount),

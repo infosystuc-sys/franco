@@ -164,6 +164,15 @@ export function ReceiptNew() {
     [allocations]
   );
 
+  /** Lo que el cliente debe hoy, sumando el saldo de cada factura pendiente. */
+  const deudaTotal = React.useMemo(
+    () => round2(invoices.reduce((sum, i) => sum + i.balance, 0)),
+    [invoices]
+  );
+
+  /** Lo que le va a quedar debiendo con lo que se está imputando. */
+  const quedaDebiendo = round2(deudaTotal - totalAllocated);
+
   const creditUsed = React.useMemo(
     () =>
       round2(
@@ -522,6 +531,36 @@ export function ReceiptNew() {
                   );
                 })}
               </tbody>
+              {/* Sin esta fila había que sumar de memoria: la pantalla mostraba
+                  el saldo de cada factura pero no cuánto debe el cliente ni
+                  cuánto le queda debiendo con lo que se está imputando, que es
+                  justamente lo que se mira mientras se cobra. */}
+              <tfoot className="border-t-2 border-ink text-[15px]">
+                <tr className="h-10 bg-panel-head">
+                  <td colSpan={3} className="px-3 py-1 text-right font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    Deuda total
+                  </td>
+                  <td className="px-3 py-1 text-right font-semibold">
+                    $ {formatMoney(deudaTotal)}
+                  </td>
+                  <td className="px-3 py-1 text-right font-semibold">
+                    $ {formatMoney(totalAllocated)}
+                  </td>
+                </tr>
+                <tr className="h-10">
+                  <td colSpan={4} className="px-3 py-1 text-right font-semibold uppercase tracking-[0.06em] text-text-soft">
+                    Queda debiendo
+                  </td>
+                  <td
+                    className={cn(
+                      'px-3 py-1 text-right text-lg font-semibold',
+                      quedaDebiendo <= 0 ? 'text-state-ok' : 'text-text'
+                    )}
+                  >
+                    $ {formatMoney(quedaDebiendo)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
