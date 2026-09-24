@@ -23,6 +23,7 @@ import {
   ArrowRightLeft,
   Link2,
   Merge,
+  Pencil,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -191,6 +192,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Package, label: 'Inventario', path: '/inventario', newPath: '/inventario?nuevo=1', adminOnly: true },
           { icon: Tags, label: 'Listas de precios', path: '/listas-precios', adminOnly: true },
           { icon: Merge, label: 'Artículos duplicados', path: '/articulos-duplicados', adminOnly: true },
+          { icon: Pencil, label: 'Actualización masiva', path: '/actualizacion-masiva', adminOnly: true },
         ],
       },
       {

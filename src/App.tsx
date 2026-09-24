@@ -12,6 +12,7 @@ import { Users } from './pages/Users';
 import { ExpenseConcepts } from './pages/ExpenseConcepts';
 import { Imputaciones } from '@/src/pages/Imputaciones';
 import { ArticulosDuplicados } from '@/src/pages/ArticulosDuplicados';
+import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
 import { CreditNoteDetails } from '@/src/pages/CreditNoteDetails';
@@ -114,6 +115,7 @@ export default function App() {
                     <Route path="/nota-credito/:id" element={<CreditNoteDetails />} />
                     <Route path="/imputaciones" element={<Imputaciones />} />
                     <Route path="/articulos-duplicados" element={<ArticulosDuplicados />} />
+                    <Route path="/actualizacion-masiva" element={<ActualizacionMasiva />} />
                     <Route path="/compras" element={<Purchases />} />
                     <Route path="/compras/nueva/:kind" element={<PurchaseNew />} />
                     <Route path="/compra/:id" element={<PurchaseDetails />} />
