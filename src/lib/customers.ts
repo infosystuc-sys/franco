@@ -6,6 +6,7 @@ import {
   type FiscalEntityInput,
 } from '@/src/lib/fiscal';
 import type { SizeClass, VehicleKind } from '@/src/lib/vehicles';
+import type { CondicionVenta } from '@/src/lib/invoices';
 
 // Los datos fiscales (CUIT, condición de IVA, domicilio) viven en fiscal.ts
 // porque los comparte con el padrón de proveedores. Se reexportan acá para
@@ -36,13 +37,23 @@ export interface CustomerVehicle {
 
 export interface Customer extends FiscalEntity {
   vehicles: CustomerVehicle[];
+  /**
+   * Condición de venta habitual. Se propone al facturar y se puede cambiar
+   * ahí mismo. Null = sin definir: la factura obliga a elegirla, que es lo que
+   * pasa hoy con todos los clientes ya cargados.
+   */
+  condicionVenta: CondicionVenta | null;
 }
 
-export type CustomerInput = FiscalEntityInput;
+export interface CustomerInput extends FiscalEntityInput {
+  /** Vacío = sin definir. */
+  condicionVenta: CondicionVenta | '';
+}
 
 function mapCustomer(row: any): Customer {
   return {
     ...mapFiscalEntity(row),
+    condicionVenta: (row.condicion_venta ?? null) as CondicionVenta | null,
     vehicles: (row.vehicles ?? []).map((v: any) => ({
       id: v.id,
       kind: v.kind ?? 'VEHICULO',
@@ -71,10 +82,18 @@ export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
   return (data ?? []).map(mapCustomer);
 }
 
+/** La fila del padrón fiscal más lo que es propio del cliente. */
+function aFilaDeCliente(input: CustomerInput): Record<string, unknown> {
+  return {
+    ...fiscalEntityToRow(input),
+    condicion_venta: input.condicionVenta === '' ? null : input.condicionVenta,
+  };
+}
+
 export async function createCustomer(input: CustomerInput): Promise<Customer> {
   const { data, error } = await supabase
     .from('customers')
-    .insert(fiscalEntityToRow(input))
+    .insert(aFilaDeCliente(input))
     .select(SELECT_WITH_VEHICLES)
     .single();
   if (error) throw error;
@@ -84,7 +103,7 @@ export async function createCustomer(input: CustomerInput): Promise<Customer> {
 export async function updateCustomer(id: string, input: CustomerInput): Promise<Customer> {
   const { data, error } = await supabase
     .from('customers')
-    .update(fiscalEntityToRow(input))
+    .update(aFilaDeCliente(input))
     .eq('id', id)
     .select(SELECT_WITH_VEHICLES)
     .single();

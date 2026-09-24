@@ -120,6 +120,19 @@ export function InvoiceNewFree() {
     return () => { cancelled = true; };
   }, [role, remitoId]);
 
+  /**
+   * La condición de venta habitual del cliente, propuesta una sola vez por
+   * cliente. Después manda lo que haya elegido quien factura: si la cambió a
+   * mano, volver a pisarla sería discutirle.
+   */
+  const propuestaPara = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const cliente = customers.find((c) => c.id === customerId);
+    if (!cliente || propuestaPara.current === cliente.id) return;
+    propuestaPara.current = cliente.id;
+    if (cliente.condicionVenta) setCondicion(cliente.condicionVenta);
+  }, [customers, customerId]);
+
   // Cada letra tiene su numeración: se vuelve a pedir al cambiarla.
   React.useEffect(() => {
     let cancelado = false;

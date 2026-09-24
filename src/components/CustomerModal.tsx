@@ -3,7 +3,8 @@ import { X, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { getErrorMessage } from '@/src/lib/workOrders';
-import { FiscalFields } from '@/src/components/FiscalFields';
+import { FiscalFields, labelClass, inputClass } from '@/src/components/FiscalFields';
+import { CONDICION_VENTA_LABELS, type CondicionVenta } from '@/src/lib/invoices';
 import {
   EMPTY_FISCAL_FORM,
   fiscalEntityToForm,
@@ -32,7 +33,9 @@ export function CustomerModal({
   onSaved: (customer: Customer) => void;
 }) {
   const [form, setForm] = React.useState<CustomerInput>(
-    customer ? fiscalEntityToForm(customer) : EMPTY_FISCAL_FORM
+    customer
+      ? { ...fiscalEntityToForm(customer), condicionVenta: customer.condicionVenta ?? '' }
+      : { ...EMPTY_FISCAL_FORM, condicionVenta: '' }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -94,6 +97,28 @@ export function CustomerModal({
                   legalNamePlaceholder="Transportes G&M S.R.L."
                   activeLabel="Activo (disponible para nuevas órdenes de trabajo)"
                 />
+
+                {/* Va acá y no adentro de FiscalFields porque no es un dato
+                    fiscal ni lo comparte el padrón de proveedores: es cómo
+                    compra este cliente. */}
+                <label className={cn(labelClass, 'mt-4 block max-w-sm')}>
+                  Condición de venta habitual
+                  <select
+                    value={form.condicionVenta}
+                    onChange={(e) =>
+                      patch({ condicionVenta: e.target.value as CustomerInput['condicionVenta'] })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Sin definir — se elige en cada factura</option>
+                    {(Object.keys(CONDICION_VENTA_LABELS) as CondicionVenta[]).map((c) => (
+                      <option key={c} value={c}>{CONDICION_VENTA_LABELS[c]}</option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                    Se propone al facturar y se puede cambiar ahí mismo.
+                  </span>
+                </label>
               </div>
 
               {/* Vehículos: solo al editar, porque necesitan un cliente ya existente */}

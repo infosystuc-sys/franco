@@ -228,6 +228,22 @@ export function InvoiceNew() {
     await recargarRef.current?.();
   }, []);
 
+  /**
+   * La condición de venta habitual del cliente, propuesta una sola vez por
+   * cliente. Después manda lo que haya elegido quien factura: si la cambió a
+   * mano, volver a pisarla sería discutirle.
+   *
+   * Se vuelve a proponer si se cambia el cliente de la orden, porque entonces
+   * la propuesta anterior era la del otro.
+   */
+  const propuestaPara = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const cliente = customers.find((c) => c.id === order?.customer?.id);
+    if (!cliente || propuestaPara.current === cliente.id) return;
+    propuestaPara.current = cliente.id;
+    if (cliente.condicionVenta) setCondicion(cliente.condicionVenta);
+  }, [customers, order]);
+
   React.useEffect(() => {
     if (!otNumber || role !== 'admin') return;
     let cancelled = false;
