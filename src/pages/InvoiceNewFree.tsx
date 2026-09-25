@@ -233,8 +233,10 @@ export function InvoiceNewFree() {
 
       // El CAE va en el mismo acto, no en un paso posterior. La X no pasa por
       // acá: no es fiscal y nace emitida.
+      // Sin CAE también se vuelve al listado: la factura queda ahí marcada como
+      // pendiente o rechazada, con "Pedir el CAE a ARCA" en Más acciones.
       if (invoiceType !== 'X' && !(await pedirCaeAlEmitir(issued.id, issued.fullNumber))) {
-        navigate(`/factura/${issued.id}`);
+        navigate('/facturas');
         return;
       }
 

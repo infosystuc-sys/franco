@@ -167,7 +167,7 @@ export function CreditNoteNew() {
       );
 
       await pedirCaeAlEmitir(nc.id, nc.fullNumber, 'nota de crédito');
-      navigate(`/nota-credito/${nc.id}`);
+      navigate('/notas-credito');
     } catch (err) {
       setError(describeCreditNoteError(getErrorMessage(err)));
       setEmitiendo(false);

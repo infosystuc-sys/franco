@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -50,6 +50,11 @@ export function Quotations() {
   const [quotations, setQuotations] = React.useState<QuotationListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  // Cotizar desde la orden trae acá el resultado: si se creó y si se mandó.
+  const location = useLocation();
+  const [aviso, setAviso] = React.useState<string | null>(
+    (location.state as { aviso?: string } | null)?.aviso ?? null
+  );
 
   const cargar = React.useCallback(async () => {
     try {
@@ -148,6 +153,8 @@ export function Quotations() {
         setQuotations((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
       }
       vacio="Todavía no hay presupuestos."
+      aviso={aviso}
+      onCerrarAviso={() => setAviso(null)}
     />
   );
 }

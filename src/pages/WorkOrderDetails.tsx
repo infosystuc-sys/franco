@@ -452,7 +452,7 @@ export function WorkOrderDetails() {
       const mandar = window.confirm(
         `Se creó el presupuesto ${creada.number}.` +
           '\n\n¿Enviarlo ahora al cliente para que lo autorice?' +
-          '\n\nSi no, queda listo y se manda cuando quieras desde acá o desde la cotización.'
+          '\n\nSi no, queda listo y se manda cuando quieras desde el listado de cotizaciones.'
       );
 
       let mensaje = `Se creó el presupuesto ${creada.number}.`;
@@ -461,22 +461,9 @@ export function WorkOrderDetails() {
         mensaje = `${creada.number}: ${describirEnvioCotizacion(resultado)}`;
       }
 
-      // Se queda en la orden: cotizar es un paso del trabajo, no el final.
-      // Desde acá se sigue cargando renglones o se manda el presupuesto.
-      const fresca = await loadOrder();
-
-      // Con recargo, los precios los reescribió la base al prorratearlo, así
-      // que el borrador local quedó viejo. loadOrder no los re-sincroniza a
-      // propósito —para no pisar ediciones sin guardar—, y acá hay que
-      // forzarlo: si no, la pantalla seguiría mostrando los precios de antes
-      // del recargo y el próximo Guardar los volvería a escribir.
-      if (sobrefacturacion && fresca) {
-        const recargados = mapItems(fresca);
-        setItems(recargados);
-        itemsBaselineRef.current = JSON.stringify(recargados);
-      }
-
-      setAviso(mensaje);
+      // Como todo comprobante nuevo, el presupuesto termina en su listado. Lo
+      // que pasó con el envío viaja con la navegación y se muestra allá.
+      navigate('/cotizaciones', { state: { aviso: mensaje } });
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

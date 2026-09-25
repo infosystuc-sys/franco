@@ -65,15 +65,13 @@ export function QuotationDetails() {
   const documentRef = React.useRef<HTMLDivElement>(null);
 
   /**
-   * A dónde se vuelve al terminar. Normalmente el menú, pero si se llegó desde
+   * A dónde se vuelve al terminar. Normalmente el listado, pero si se llegó desde
    * una orden —con ?volver=OT-x— se vuelve a esa orden: quien mandó a imprimir
    * desde ahí está trabajando en la orden, no en el presupuesto.
    */
   const destinoAlSalir = searchParams.get('volver')
     ? `/orden/${searchParams.get('volver')}`
-    : ['imprimir', 'descargar', 'enviar'].some((p) => searchParams.has(p))
-      ? '/cotizaciones'
-      : '/';
+    : '/cotizaciones';
 
   const loadQuotation = React.useCallback(async () => {
     if (!number) return;
@@ -170,15 +168,15 @@ export function QuotationDetails() {
   }
 
   /**
-   * Toda acción de la cotización termina en el menú. Cada cosa que se hace acá
+   * Toda acción de la cotización termina en el listado de cotizaciones. Cada cosa que se hace acá
    * —guardarla, mandarla, imprimirla— cierra el trámite de esa cotización, y
    * quedarse en la pantalla invita a repetir la acción sobre algo ya resuelto.
    */
-  const volverAlMenu = () => navigate(destinoAlSalir);
+  const volverAlListado = () => navigate(destinoAlSalir);
 
   const handleSave = () => run(async () => {
     await guardarLoEditado();
-    volverAlMenu();
+    volverAlListado();
   });
 
   const handleStatus = (status: QuotationDetail['status']) => run(async () => {
@@ -186,13 +184,13 @@ export function QuotationDetails() {
     // El rechazo no se queda en la cotización: la orden que la originó deja de
     // esperar respuesta y libera el lugar que el vehículo ocupaba en la playa.
     if (status === 'RECHAZADA') await rejectQuotationWorkOrder(quotation.id);
-    volverAlMenu();
+    volverAlListado();
   });
 
   /**
    * Mandarlo a autorizar no cierra la pantalla como el resto de las acciones:
    * después de enviar se suele mirar el estado, y a veces reenviar. Salir al
-   * menú obligaría a volver a entrar para hacer exactamente eso.
+   * listado obligaría a volver a entrar para hacer exactamente eso.
    */
   const handleEnviarAutorizar = () => run(async () => {
     await guardarLoEditado();
@@ -205,7 +203,7 @@ export function QuotationDetails() {
     await guardarLoEditado();
     // Se vuelve recién cuando se cierra el diálogo de impresión: navegar
     // mientras está abierto cancela la impresión o la saca cortada.
-    window.addEventListener('afterprint', volverAlMenu, { once: true });
+    window.addEventListener('afterprint', volverAlListado, { once: true });
     window.print();
   });
 
@@ -456,7 +454,7 @@ export function QuotationDetails() {
               : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`
           }
           onSent={() => marcarEnviado('presupuesto', quotation.id)}
-          onClose={() => { setSendModal(null); volverAlMenu(); }}
+          onClose={() => { setSendModal(null); volverAlListado(); }}
         />
       )}
     </div>
