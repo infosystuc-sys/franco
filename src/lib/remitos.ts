@@ -22,6 +22,9 @@ export interface Remito {
   issueDate: string;
   notes: string | null;
   voidedReason: string | null;
+  /** Contacto vigente del cliente, para mandarle el remito. */
+  customerEmail?: string | null;
+  customerPhone?: string | null;
   items: RemitoItem[];
 }
 
@@ -44,6 +47,8 @@ function mapRemito(row: any): Remito {
     issueDate: row.issue_date,
     notes: row.notes,
     voidedReason: row.voided_reason,
+    customerEmail: row.customer?.email ?? null,
+    customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
     items: (row.items ?? [])
       .slice()
       .sort((a: any, b: any) => a.line_number - b.line_number)
@@ -59,6 +64,7 @@ function mapRemito(row: any): Remito {
 const SELECT =
   `id, full_number, status, invoice_id, customer_id, customer_name, customer_legal_name, customer_tax_id,
    customer_address, issue_date, notes, voided_reason,
+   customer:customers(email, phone_e164, phone),
    items:remito_items(article_id, code, description, quantity, line_number)`;
 
 export async function fetchRemitoByInvoice(invoiceId: string): Promise<Remito | null> {
@@ -83,16 +89,19 @@ export interface RemitoListRow {
   status: RemitoStatus;
   invoiceId: string | null;
   invoiceFullNumber: string | null;
+  customerId: string;
   customerName: string;
   issueDate: string;
   itemCount: number;
+  enviadoAt: string | null;
+  etiquetas: string[];
 }
 
 export async function fetchRemitos(): Promise<RemitoListRow[]> {
   const { data, error } = await supabase
     .from('remitos')
     .select(
-      `id, full_number, status, invoice_id, customer_name, issue_date,
+      `id, full_number, status, invoice_id, customer_id, customer_name, issue_date, enviado_at, etiquetas,
        invoice:invoices(full_number),
        items:remito_items(id)`
     )
@@ -106,9 +115,12 @@ export async function fetchRemitos(): Promise<RemitoListRow[]> {
     status: row.status,
     invoiceId: row.invoice_id,
     invoiceFullNumber: row.invoice?.full_number ?? null,
+    customerId: row.customer_id,
     customerName: row.customer_name,
     issueDate: row.issue_date,
     itemCount: (row.items ?? []).length,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
   }));
 }
 

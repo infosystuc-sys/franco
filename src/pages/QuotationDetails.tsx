@@ -20,6 +20,8 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { QuotationDocument } from '@/src/components/QuotationDocument';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 import { formatCuit } from '@/src/lib/fiscal';
 import { fetchTallerHeader, formatAddress, type TallerHeader } from '@/src/lib/companySettings';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
@@ -60,8 +62,6 @@ export function QuotationDetails() {
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  /** Ya se disparó la impresión automática: sin esto se repetiría en cada render. */
-  const yaImprimio = React.useRef(false);
   const documentRef = React.useRef<HTMLDivElement>(null);
 
   /**
@@ -71,7 +71,9 @@ export function QuotationDetails() {
    */
   const destinoAlSalir = searchParams.get('volver')
     ? `/orden/${searchParams.get('volver')}`
-    : '/';
+    : ['imprimir', 'descargar', 'enviar'].some((p) => searchParams.has(p))
+      ? '/cotizaciones'
+      : '/';
 
   const loadQuotation = React.useCallback(async () => {
     if (!number) return;
@@ -110,33 +112,20 @@ export function QuotationDetails() {
   }, [isAdmin]);
 
   /**
-   * Llegar con ?imprimir=1 abre el diálogo solo. Es el botón "Imprimir
-   * presupuesto" de la orden: desde ahí se quiere el papel, no esta pantalla.
+   * Llegar con ?imprimir=1, ?descargar=1 o ?enviar=… hace la acción sola: son
+   * el botón "Imprimir presupuesto" de la orden y los del listado. Al terminar
+   * se vuelve a donde se vino (ver destinoAlSalir).
    *
    * Vive acá arriba, con el resto de los hooks, porque más abajo hay returns
-   * tempranos —cargando, no encontrada— y un hook detrás de un return se saltea
-   * en esos renders: React cuenta los hooks por posición y el orden se rompe.
-   *
-   * Se espera a que la cotización esté cargada —imprimir un cartel de
-   * "cargando" no le sirve a nadie— y se hace una sola vez.
+   * tempranos —cargando, no encontrada—.
    */
-  React.useEffect(() => {
-    if (yaImprimio.current) return;
-    if (searchParams.get('imprimir') !== '1') return;
-    if (loading || !quotation) return;
-    // Un respiro para que el navegador termine de pintar el documento antes
-    // de capturarlo. La marca de "ya imprimí" se pone recién acá adentro, no
-    // antes del timeout: en desarrollo React monta el efecto dos veces, y
-    // marcarla afuera hacía que el segundo montaje se diera por impreso
-    // mientras el primero ya había cancelado su timeout.
-    const t = setTimeout(() => {
-      if (yaImprimio.current) return;
-      yaImprimio.current = true;
-      window.addEventListener('afterprint', () => navigate(destinoAlSalir), { once: true });
-      window.print();
-    }, 300);
-    return () => clearTimeout(t);
-  }, [loading, quotation, searchParams, navigate, destinoAlSalir]);
+  useAccionDesdeListado({
+    listo: !loading && !!quotation,
+    listado: destinoAlSalir,
+    documentRef,
+    nombreArchivo: `Presupuesto-${quotation?.number ?? ''}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (loading) {
     return <div className="w-full p-8 text-center text-text-soft">Cargando cotización...</div>;
@@ -466,6 +455,7 @@ export function QuotationDetails() {
               ? `Adjuntamos el presupuesto ${quotation.number} por $ ${formatMoney(itemsTotal + itemsIva)}.`
               : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`
           }
+          onSent={() => marcarEnviado('presupuesto', quotation.id)}
           onClose={() => { setSendModal(null); volverAlMenu(); }}
         />
       )}

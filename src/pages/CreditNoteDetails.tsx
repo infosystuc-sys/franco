@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Printer, AlertTriangle, Stamp, Receipt } from 'lucide-react';
+import { XCircle, Printer, AlertTriangle, Stamp, Receipt, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import QRCode from 'qrcode';
 import { cn, formatMoney } from '@/src/lib/utils';
@@ -15,6 +15,9 @@ import {
 } from '@/src/lib/creditNotes';
 import { emitirNcEnArca } from '@/src/lib/arcaFacturacion';
 import { fetchCompanySettings } from '@/src/lib/companySettings';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 
 /** Los códigos de nota de crédito de ARCA, para el QR. */
 const COD_NOTA_CREDITO: Record<string, number> = { A: 3, B: 8, C: 13 };
@@ -28,6 +31,8 @@ export function CreditNoteDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [pidiendoCae, setPidiendoCae] = React.useState(false);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -44,6 +49,15 @@ export function CreditNoteDetails() {
   }, [id]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Los botones del listado llegan acá con la acción en la URL.
+  const desdeListado = useAccionDesdeListado({
+    listo: !loading && nc?.status === 'EMITIDA',
+    listado: '/notas-credito',
+    documentRef,
+    nombreArchivo: `NC-${nc?.fullNumber ?? ''}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (loading) return <div className="mx-auto max-w-4xl p-8 text-center text-text-soft">Cargando…</div>;
@@ -124,9 +138,17 @@ export function CreditNoteDetails() {
                   {pidiendoCae ? 'Pidiendo el CAE…' : nc.caeRechazo ? 'Reintentar el CAE' : 'Pedir el CAE a ARCA'}
                 </Button>
               ) : (
-                <Button variant="ghost" type="button" onClick={() => window.print()}>
-                  <Printer size={16} /> Imprimir
-                </Button>
+                <>
+                  <Button variant="ghost" type="button" onClick={() => window.print()}>
+                    <Printer size={16} /> Imprimir
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                    <Mail size={16} /> Enviar por mail
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </Button>
+                </>
               )}
             </>
           }
@@ -162,7 +184,29 @@ export function CreditNoteDetails() {
         )}
       </div>
 
-      <CreditNoteDocument nc={nc} logo={logo} />
+      <div ref={documentRef}>
+        <CreditNoteDocument nc={nc} logo={logo} />
+      </div>
+
+      {sendModal && (
+        <SendDocumentModal
+          channel={sendModal}
+          defaultDestino={(sendModal === 'email' ? nc.customerEmail : nc.customerPhone) ?? null}
+          fileName={`NC-${nc.fullNumber}.pdf`}
+          documentRef={documentRef}
+          subject={`Nota de crédito ${nc.fullNumber}`}
+          text={
+            sendModal === 'email'
+              ? `Adjuntamos la nota de crédito ${nc.fullNumber} por $ ${formatMoney(nc.totalAmount)}.`
+              : `Nota de crédito ${nc.fullNumber} — $ ${formatMoney(nc.totalAmount)}`
+          }
+          onSent={() => marcarEnviado('nota_credito', nc.id)}
+          onClose={() => {
+            setSendModal(null);
+            if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
+          }}
+        />
+      )}
     </div>
   );
 }

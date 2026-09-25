@@ -28,9 +28,18 @@ export interface CreditNoteListRow {
   /** La factura que revierte. */
   invoiceFullNumber: string;
   invoiceId: string;
+  customerId: string;
+  /** Lo que ya se aplicó contra facturas; el resto queda a cuenta. */
+  appliedAmount: number;
+  autorizada: boolean;
+  enviadoAt: string | null;
+  etiquetas: string[];
 }
 
 export interface CreditNoteDetail extends CreditNoteListRow {
+  /** Contacto vigente del cliente, para mandarle la nota. */
+  customerEmail: string | null;
+  customerPhone: string | null;
   salesPoint: number;
   number: number;
   netAmount: number;
@@ -59,7 +68,8 @@ export interface CreditNoteDetail extends CreditNoteListRow {
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_name, issue_date, total_amount, ' +
-  'cancela_total, devuelve_fondos, cae_rechazo, invoice_id, invoice:invoices(full_number)';
+  'cancela_total, devuelve_fondos, cae_rechazo, invoice_id, invoice:invoices(full_number), ' +
+  'customer_id, applied_amount, cae, enviado_at, etiquetas';
 
 function mapListRow(row: any): CreditNoteListRow {
   return {
@@ -75,6 +85,11 @@ function mapListRow(row: any): CreditNoteListRow {
     caeRechazo: row.cae_rechazo ?? null,
     invoiceId: row.invoice_id,
     invoiceFullNumber: row.invoice?.full_number ?? '',
+    customerId: row.customer_id,
+    appliedAmount: Number(row.applied_amount ?? 0),
+    autorizada: !!row.cae,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
   };
 }
 
@@ -93,7 +108,7 @@ export async function fetchCreditNoteById(id: string): Promise<CreditNoteDetail 
   const { data, error } = await supabase
     .from('credit_notes')
     .select(
-      'id, full_number, invoice_type, status, customer_name, issue_date, total_amount, cancela_total, devuelve_fondos, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
+      'id, full_number, invoice_type, status, customer_id, applied_amount, enviado_at, etiquetas, customer:customers(email, phone_e164, phone), customer_name, issue_date, total_amount, cancela_total, devuelve_fondos, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
     )
     .eq('id', id)
     .maybeSingle();
@@ -109,6 +124,8 @@ export async function fetchCreditNoteById(id: string): Promise<CreditNoteDetail 
     netAmount: Number(row.net_amount),
     vatAmount: Number(row.vat_amount),
     motivo: row.motivo,
+    customerEmail: row.customer?.email ?? null,
+    customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
     customerLegalName: row.customer_legal_name,
     customerTaxId: row.customer_tax_id,
     customerTaxCondition: row.customer_tax_condition,

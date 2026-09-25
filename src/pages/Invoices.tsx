@@ -1,505 +1,185 @@
 import React from 'react';
-import { Plus, Search, Eye, AlertTriangle, Receipt, ArrowRight, Stamp, HandCoins, Printer, Mail, MessageCircle } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
-import { cn, formatMoney } from '@/src/lib/utils';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   balanceOf,
-  daysUntilDue,
   describeInvoiceError,
   fetchInvoices,
-  fetchPendingToInvoice,
   formatDate,
-  INVOICE_STRIP,
-  INVOICE_TYPE_LABELS,
-  isOverdue,
   paymentStateOf,
-  PAYMENT_STATE_BADGE,
-  PAYMENT_STATE_LABELS,
   type InvoiceListRow,
-  type PendingToInvoice,
 } from '@/src/lib/invoices';
 import { emitirEnArca } from '@/src/lib/arcaFacturacion';
+import { siNo } from '@/src/lib/comprobantes';
+import { urlDeAccion } from '@/src/lib/accionDesdeListado';
+import {
+  ComprobantesListado,
+  ETIQUETAR,
+  type AccionListado,
+  type ColumnaListado,
+} from '@/src/components/ComprobantesListado';
 
-type Filter = 'TODAS' | 'IMPAGAS' | 'VENCIDAS' | 'PAGADAS' | 'ANULADAS';
+const SOLO_EMITIDA = (f: InvoiceListRow) =>
+  f.status === 'EMITIDA' ? null : 'Solo sobre una factura emitida: esta está anulada o esperando el CAE.';
 
-const FILTER_LABELS: Record<Filter, string> = {
-  TODAS: 'Todas',
-  IMPAGAS: 'Por cobrar',
-  VENCIDAS: 'Vencidas',
-  PAGADAS: 'Pagadas',
-  ANULADAS: 'Anuladas',
-};
-
-const FILTERS = Object.keys(FILTER_LABELS) as Filter[];
-
-function matchesFilter(invoice: InvoiceListRow, filter: Filter): boolean {
-  const voided = invoice.status === 'ANULADA';
-  switch (filter) {
-    case 'TODAS':
-      return true;
-    case 'ANULADAS':
-      return voided;
-    case 'VENCIDAS':
-      return isOverdue(invoice);
-    case 'PAGADAS':
-      return !voided && paymentStateOf(invoice) === 'PAGADA';
-    case 'IMPAGAS':
-      return !voided && balanceOf(invoice) > 0;
-  }
+function estado(f: InvoiceListRow): string {
+  if (f.status === 'ANULADA') return 'Anulado';
+  if (f.status === 'PENDIENTE_CAE') return f.caeRechazo ? 'Rechazado por ARCA' : 'Pendiente de CAE';
+  return 'Emitido';
 }
 
-/** El color de la tira: lo que hay que hacer con esa factura, de un vistazo. */
-function stripColor(invoice: InvoiceListRow): string {
-  if (invoice.status === 'ANULADA') return INVOICE_STRIP.ANULADA;
-  if (invoice.status === 'PENDIENTE_CAE') return INVOICE_STRIP.PENDIENTE_CAE;
-  if (isOverdue(invoice)) return INVOICE_STRIP.VENCIDA;
-  return INVOICE_STRIP[paymentStateOf(invoice)];
+function cobrado(f: InvoiceListRow): string {
+  if (f.status !== 'EMITIDA') return '—';
+  const pago = paymentStateOf(f);
+  return pago === 'PAGADA' ? 'Si' : pago === 'PARCIAL' ? 'Parcial' : 'No';
 }
 
+const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
+  { label: 'Comprobante', valor: (f) => `FVA ${f.invoiceType} ${f.fullNumber}` },
+  { label: 'Cliente', valor: (f) => f.customerName, ancho: 'w-full' },
+  { label: 'Emisión', valor: (f) => formatDate(f.issueDate) },
+  { label: 'Vencimiento', valor: (f) => formatDate(f.dueDate) },
+  { label: 'Enviado', valor: (f) => siNo(!!f.enviadoAt) },
+  { label: 'Total', valor: (f) => `$ ${formatMoney(f.totalAmount)}`, derecha: true },
+  { label: 'Estado', valor: estado },
+  // La X no es fiscal: ARCA no la autoriza, ni tiene por qué.
+  { label: 'Autorizado', valor: (f) => (f.invoiceType === 'X' ? '—' : siNo(f.autorizada)) },
+  { label: 'Cobrado', valor: cobrado },
+];
+
+/**
+ * Facturas de venta, con el listado y las acciones del de Tango. Cada acción
+ * sobre un comprobante abre su ficha y le pide la acción por la URL: la ficha
+ * es la que sabe dibujar la factura, imprimirla y mandarla.
+ */
 export function Invoices() {
   const { role, canViewHistory } = useAuth();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = React.useState<InvoiceListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [search, setSearch] = React.useState('');
-  const [filter, setFilter] = React.useState<Filter>('TODAS');
-  const [pending, setPending] = React.useState<PendingToInvoice[]>([]);
-  const [reintentando, setReintentando] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    Promise.all([fetchInvoices(), fetchPendingToInvoice()])
-      .then(([issued, toInvoice]) => {
-        if (cancelled) return;
-        setInvoices(issued);
-        setPending(toInvoice);
-      })
-      .catch((err) => !cancelled && setError(describeInvoiceError(getErrorMessage(err))))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+  const cargar = React.useCallback(async () => {
+    try {
+      setInvoices(await fetchInvoices());
+    } catch (err) {
+      setError(describeInvoiceError(getErrorMessage(err)));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  /**
-   * Volver a pedir el CAE sin salir del listado. Es el caso de la factura que
-   * ARCA rechazó por algo que ya se corrigió, o que quedó pendiente porque se
-   * cortó la conexión en el peor momento.
-   */
-  async function reintentarCae(invoice: InvoiceListRow) {
-    const motivo = invoice.caeRechazo
-      ? `\n\nLa vez anterior ARCA dijo:\n${invoice.caeRechazo}`
-      : '';
+  React.useEffect(() => { cargar(); }, [cargar]);
+
+  const getId = React.useCallback((f: InvoiceListRow) => f.id, []);
+
+  if (role !== 'admin') return <Navigate to="/" replace />;
+
+  const ficha = (f: InvoiceListRow) => `/factura/${f.id}`;
+
+  /** Pedirle a ARCA el CAE que quedó pendiente, sin salir del listado. */
+  async function pedirCae(f: InvoiceListRow) {
+    const motivo = f.caeRechazo ? `\n\nLa vez anterior ARCA dijo:\n${f.caeRechazo}` : '';
     if (
       !window.confirm(
-        `Pedirle a ARCA el CAE de la ${invoice.fullNumber}, por $ ${formatMoney(invoice.totalAmount)}.` +
+        `Pedirle a ARCA el CAE de la ${f.fullNumber}, por $ ${formatMoney(f.totalAmount)}.` +
           `${motivo}\n\nSi ARCA la autoriza, el comprobante queda emitido y solo se ` +
           'puede revertir con una nota de crédito.'
       )
     ) {
       return;
     }
-
-    setReintentando(invoice.id);
     setError(null);
     try {
-      await emitirEnArca(invoice.id);
-      setInvoices(await fetchInvoices());
+      await emitirEnArca(f.id);
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
-      setReintentando(null);
     }
+    await cargar();
   }
 
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return invoices.filter((invoice) => {
-      if (!matchesFilter(invoice, filter)) return false;
-      if (!term) return true;
-      return [invoice.fullNumber, invoice.customerName, invoice.workOrderNumber]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term));
-    });
-  }, [invoices, search, filter]);
+  const botones: AccionListado<InvoiceListRow>[] = [
+    { label: 'Ver', onClick: (f) => f && navigate(ficha(f)) },
+    { label: 'Imprimir', bloqueo: SOLO_EMITIDA, onClick: (f) => f && navigate(urlDeAccion(ficha(f), 'imprimir')) },
+    {
+      label: 'Generar ticket de cambio',
+      bloqueo: SOLO_EMITIDA,
+      onClick: (f) => f && navigate(urlDeAccion(ficha(f), 'ticket')),
+    },
+  ];
 
-  const totals = React.useMemo(() => {
-    const live = invoices.filter((invoice) => invoice.status === 'EMITIDA');
-    return {
-      emitidas: live.length,
-      porCobrar: live.reduce((sum, invoice) => sum + balanceOf(invoice), 0),
-      vencido: invoices
-        .filter(isOverdue)
-        .reduce((sum, invoice) => sum + balanceOf(invoice), 0),
-    };
-  }, [invoices]);
-
-  if (role !== 'admin') return <Navigate to="/" replace />;
+  const masAcciones = [
+    {
+      label: 'Descargar comprobante',
+      bloqueo: SOLO_EMITIDA,
+      onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'descargar')),
+    },
+    {
+      label: 'Copiar comprobante',
+      onClick: (f: InvoiceListRow | null) => f && navigate(`/facturas/nueva?copiar=${f.id}`),
+    },
+    ETIQUETAR,
+    {
+      label: 'Generar nota de crédito',
+      bloqueo: (f: InvoiceListRow) => {
+        if (f.invoiceType === 'X') return 'La serie X no lleva nota de crédito: se anula desde la ficha.';
+        return SOLO_EMITIDA(f);
+      },
+      onClick: (f: InvoiceListRow | null) => f && navigate(`/notas-credito/nueva?factura=${f.id}`),
+    },
+    {
+      label: 'Enviar comprobante por WhatsApp',
+      bloqueo: SOLO_EMITIDA,
+      onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'whatsapp')),
+    },
+    {
+      label: 'Enviar comprobante por correo',
+      bloqueo: SOLO_EMITIDA,
+      onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'email')),
+    },
+    {
+      label: 'Cobrar',
+      bloqueo: (f: InvoiceListRow) =>
+        SOLO_EMITIDA(f) ?? (balanceOf(f) > 0 ? null : 'Esta factura no tiene saldo pendiente.'),
+      onClick: (f: InvoiceListRow | null) =>
+        f && navigate(`/cobranzas/nueva?cliente=${f.customerId}&factura=${f.id}`),
+    },
+    {
+      label: 'Pedir el CAE a ARCA',
+      bloqueo: (f: InvoiceListRow) =>
+        f.status === 'PENDIENTE_CAE' ? null : 'Solo para una factura que quedó esperando el CAE.',
+      onClick: (f: InvoiceListRow | null) => f && pedirCae(f),
+    },
+    {
+      label: 'Órdenes para facturar',
+      sinSeleccion: true,
+      onClick: () => navigate('/facturas/pendientes'),
+    },
+    { label: 'Nuevo cliente', sinSeleccion: true, onClick: () => navigate('/clientes?nuevo=1') },
+    { label: 'Nuevo producto/servicio', sinSeleccion: true, onClick: () => navigate('/inventario?nuevo=1') },
+  ];
 
   return (
-    <div className="w-full space-y-6">
-      <PageHeader
-        title={canViewHistory ? 'Facturación' : ''}
-        subtitle={canViewHistory ? 'Las facturas salen de una orden terminada, en cuenta corriente a 7 días.' : undefined}
-        actions={
-          <Link to="/facturas/nueva">
-            <Button variant="secondary"><Plus size={16} /> Nueva factura</Button>
-          </Link>
-        }
-      />
-
-      {error && (
-        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
-      )}
-
-      {canViewHistory && (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Kpi label="Facturas emitidas" value={String(totals.emitidas)} />
-        <Kpi label="Por cobrar" value={`$ ${formatMoney(totals.porCobrar)}`} />
-        <Kpi label="Vencido" value={`$ ${formatMoney(totals.vencido)}`} danger={totals.vencido > 0} />
-      </div>
-      )}
-
-      <PendingToInvoiceList orders={pending} loading={loading} />
-
-      {canViewHistory && (
-      <>
-      <SectionHeader title="Facturas emitidas" />
-
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((option) => (
-          <button
-            key={option}
-            onClick={() => setFilter(option)}
-            className={cn(
-              'rounded border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
-              filter === option
-                ? 'border-accent bg-accent text-accent-ink'
-                : 'border-line-strong bg-panel text-text-soft hover:bg-panel-alt'
-            )}
-          >
-            {FILTER_LABELS[option]}
-          </button>
-        ))}
-
-        <div className="relative ml-auto w-full sm:w-64">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Número, cliente u orden…"
-            className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
-          />
-        </div>
-      </div>
-
-      <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[15px]">
-          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-            <tr>
-              <th className="px-4 py-1">Comprobante</th>
-              <th className="px-3 py-1">Cliente</th>
-              <th className="px-3 py-1 w-24">Orden</th>
-              <th className="px-3 py-1 w-28">Emisión</th>
-              <th className="px-3 py-1 w-32">Vencimiento</th>
-              <th className="px-3 py-1 w-32 text-right">Total</th>
-              <th className="px-3 py-1 w-32 text-right">Saldo</th>
-              <th className="px-3 py-1 w-36"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-text-soft">Cargando facturas…</td>
-              </tr>
-            )}
-
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-text-soft">
-                  {invoices.length === 0 ? (
-                    <span className="flex flex-col items-center gap-2">
-                      <Receipt size={24} className="text-text-faint" />
-                      Todavía no hay facturas emitidas. Salen de las órdenes de
-                      arriba, con el botón <strong>Facturar</strong>.
-                    </span>
-                  ) : (
-                    'Ninguna factura coincide con el filtro.'
-                  )}
-                </td>
-              </tr>
-            )}
-
-            {!loading &&
-              filtered.map((invoice) => {
-                const voided = invoice.status === 'ANULADA';
-                const overdue = isOverdue(invoice);
-                const balance = balanceOf(invoice);
-                const days = daysUntilDue(invoice.dueDate);
-
-                return (
-                  <tr
-                    key={invoice.id}
-                    className="relative h-11 border-b border-line transition-colors hover:bg-panel-alt"
-                  >
-                    <td data-primary className="relative px-4 py-1">
-                      <StateStrip color={stripColor(invoice)} />
-                      <Link
-                        to={`/factura/${invoice.id}`}
-                        className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"
-                      >
-                        {invoice.fullNumber}
-                      </Link>
-                      <span className="ml-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-                        {INVOICE_TYPE_LABELS[invoice.invoiceType]}
-                      </span>
-                    </td>
-
-                    <td data-label="Cliente" className="px-3 py-1">
-                      <span className={cn(voided && 'text-text-faint line-through')}>
-                        {invoice.customerName}
-                      </span>
-                      {voided ? (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-                          Anulada
-                        </span>
-                      ) : invoice.status === 'PENDIENTE_CAE' ? (
-                        <span className="ml-2 bg-panel-head rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-                          Esperando CAE
-                        </span>
-                      ) : (
-                        <span
-                          className={cn(
-                            'ml-2 rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.06em]',
-                            PAYMENT_STATE_BADGE[paymentStateOf(invoice)]
-                          )}
-                        >
-                          {PAYMENT_STATE_LABELS[paymentStateOf(invoice)]}
-                        </span>
-                      )}
-                    </td>
-
-                    <td data-label="Orden" className="px-3 py-1 font-mono text-[14px] text-text-soft">
-                      {invoice.workOrderNumber ? (
-                        <Link to={`/orden/${invoice.workOrderNumber}`} className="hover:underline">
-                          {invoice.workOrderNumber}
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-
-                    <td data-label="Emisión" className="px-3 py-1 text-text-soft">
-                      {formatDate(invoice.issueDate)}
-                    </td>
-
-                    <td data-label="Vencimiento" className="px-3 py-1">
-                      <span className={cn(overdue ? 'font-semibold text-danger' : 'text-text-soft')}>
-                        {formatDate(invoice.dueDate)}
-                      </span>
-                      {overdue && (
-                        <span className="ml-1.5 inline-flex items-center gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-danger">
-                          <AlertTriangle size={11} /> {Math.abs(days)} d.
-                        </span>
-                      )}
-                    </td>
-
-                    <td data-label="Total" className="px-3 py-1 text-right">
-                      $ {formatMoney(invoice.totalAmount)}
-                    </td>
-
-                    <td data-label="Saldo" className="px-3 py-1 text-right font-semibold">
-                      {voided ? <span className="text-text-faint">—</span> : `$ ${formatMoney(balance)}`}
-                    </td>
-
-                    <td className="px-3 py-1 text-center">
-                      <div className="inline-flex items-center gap-2">
-                        {invoice.status === 'PENDIENTE_CAE' && (
-                          <button
-                            type="button"
-                            onClick={() => reintentarCae(invoice)}
-                            disabled={reintentando !== null}
-                            title={
-                              invoice.caeRechazo
-                                ? `ARCA la rechazó: ${invoice.caeRechazo}`
-                                : 'Todavía no tiene CAE. Pedírselo a ARCA.'
-                            }
-                            aria-label={`Pedir el CAE de la factura ${invoice.fullNumber}`}
-                            className={cn(
-                              'inline-flex transition-colors disabled:opacity-40',
-                              invoice.caeRechazo
-                                ? 'text-danger hover:text-danger/70'
-                                : 'text-text-soft hover:text-accent-deep'
-                            )}
-                          >
-                            <Stamp
-                              size={16}
-                              className={cn(reintentando === invoice.id && 'animate-pulse')}
-                            />
-                          </button>
-                        )}
-
-                        {/* Sobre un comprobante ya emitido: cobrar, reimprimir
-                            y mandar, sin tener que abrir la ficha primero. Son
-                            las acciones que ya existían adentro de la ficha
-                            —esto solo les da un atajo desde acá—. */}
-                        {invoice.status === 'EMITIDA' && (
-                          <>
-                            {balance > 0 && (
-                              <Link
-                                to={`/cobranzas/nueva?cliente=${invoice.customerId}&factura=${invoice.id}`}
-                                aria-label={`Cobrar la factura ${invoice.fullNumber}`}
-                                title={`Cobrar — debe $ ${formatMoney(balance)}`}
-                                className="inline-flex text-text-soft transition-colors hover:text-state-ok"
-                              >
-                                <HandCoins size={16} />
-                              </Link>
-                            )}
-                            <Link
-                              to={`/factura/${invoice.id}?imprimir=1`}
-                              aria-label={`Reimprimir la factura ${invoice.fullNumber}`}
-                              title="Reimprimir"
-                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
-                            >
-                              <Printer size={16} />
-                            </Link>
-                            <Link
-                              to={`/factura/${invoice.id}?enviar=email`}
-                              aria-label={`Enviar por mail la factura ${invoice.fullNumber}`}
-                              title="Enviar por mail"
-                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
-                            >
-                              <Mail size={16} />
-                            </Link>
-                            <Link
-                              to={`/factura/${invoice.id}?enviar=whatsapp`}
-                              aria-label={`Enviar por WhatsApp la factura ${invoice.fullNumber}`}
-                              title="Enviar por WhatsApp"
-                              className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
-                            >
-                              <MessageCircle size={16} />
-                            </Link>
-                          </>
-                        )}
-
-                        <Link
-                          to={`/factura/${invoice.id}`}
-                          aria-label={`Ver factura ${invoice.fullNumber}`}
-                          title="Ver ficha"
-                          className="inline-flex text-text-soft transition-colors hover:text-accent-deep"
-                        >
-                          <Eye size={16} />
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-      </Panel>
-      </>
-      )}
-    </div>
-  );
-}
-
-/**
- * Lo que hay para facturar. Va arriba de las emitidas porque es la razón por
- * la que se entra acá: el listado de facturas es consulta, esto es trabajo
- * pendiente. También es el único camino a una orden terminada, que el panel
- * no muestra por ser una cola de trabajo.
- */
-function PendingToInvoiceList({
-  orders,
-  loading,
-}: {
-  orders: PendingToInvoice[];
-  loading: boolean;
-}) {
-  return (
-    <div>
-      <SectionHeader
-        title={`Pendientes de facturar${orders.length > 0 ? ` (${orders.length})` : ''}`}
-      />
-
-      <Panel className="overflow-x-auto overflow-y-hidden">
-        <table className="table-stack w-full text-left text-[15px]">
-          <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-            <tr>
-              <th className="px-4 py-1 w-28">Orden</th>
-              <th className="px-3 py-1">Cliente</th>
-              <th className="px-3 py-1">Vehículo / Componente</th>
-              <th className="px-3 py-1 w-36"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-soft">Cargando…</td>
-              </tr>
-            )}
-
-            {!loading && orders.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-soft">
-                  No hay órdenes terminadas sin facturar.
-                </td>
-              </tr>
-            )}
-
-            {!loading &&
-              orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="relative h-11 border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
-                >
-                  <td data-primary className="relative px-4 py-1">
-                    <StateStrip color="var(--color-state-done)" />
-                    <Link
-                      to={`/orden/${order.number}`}
-                      className="font-mono font-semibold text-text hover:text-accent-deep hover:underline"
-                    >
-                      {order.number}
-                    </Link>
-                  </td>
-                  <td data-label="Cliente" className="px-3 py-1">{order.customerName}</td>
-                  <td data-label="Vehículo" className="px-3 py-1 text-text-soft">
-                    <span className="block">{order.vehicleLabel}</span>
-                    {order.component && (
-                      <span className="block text-[13px] text-text-faint">{order.component}</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1 text-right">
-                    <Link to={`/facturar/${order.number}`}>
-                      <Button type="button" className="px-3">
-                        <Receipt size={15} /> Facturar <ArrowRight size={14} />
-                      </Button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </Panel>
-    </div>
-  );
-}
-
-function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <Panel className="p-4">
-      <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-        {label}
-      </span>
-      <span
-        className={cn('block font-display text-2xl font-medium', danger ? 'text-danger' : 'text-text')}
-      >
-        {value}
-      </span>
-    </Panel>
+    <ComprobantesListado
+      titulo="Facturas de venta"
+      tipo="factura"
+      filas={invoices}
+      loading={loading}
+      error={error}
+      getId={getId}
+      columnas={COLUMNAS}
+      nuevo={{ to: '/facturas/nueva' }}
+      onAbrir={(f) => navigate(ficha(f))}
+      botones={botones}
+      masAcciones={masAcciones}
+      etiquetasDe={(f) => f.etiquetas}
+      onEtiquetasGuardadas={(id, etiquetas) =>
+        setInvoices((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
+      }
+      ocultarListado={!canViewHistory}
+      vacio="Todavía no hay facturas emitidas."
+    />
   );
 }

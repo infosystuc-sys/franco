@@ -6,6 +6,8 @@ import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 import {
   CHANGE_KIND_LABELS,
   describeReceiptError,
@@ -49,6 +51,15 @@ export function ReceiptDetails() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  // Los botones del listado llegan acá con la acción en la URL.
+  const desdeListado = useAccionDesdeListado({
+    listo: !loading && receipt?.status === 'REGISTRADO',
+    listado: '/cobranzas',
+    documentRef,
+    nombreArchivo: `Recibo ${receipt?.fullNumber ?? ''}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -312,7 +323,11 @@ export function ReceiptDetails() {
             `Te enviamos el recibo ${receipt.fullNumber} por $ ${formatMoney(receipt.totalAmount)}. ` +
             'Gracias por tu pago.'
           }
-          onClose={() => setSendModal(null)}
+          onSent={() => marcarEnviado('recibo', receipt.id)}
+          onClose={() => {
+            setSendModal(null);
+            if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
+          }}
         />
       )}
     </div>

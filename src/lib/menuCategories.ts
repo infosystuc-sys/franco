@@ -101,6 +101,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo?destino=ot' },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
           { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
+          { icon: ClipboardList, label: 'Órdenes para facturar', path: '/facturas/pendientes', adminOnly: true },
           { icon: FileMinus, label: 'Notas de crédito', path: '/notas-credito', newPath: '/notas-credito/nueva', adminOnly: true },
           { icon: Link2, label: 'Imputación de comprobantes', path: '/imputaciones', adminOnly: true },
           { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
@@ -158,6 +159,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'comprobantes',
         cards: [
           { icon: HandCoins, label: 'Cobranzas', path: '/cobranzas', newPath: '/cobranzas/nueva', adminOnly: true },
+          { icon: Users, label: 'Cuenta corriente de clientes', path: '/cuenta-corriente-clientes', adminOnly: true },
           { icon: Banknote, label: 'Pagos', path: '/pagos', newPath: '/pagos/nueva', adminOnly: true },
         ],
       },

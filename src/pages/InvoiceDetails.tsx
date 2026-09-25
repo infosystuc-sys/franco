@@ -1,6 +1,8 @@
 import React from 'react';
 import { XCircle, Printer, Ban, AlertTriangle, Wrench, Mail, MessageCircle, Stamp, FileMinus } from 'lucide-react';
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
@@ -36,8 +38,6 @@ import { fetchCompanySettings } from '@/src/lib/companySettings';
 export function InvoiceDetails() {
   const { role } = useAuth();
   const { id } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
 
   const [invoice, setInvoice] = React.useState<InvoiceDetail | null>(null);
   const [remito, setRemito] = React.useState<Remito | null>(null);
@@ -72,38 +72,14 @@ export function InvoiceDetails() {
     load();
   }, [load]);
 
-  /**
-   * Llegar con ?imprimir=1 o ?enviar=email|whatsapp dispara la acción sola: es
-   * el botón "Reimprimir" o "Enviar" del listado, y desde ahí se quiere el
-   * resultado, no esta pantalla. Mismo mecanismo que el presupuesto.
-   *
-   * Van arriba, con el resto de los hooks: más abajo hay returns tempranos —
-   * cargando, no encontrada— y un hook detrás de un return se saltea en esos
-   * renders, así que el orden de hooks se rompería si estuvieran después.
-   */
-  const yaImprimio = React.useRef(false);
-  React.useEffect(() => {
-    if (yaImprimio.current) return;
-    if (searchParams.get('imprimir') !== '1') return;
-    if (loading || !invoice || invoice.status !== 'EMITIDA') return;
-    const t = setTimeout(() => {
-      if (yaImprimio.current) return;
-      yaImprimio.current = true;
-      window.addEventListener('afterprint', () => navigate('/facturas'), { once: true });
-      window.print();
-    }, 300);
-    return () => clearTimeout(t);
-  }, [loading, invoice, searchParams, navigate]);
-
-  const yaAbrioEnvio = React.useRef(false);
-  React.useEffect(() => {
-    if (yaAbrioEnvio.current) return;
-    const canal = searchParams.get('enviar');
-    if (canal !== 'email' && canal !== 'whatsapp') return;
-    if (loading || !invoice || invoice.status !== 'EMITIDA') return;
-    yaAbrioEnvio.current = true;
-    setSendModal(canal);
-  }, [loading, invoice, searchParams]);
+  // Los botones del listado llegan acá con la acción en la URL.
+  const desdeListado = useAccionDesdeListado({
+    listo: !loading && invoice?.status === 'EMITIDA',
+    listado: '/facturas',
+    documentRef,
+    nombreArchivo: `${invoice?.fullNumber ?? 'factura'}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -376,10 +352,16 @@ export function InvoiceDetails() {
         )}
       </div>
 
-      <div ref={documentRef}>
-        <InvoiceDocument invoice={invoice} logo={logo} />
-        {remito && <RemitoDocument remito={remito} logo={logo} />}
-      </div>
+      {/* El ticket de cambio reemplaza al comprobante en la hoja: es lo único
+          que se quiere imprimir cuando se lo pide. */}
+      {desdeListado.accion === 'ticket' ? (
+        <TicketDeCambio invoice={invoice} logo={logo} />
+      ) : (
+        <div ref={documentRef}>
+          <InvoiceDocument invoice={invoice} logo={logo} />
+          {remito && <RemitoDocument remito={remito} logo={logo} />}
+        </div>
+      )}
 
       {sendModal && (
         <SendDocumentModal
@@ -393,9 +375,71 @@ export function InvoiceDetails() {
               ? `Adjuntamos la ${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} por $ ${formatMoney(invoice.totalAmount)}.`
               : `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} — $ ${formatMoney(invoice.totalAmount)}`
           }
-          onClose={() => setSendModal(null)}
+          onSent={() => marcarEnviado('factura', invoice.id)}
+          onClose={() => {
+            setSendModal(null);
+            if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
+          }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * El ticket de cambio: lo que se lleva el cliente para cambiar lo que compró
+ * sin mostrar lo que pagó. Mismos renglones que la factura, sin precios ni
+ * totales, y aclarando que no es un comprobante fiscal.
+ */
+function TicketDeCambio({ invoice, logo }: { invoice: InvoiceDetail; logo?: string | null }) {
+  return (
+    <div className="print-document mx-auto max-w-md border border-line bg-panel p-6">
+      <div className="border-b-2 border-ink pb-3 text-center">
+        {logo && <img src={logo} alt="" className="mx-auto mb-2 max-h-14 object-contain" />}
+        <p className="font-display text-lg font-medium uppercase">{invoice.issuerLegalName}</p>
+        {invoice.issuerAddress && <p className="text-[13px] text-text-soft">{invoice.issuerAddress}</p>}
+        <p className="mt-2 font-display text-xl uppercase tracking-[0.1em]">Ticket de cambio</p>
+      </div>
+
+      <dl className="space-y-0.5 border-b border-line py-3 text-[14px]">
+        <div className="flex justify-between gap-3">
+          <dt className="text-text-faint">Comprobante</dt>
+          <dd className="font-mono font-semibold">FVA {invoice.invoiceType} {invoice.fullNumber}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-text-faint">Fecha</dt>
+          <dd>{formatDate(invoice.issueDate)}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-text-faint">Cliente</dt>
+          <dd className="text-right">{invoice.customerName}</dd>
+        </div>
+      </dl>
+
+      <table className="mt-3 w-full text-left text-[14px]">
+        <thead className="border-b border-line-strong text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          <tr>
+            <th className="py-1 pr-2">Artículo</th>
+            <th className="w-14 py-1 text-right">Cant.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.items.map((item, i) => (
+            <tr key={i} className="border-b border-line align-top">
+              <td className="py-1.5 pr-2">
+                {item.code && <span className="mr-1 font-mono text-[12px] text-text-soft">{item.code}</span>}
+                {item.description}
+              </td>
+              <td className="py-1.5 text-right">{item.quantity}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <p className="mt-4 text-center text-[12px] text-text-faint">
+        Válido para cambio de la mercadería detallada. No es un comprobante fiscal
+        ni tiene valor monetario.
+      </p>
     </div>
   );
 }

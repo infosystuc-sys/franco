@@ -20,6 +20,7 @@ import {
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
+  fetchInvoiceById,
   fetchProximoNumero,
   LETRAS_EMISIBLES,
   PAYMENT_TERMS_DAYS,
@@ -56,6 +57,9 @@ export function InvoiceNewFree() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const remitoId = searchParams.get('remito');
+  // "Copiar comprobante" del listado: arranca con el cliente y los renglones
+  // de otra factura. Es una factura nueva: número, fecha y CAE propios.
+  const copiarId = searchParams.get('copiar');
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [company, setCompany] = React.useState<CompanySettings | null>(null);
@@ -93,6 +97,29 @@ export function InvoiceNewFree() {
         setCustomers(customerRows);
         setCompany(settings);
         setArticles(articleRows);
+        if (copiarId) {
+          return fetchInvoiceById(copiarId).then((original) => {
+            if (cancelled || !original) return;
+            setCustomerId(original.customerId);
+            if (LETRAS_EMISIBLES.includes(original.invoiceType)) setInvoiceType(original.invoiceType);
+            setNotes(original.notes ?? '');
+            setItems(
+              original.items.map((item) => {
+                // La factura guarda el código, no el artículo: se lo vuelve a
+                // buscar por código para que el renglón mueva stock como uno
+                // cargado a mano. El precio es el de la factura copiada.
+                const articulo = item.code ? articleRows.find((a) => a.code === item.code) : undefined;
+                return {
+                  articleId: articulo?.id ?? null,
+                  code: item.code ?? '',
+                  description: item.description,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                };
+              })
+            );
+          });
+        }
         if (!remitoId) return;
         return fetchRemitoById(remitoId).then((r) => {
           if (cancelled || !r) return;
@@ -118,7 +145,7 @@ export function InvoiceNewFree() {
       .then((data) => !cancelled && setBanks(data))
       .catch(() => {/* si falla, el combobox de banco del cheque arranca vacío pero se puede cargar uno nuevo igual */});
     return () => { cancelled = true; };
-  }, [role, remitoId]);
+  }, [role, remitoId, copiarId]);
 
   /**
    * La condición de venta habitual del cliente, propuesta una sola vez por

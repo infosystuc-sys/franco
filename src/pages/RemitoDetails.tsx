@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Printer, Ban, Receipt } from 'lucide-react';
+import { XCircle, Printer, Ban, Receipt, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader } from '@/src/components/ui';
@@ -7,6 +7,9 @@ import { getErrorMessage } from '@/src/lib/workOrders';
 import { describeRemitoError, fetchRemitoById, isPending, voidRemito, type Remito } from '@/src/lib/remitos';
 import { RemitoDocument } from '@/src/pages/InvoiceDetails';
 import { fetchCompanySettings } from '@/src/lib/companySettings';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 
 /** Ficha de un remito, con o sin factura. Es también el documento imprimible. */
 export function RemitoDetails() {
@@ -18,6 +21,8 @@ export function RemitoDetails() {
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
   const [logo, setLogo] = React.useState<string | null>(null);
+  const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -35,6 +40,15 @@ export function RemitoDetails() {
   }, [id]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Los botones del listado llegan acá con la acción en la URL.
+  const desdeListado = useAccionDesdeListado({
+    listo: !loading && !!remito,
+    listado: '/remitos',
+    documentRef,
+    nombreArchivo: `Remito-${remito?.fullNumber ?? ''}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -87,6 +101,16 @@ export function RemitoDetails() {
               <Button variant="ghost" type="button" onClick={() => window.print()}>
                 <Printer size={16} /> Imprimir
               </Button>
+              {remito.status !== 'ANULADO' && (
+                <>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
+                    <Mail size={16} /> Enviar por mail
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={() => setSendModal('whatsapp')}>
+                    <MessageCircle size={16} /> Enviar por WhatsApp
+                  </Button>
+                </>
+              )}
               {pending && (
                 <>
                   <Link to={`/facturas/nueva?remito=${remito.id}`}>
@@ -106,7 +130,29 @@ export function RemitoDetails() {
         )}
       </div>
 
-      <RemitoDocument remito={remito} logo={logo} />
+      <div ref={documentRef}>
+        <RemitoDocument remito={remito} logo={logo} />
+      </div>
+
+      {sendModal && (
+        <SendDocumentModal
+          channel={sendModal}
+          defaultDestino={(sendModal === 'email' ? remito.customerEmail : remito.customerPhone) ?? null}
+          fileName={`Remito-${remito.fullNumber}.pdf`}
+          documentRef={documentRef}
+          subject={`Remito ${remito.fullNumber}`}
+          text={
+            sendModal === 'email'
+              ? `Adjuntamos el remito ${remito.fullNumber}.`
+              : `Remito ${remito.fullNumber}`
+          }
+          onSent={() => marcarEnviado('remito', remito.id)}
+          onClose={() => {
+            setSendModal(null);
+            if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
+          }}
+        />
+      )}
     </div>
   );
 }

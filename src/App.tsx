@@ -13,6 +13,8 @@ import { ExpenseConcepts } from './pages/ExpenseConcepts';
 import { Imputaciones } from '@/src/pages/Imputaciones';
 import { ArticulosDuplicados } from '@/src/pages/ArticulosDuplicados';
 import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
+import { InvoicesPending } from '@/src/pages/InvoicesPending';
+import { CustomerAccounts } from '@/src/pages/CustomerAccounts';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
@@ -110,6 +112,7 @@ export default function App() {
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/facturas" element={<Invoices />} />
                     <Route path="/facturas/nueva" element={<InvoiceNewFree />} />
+                    <Route path="/facturas/pendientes" element={<InvoicesPending />} />
                     <Route path="/facturar/:otNumber" element={<InvoiceNew />} />
                     <Route path="/factura/:id" element={<InvoiceDetails />} />
                     <Route path="/notas-credito" element={<CreditNotes />} />
@@ -128,6 +131,7 @@ export default function App() {
                     <Route path="/informe/:id" element={<ReportView />} />
                     <Route path="/cobranzas" element={<Receipts />} />
                     <Route path="/cobranzas/nueva" element={<ReceiptNew />} />
+                    <Route path="/cuenta-corriente-clientes" element={<CustomerAccounts />} />
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />
                     <Route path="/pagos" element={<PaymentOrders />} />
                     <Route path="/pagos/nueva" element={<PaymentOrderNew />} />

@@ -91,6 +91,8 @@ export interface Receipt {
   notes: string | null;
   voidedAt: string | null;
   voidedReason: string | null;
+  enviadoAt: string | null;
+  etiquetas: string[];
   allocations: ReceiptAllocation[];
   values: ReceiptValue[];
   /** El vuelto, si lo hubo. Puede tener varios tramos (efectivo, cheque propio, cheque de cartera). */
@@ -100,6 +102,7 @@ export interface Receipt {
 const SELECT =
   `id, full_number, status, customer_id, customer_name, receipt_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
+   enviado_at, etiquetas,
    customer:customers(email, phone_e164, phone),
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
@@ -126,6 +129,8 @@ function mapReceipt(row: any): Receipt {
     notes: row.notes,
     voidedAt: row.voided_at,
     voidedReason: row.voided_reason,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
     allocations: ((row.allocations ?? []) as any[]).map((a) => ({
       invoiceId: a.invoice_id,
       invoiceFullNumber: a.invoice?.full_number ?? '—',

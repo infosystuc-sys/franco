@@ -18,6 +18,7 @@ export function SendDocumentModal({
   subject,
   text,
   onClose,
+  onSent,
 }: {
   channel: 'email' | 'whatsapp';
   defaultDestino: string | null;
@@ -26,6 +27,8 @@ export function SendDocumentModal({
   subject: string;
   text: string;
   onClose: () => void;
+  /** Para dejar marcado el comprobante como enviado en su listado. */
+  onSent?: () => Promise<void> | void;
 }) {
   const isEmail = channel === 'email';
   const [destino, setDestino] = React.useState(defaultDestino ?? '');
@@ -46,6 +49,12 @@ export function SendDocumentModal({
         await sendInvoiceByWhatsapp({ phone: destino.trim(), fileName, pdfBase64, caption: text });
       }
       setSent(true);
+      // Ya salió: si la marca falla, el envío no se deshace ni se avisa como error.
+      try {
+        await onSent?.();
+      } catch {
+        // sin marca de enviado: no es motivo para decir que falló el envío
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

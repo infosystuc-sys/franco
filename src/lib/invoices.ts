@@ -288,6 +288,11 @@ export interface InvoiceListRow {
    * emitida y sin imputar no lo toca: queda a cuenta del cliente.
    */
   creditedAmount: number;
+  /** Tiene CAE real de ARCA. La serie X nunca lo tiene: no es fiscal. */
+  autorizada: boolean;
+  /** Cuándo se mandó por última vez por mail o WhatsApp. */
+  enviadoAt: string | null;
+  etiquetas: string[];
 }
 
 export interface InvoiceItem {
@@ -344,7 +349,8 @@ export interface InvoiceDetail extends InvoiceListRow {
 
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_id, customer_name, issue_date, due_date, ' +
-  'total_amount, paid_amount, credited_amount, cae_rechazo, work_order:work_orders(number)';
+  'total_amount, paid_amount, credited_amount, cae, cae_simulated, cae_rechazo, enviado_at, etiquetas, ' +
+  'work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
   return {
@@ -361,6 +367,9 @@ function mapListRow(row: any): InvoiceListRow {
     paidAmount: Number(row.paid_amount),
     caeRechazo: row.cae_rechazo ?? null,
     creditedAmount: Number(row.credited_amount ?? 0),
+    autorizada: !!row.cae && !row.cae_simulated,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
   };
 }
 
@@ -379,8 +388,8 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
   const { data, error } = await supabase
     .from('invoices')
     .select(
-      `id, full_number, invoice_type, sales_point, number, status,
-       customer_name, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address,
+      `id, full_number, invoice_type, sales_point, number, status, enviado_at, etiquetas,
+       customer_id, customer_name, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address,
        issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address,
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,

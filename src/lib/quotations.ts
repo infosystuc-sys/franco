@@ -61,6 +61,9 @@ export interface QuotationListRow {
   workOrderNumber: string | null;
   publicToken: string;
   createdAt: string;
+  customerId: string;
+  enviadoAt: string | null;
+  etiquetas: string[];
 }
 
 export interface QuotationDetail {
@@ -108,6 +111,7 @@ function vehicleLabelOf(vehicle: { brand: string | null; model: string; license_
 
 const LIST_SELECT = `
   id, number, status, component, valid_until, created_at, public_token,
+  customer_id, enviado_at, etiquetas,
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
@@ -131,6 +135,9 @@ function mapQuotationRow(row: any): QuotationListRow {
     workOrderNumber: row.work_order?.number ?? null,
     publicToken: row.public_token,
     createdAt: row.created_at,
+    customerId: row.customer_id,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
   };
 }
 
