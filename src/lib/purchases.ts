@@ -219,6 +219,7 @@ export interface PurchaseListRow {
   dueDate: string;
   totalAmount: number;
   settledAmount: number;
+  etiquetas: string[];
 }
 
 export interface PurchaseItem {
@@ -273,7 +274,7 @@ export interface PurchaseDetail extends PurchaseListRow {
 
 const LIST_SELECT =
   'id, kind, doc_type, letter, full_number, status, supplier_id, supplier_name, ' +
-  'issue_date, due_date, total_amount, settled_amount';
+  'issue_date, due_date, total_amount, settled_amount, etiquetas';
 
 function mapListRow(row: any): PurchaseListRow {
   return {
@@ -289,6 +290,7 @@ function mapListRow(row: any): PurchaseListRow {
     dueDate: row.due_date,
     totalAmount: Number(row.total_amount),
     settledAmount: Number(row.settled_amount),
+    etiquetas: row.etiquetas ?? [],
   };
 }
 
@@ -312,7 +314,7 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDetail | nu
        issue_date, received_date, due_date, payment_terms_days, moves_stock,
        gross_amount, line_discount_amount, general_discount_percent, general_discount_amount,
        net_taxed, net_exempt, net_untaxed, vat_amount, other_taxes_amount,
-       total_amount, settled_amount, notes, voided_at, voided_reason,
+       total_amount, settled_amount, notes, voided_at, voided_reason, etiquetas,
        items:purchase_invoice_items(line_number, code, description, quantity, unit_price,
              discount_percent, net_amount, vat_rate, vat_treatment, vat_amount,
              concept:expense_concepts(name)),

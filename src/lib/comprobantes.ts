@@ -5,7 +5,15 @@ import { supabase } from '@/src/lib/supabase';
  * y las etiquetas. Cada tipo tiene su tabla; la base traduce el tipo a la
  * tabla de una lista cerrada (ver supabase/listados-de-comprobantes.sql).
  */
-export type TipoComprobante = 'factura' | 'nota_credito' | 'recibo' | 'presupuesto' | 'remito';
+export type TipoComprobante =
+  | 'factura'
+  | 'nota_credito'
+  | 'recibo'
+  | 'presupuesto'
+  | 'remito'
+  | 'orden_trabajo'
+  | 'compra'
+  | 'orden_pago';
 
 /** Se llama después de mandar el comprobante por mail o WhatsApp. */
 export async function marcarEnviado(tipo: TipoComprobante, id: string): Promise<void> {

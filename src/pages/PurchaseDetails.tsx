@@ -21,6 +21,9 @@ import {
   eliminarComprobanteDeCompra,
   type PurchaseDetail,
 } from '@/src/lib/purchases';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+
+const SIN_ENVIO = () => {};
 
 export function PurchaseDetails() {
   const { role } = useAuth();
@@ -31,6 +34,7 @@ export function PurchaseDetails() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
+  const documentRef = React.useRef<HTMLDivElement>(null);
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -48,6 +52,16 @@ export function PurchaseDetails() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  // Imprimir y Descargar del listado llegan acá con la acción en la URL. Un
+  // comprobante de compra no se manda: lo mandó el proveedor.
+  useAccionDesdeListado({
+    listo: !loading && !!doc,
+    listado: '/compras',
+    documentRef,
+    nombreArchivo: `Compra-${doc?.fullNumber ?? ''}.pdf`,
+    abrirEnvio: SIN_ENVIO,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -195,7 +209,7 @@ export function PurchaseDetails() {
         )}
       </div>
 
-      <div className="print-document border border-line bg-panel p-6 md:p-8">
+      <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
         {/* Encabezado */}
         <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-2">
           <div>

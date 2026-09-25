@@ -371,6 +371,9 @@ export interface WorkOrderRow extends WorkOrderListRow {
    * está, lo que filtra son las filas— así que la orden se lista igual.
    */
   invoiceNumber: string | null;
+  invoiceId: string | null;
+  quotationNumber: string | null;
+  etiquetas: string[];
 }
 
 /**
@@ -386,15 +389,15 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   const { data, error } = await supabase
     .from('work_orders')
     .select(
-      `id, number, component, public_token, created_at,
+      `id, number, component, public_token, created_at, etiquetas,
        price_auth_status, price_auth_requested_total,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate),
        employee:employees!work_orders_employee_id_fkey(name),
-       quotation:quotations!work_orders_quotation_id_fkey(items:quotation_items(subtotal)),
+       quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
-       invoice:invoices!invoices_work_order_id_fkey(full_number, status, revertida_por_nc)`
+       invoice:invoices!invoices_work_order_id_fkey(id, full_number, status, revertida_por_nc)`
     )
     .order('created_at', { ascending: false });
 
@@ -425,6 +428,9 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
       createdAt: row.created_at,
       priceDiffers: priceDiffers && !priceAuthCoversCurrent,
       invoiceNumber: emitida?.full_number ?? null,
+      invoiceId: emitida?.id ?? null,
+      quotationNumber: quotation?.number ?? null,
+      etiquetas: row.etiquetas ?? [],
     };
   });
 }

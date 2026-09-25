@@ -161,6 +161,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           { icon: HandCoins, label: 'Cobranzas', path: '/cobranzas', newPath: '/cobranzas/nueva', adminOnly: true },
           { icon: Users, label: 'Cuenta corriente de clientes', path: '/cuenta-corriente-clientes', adminOnly: true },
           { icon: Banknote, label: 'Pagos', path: '/pagos', newPath: '/pagos/nueva', adminOnly: true },
+          { icon: Factory, label: 'Cuenta corriente de proveedores', path: '/cuenta-corriente-proveedores', adminOnly: true },
         ],
       },
       {

@@ -5,6 +5,8 @@ import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   describePaymentOrderError,
@@ -44,6 +46,15 @@ export function PaymentOrderDetails() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  // Los botones del listado llegan acá con la acción en la URL.
+  const desdeListado = useAccionDesdeListado({
+    listo: !loading && order?.status === 'REGISTRADA',
+    listado: '/pagos',
+    documentRef,
+    nombreArchivo: `${order?.fullNumber ?? 'orden-de-pago'}.pdf`,
+    abrirEnvio: setSendModal,
+  });
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -298,7 +309,11 @@ export function PaymentOrderDetails() {
               ? `Adjuntamos la orden de pago ${order.fullNumber} por $ ${formatMoney(order.totalAmount)}.`
               : `Orden de pago ${order.fullNumber} — $ ${formatMoney(order.totalAmount)}`
           }
-          onClose={() => setSendModal(null)}
+          onSent={() => marcarEnviado('orden_pago', order.id)}
+          onClose={() => {
+            setSendModal(null);
+            if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
+          }}
         />
       )}
     </div>

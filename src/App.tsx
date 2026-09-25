@@ -15,6 +15,7 @@ import { ArticulosDuplicados } from '@/src/pages/ArticulosDuplicados';
 import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
 import { InvoicesPending } from '@/src/pages/InvoicesPending';
 import { CustomerAccounts } from '@/src/pages/CustomerAccounts';
+import { SupplierAccounts } from '@/src/pages/SupplierAccounts';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
@@ -135,6 +136,7 @@ export default function App() {
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />
                     <Route path="/pagos" element={<PaymentOrders />} />
                     <Route path="/pagos/nueva" element={<PaymentOrderNew />} />
+                    <Route path="/cuenta-corriente-proveedores" element={<SupplierAccounts />} />
                     <Route path="/pago/:id" element={<PaymentOrderDetails />} />
                     <Route path="/tesoreria" element={<Treasury />} />
                     <Route path="/tesoreria/endosar-cheque" element={<EndorseCheck />} />

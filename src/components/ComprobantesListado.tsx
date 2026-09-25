@@ -12,9 +12,10 @@ import { guardarEtiquetas, type TipoComprobante } from '@/src/lib/comprobantes';
  * resto en gris, y "Más acciones" desplegable), una fila elegida sobre la que
  * actúan los botones, y "Ver más" al pie.
  *
- * Lo comparten facturas, notas de crédito, recibos, presupuestos y remitos:
- * cada pantalla dice qué columnas y qué acciones tiene, y este componente
- * pone el resto. Así los cinco se manejan igual.
+ * Lo comparten todas las pantallas de comprobantes —facturas, notas de
+ * crédito, recibos, cotizaciones, remitos, órdenes de trabajo, compras y
+ * pagos—: cada una dice qué columnas y qué acciones tiene, y este componente
+ * pone el resto. Así todas se manejan igual.
  */
 
 export interface ColumnaListado<T> {
@@ -63,6 +64,8 @@ export function ComprobantesListado<T>({
   onEtiquetasGuardadas,
   ocultarListado,
   vacio = 'Todavía no hay comprobantes emitidos.',
+  aviso,
+  onCerrarAviso,
 }: {
   titulo: string;
   tipo: TipoComprobante;
@@ -71,8 +74,8 @@ export function ComprobantesListado<T>({
   error: string | null;
   getId: (fila: T) => string;
   columnas: ColumnaListado<T>[];
-  /** A dónde lleva el botón Nuevo. */
-  nuevo: { to: string; title?: string };
+  /** A dónde lleva el botón Nuevo. Sin él, no hay botón (quien no puede dar de alta). */
+  nuevo?: { to: string; title?: string };
   /** Doble click o Enter sobre una fila. */
   onAbrir: (fila: T) => void;
   /** Los botones grises, en orden (Ver, Imprimir…). */
@@ -84,6 +87,9 @@ export function ComprobantesListado<T>({
   /** El permiso "sin historial": se ve la botonera pero no los comprobantes. */
   ocultarListado?: boolean;
   vacio?: string;
+  /** Un resultado para contar (no un error): "Se eliminó la orden…". */
+  aviso?: string | null;
+  onCerrarAviso?: () => void;
 }) {
   const navigate = useNavigate();
   const [cantidad, setCantidad] = React.useState(PAGINA);
@@ -136,7 +142,9 @@ export function ComprobantesListado<T>({
   }
 
   function motivoBloqueo(accion: AccionListado<T>): string | null {
-    if (accion.sinSeleccion) return null;
+    // Una acción sin selección igual puede estar vedada (por el rol, no por la
+    // fila): el bloqueo se consulta con lo que haya elegido, que puede no ser nada.
+    if (accion.sinSeleccion) return accion.bloqueo?.(elegida as T) ?? null;
     if (!elegida) return 'Elegí un comprobante del listado.';
     return accion.bloqueo?.(elegida) ?? null;
   }
@@ -160,14 +168,16 @@ export function ComprobantesListado<T>({
         <h1 className="text-[26px] font-light uppercase tracking-wide text-text-faint">{titulo}</h1>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate(nuevo.to)}
-            title={nuevo.title}
-            className={cn(botonBase, botonAmarillo)}
-          >
-            Nuevo
-          </button>
+          {nuevo && (
+            <button
+              type="button"
+              onClick={() => navigate(nuevo.to)}
+              title={nuevo.title}
+              className={cn(botonBase, botonAmarillo)}
+            >
+              Nuevo
+            </button>
+          )}
 
           {botones.map((accion) => {
             const bloqueo = motivoBloqueo(accion);
@@ -252,6 +262,17 @@ export function ComprobantesListado<T>({
       {error && (
         <div className="mb-4 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
+        </div>
+      )}
+
+      {aviso && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-md border border-line-strong bg-panel-alt px-4 py-3 text-sm text-text">
+          <span>{aviso}</span>
+          {onCerrarAviso && (
+            <button type="button" onClick={onCerrarAviso} aria-label="Cerrar aviso" className="shrink-0 text-text-soft hover:text-text">
+              <X size={16} />
+            </button>
+          )}
         </div>
       )}
 

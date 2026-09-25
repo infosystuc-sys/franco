@@ -1,29 +1,66 @@
 import React from 'react';
-import { Plus, Search, Eye, Edit2, AlertTriangle, Trash2 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { cn, formatDate } from '@/src/lib/utils';
-import { Button, PageHeader, Panel, StateStrip } from '@/src/components/ui';
+import { AlertTriangle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { NewWorkOrderModal } from '@/src/components/NewWorkOrderModal';
 import { DeleteWorkOrdersModal } from '@/src/components/DeleteWorkOrdersModal';
 import {
+  describirReenvioLink,
   fetchAllWorkOrders,
   fetchWorkOrderStatuses,
   getErrorMessage,
+  reenviarLinkSeguimiento,
   type WorkOrderDeletionResult,
   type WorkOrderRow,
   type WorkOrderStatusDef,
 } from '@/src/lib/workOrders';
+import {
+  ComprobantesListado,
+  ETIQUETAR,
+  type AccionListado,
+  type ColumnaListado,
+} from '@/src/components/ComprobantesListado';
+
+const COLUMNAS: ColumnaListado<WorkOrderRow>[] = [
+  {
+    label: 'Comprobante',
+    valor: (f) => (
+      <span className="inline-flex items-center gap-1.5">
+        {f.number}
+        {f.priceDiffers && (
+          <span title="El monto de la OT difiere de la cotización original">
+            <AlertTriangle size={14} className="text-state-wait" />
+          </span>
+        )}
+      </span>
+    ),
+  },
+  { label: 'Cliente', valor: (f) => f.customerName, ancho: 'w-full' },
+  {
+    label: 'Vehículo / Equipo',
+    valor: (f) => (f.component ? `${f.vehicleLabel} · ${f.component}` : f.vehicleLabel),
+  },
+  {
+    label: 'Estado',
+    valor: (f) => (
+      <span className="inline-flex items-center gap-2">
+        <span aria-hidden className="inline-block h-2.5 w-2.5" style={{ backgroundColor: f.status.color }} />
+        {f.status.label}
+      </span>
+    ),
+  },
+  { label: 'Factura', valor: (f) => f.invoiceNumber ?? '—' },
+  { label: 'Empleado', valor: (f) => f.employeeName ?? '—' },
+  { label: 'Fecha', valor: (f) => formatDate(f.createdAt.slice(0, 10)) },
+];
 
 /**
- * El listado completo de órdenes, en cualquier estado.
+ * Órdenes de trabajo, con el listado y las acciones del de Tango.
  *
- * El Panel es una cola de trabajo y por diseño solo muestra lo pendiente;
- * acá está todo, con quién la tiene asignada y desde cuándo, para poder
- * buscar una orden terminada hace tres semanas sin tener que recordarla.
- *
- * Un operario ve únicamente sus propias órdenes: lo decide el RLS de
- * work_orders, no esta pantalla.
+ * El Panel es una cola de trabajo y solo muestra lo pendiente; acá está todo,
+ * para poder encontrar una orden terminada hace tres semanas. Un operario ve
+ * únicamente sus propias órdenes: lo decide el RLS de work_orders.
  */
 export function WorkOrders() {
   const { role } = useAuth();
@@ -34,9 +71,14 @@ export function WorkOrders() {
   const [statuses, setStatuses] = React.useState<WorkOrderStatusDef[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [search, setSearch] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState('');
+  const [aviso, setAviso] = React.useState<string | null>(null);
   const [showNewOrder, setShowNewOrder] = React.useState(false);
+  const [borrando, setBorrando] = React.useState<WorkOrderRow | null>(null);
+  /**
+   * Las retiradas se esconden por defecto: con el tiempo son la mayoría —toda
+   * orden termina retirada— y son justamente las que ya no piden nada.
+   */
+  const [verRetirados, setVerRetirados] = React.useState(false);
 
   // Una orden arranca por el vehículo: el ingreso manda de vuelta acá con
   // ?nuevo=1 y el vehículo ya recibido, y recién ahí se abre el alta con ese
@@ -57,19 +99,8 @@ export function WorkOrders() {
       return proximos;
     }, { replace: true });
   }, [searchParams, setSearchParams, isAdmin]);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [showDelete, setShowDelete] = React.useState(false);
-  /**
-   * Las retiradas se esconden por defecto. Son la mayoría con el tiempo —toda
-   * orden termina retirada— y son justamente las que ya no requieren nada:
-   * dejarlas a la vista empuja hacia abajo lo que sí hay que atender.
-   */
-  const [verRetirados, setVerRetirados] = React.useState(false);
-  const [notice, setNotice] = React.useState<string | null>(null);
 
-  const loadOrders = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const cargar = React.useCallback(async () => {
     try {
       const [orderRows, statusDefs] = await Promise.all([fetchAllWorkOrders(), fetchWorkOrderStatuses(true)]);
       setOrders(orderRows);
@@ -81,320 +112,126 @@ export function WorkOrders() {
     }
   }, []);
 
-  React.useEffect(() => {
-    loadOrders();
-  }, [loadOrders]);
+  React.useEffect(() => { cargar(); }, [cargar]);
 
-  const counts = React.useMemo(() => {
-    const base: Record<string, number> = {};
-    statuses.forEach((status) => { base[status.id] = 0; });
-    orders.forEach((order) => { base[order.status.id] = (base[order.status.id] ?? 0) + 1; });
-    return base;
-  }, [orders, statuses]);
+  const getId = React.useCallback((f: WorkOrderRow) => f.id, []);
 
   // El estado se busca por system_key: la etiqueta la renombra el taller.
   const retiradoId = statuses.find((s) => s.systemKey === 'RETIRADO')?.id ?? null;
+  const visibles = verRetirados || !retiradoId ? orders : orders.filter((o) => o.status.id !== retiradoId);
 
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return orders.filter((order) => {
-      if (statusFilter && order.status.id !== statusFilter) return false;
-      // Pedir expresamente el estado Retirado manda sobre el check: si se
-      // filtró por esa tarjeta, esconderlas dejaría la pantalla vacía sin
-      // explicación.
-      if (
-        !verRetirados &&
-        retiradoId &&
-        order.status.id === retiradoId &&
-        statusFilter !== retiradoId
-      ) {
-        return false;
-      }
-      if (!term) return true;
-      return [order.number, order.customerName, order.vehicleLabel, order.component, order.employeeName, order.invoiceNumber]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term));
-    });
-  }, [orders, search, statusFilter, verRetirados, retiradoId]);
+  const ficha = (f: WorkOrderRow) => `/orden/${f.number}`;
+  const soloAdmin = () => (isAdmin ? null : 'Solo un administrador puede hacerlo.');
 
-  /**
-   * Solo se actúa sobre lo que está marcado Y visible. Si se marcan tres
-   * órdenes y después un filtro esconde una, el botón dice "las 2" y borra
-   * esas dos: nunca se lleva puesta una fila que en ese momento no está en
-   * pantalla.
-   */
-  const selectedOrders = React.useMemo(
-    () => filtered.filter((order) => selectedIds.has(order.id)),
-    [filtered, selectedIds]
-  );
-  const allFilteredSelected = filtered.length > 0 && selectedOrders.length === filtered.length;
-
-  function toggleOne(id: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllFiltered() {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (allFilteredSelected) filtered.forEach((order) => next.delete(order.id));
-      else filtered.forEach((order) => next.add(order.id));
-      return next;
-    });
+  async function reenviarSeguimiento(f: WorkOrderRow) {
+    setError(null);
+    setAviso(null);
+    try {
+      setAviso(`${f.number}: ${describirReenvioLink(await reenviarLinkSeguimiento(f.id))}`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
   }
 
   function handleDeleted(results: WorkOrderDeletionResult[]) {
-    const borradas = results.filter((r) => r.deleted).map((r) => r.orderNumber);
     // La base revalida: entre que se armó la confirmación y se aceptó, alguien
-    // pudo haber facturado una de estas órdenes. Eso hay que decirlo.
-    const rechazadas = results.filter((r) => !r.deleted);
-
-    const partes: string[] = [];
-    if (borradas.length > 0) {
-      partes.push(
-        borradas.length === 1
-          ? `Se eliminó la orden ${borradas[0]}.`
-          : `Se eliminaron ${borradas.length} órdenes: ${borradas.join(', ')}.`
-      );
-    }
-    rechazadas.forEach((r) => partes.push(`No se pudo eliminar ${r.orderNumber}: ${r.reason}.`));
-
-    setNotice(partes.join(' ') || null);
-    setShowDelete(false);
-    setSelectedIds(new Set());
-    loadOrders();
+    // pudo haber facturado la orden. Eso hay que decirlo.
+    setAviso(
+      results
+        .map((r) => (r.deleted ? `Se eliminó la orden ${r.orderNumber}.` : `No se pudo eliminar ${r.orderNumber}: ${r.reason}.`))
+        .join(' ') || null
+    );
+    setBorrando(null);
+    cargar();
   }
 
+  const botones: AccionListado<WorkOrderRow>[] = [
+    { label: 'Ver', onClick: (f) => f && navigate(ficha(f)) },
+    {
+      label: 'Imprimir',
+      onClick: (f) => f && navigate(`/orden/${f.number}/imprimir-blanco?imprimir=1&desde=listado`),
+    },
+  ];
+
+  const masAcciones = [
+    {
+      label: 'Imprimir presupuesto',
+      bloqueo: (f: WorkOrderRow) =>
+        soloAdmin() ?? (f.quotationNumber ? null : 'Esta orden no tiene presupuesto.'),
+      onClick: (f: WorkOrderRow | null) =>
+        f?.quotationNumber && navigate(`/cotizacion/${f.quotationNumber}?imprimir=1&volver=${f.number}`),
+    },
+    ...(isAdmin ? [ETIQUETAR] : []),
+    {
+      label: 'Facturar',
+      bloqueo: (f: WorkOrderRow) =>
+        soloAdmin() ?? (f.invoiceNumber ? `Ya está facturada en la ${f.invoiceNumber}.` : null),
+      onClick: (f: WorkOrderRow | null) => f && navigate(`/facturar/${f.number}`),
+    },
+    {
+      label: 'Ver factura',
+      bloqueo: (f: WorkOrderRow) =>
+        soloAdmin() ?? (f.invoiceId ? null : 'Esta orden no tiene factura emitida.'),
+      onClick: (f: WorkOrderRow | null) => f?.invoiceId && navigate(`/factura/${f.invoiceId}`),
+    },
+    {
+      label: 'Ver como lo ve el cliente',
+      onClick: (f: WorkOrderRow | null) => f && navigate(`/seguimiento/${f.publicToken}`),
+    },
+    {
+      label: 'Reenviar seguimiento por WhatsApp',
+      bloqueo: soloAdmin,
+      onClick: (f: WorkOrderRow | null) => f && reenviarSeguimiento(f),
+    },
+    {
+      label: 'Eliminar orden',
+      bloqueo: (f: WorkOrderRow) =>
+        soloAdmin() ?? (f.invoiceNumber ? 'Una orden facturada no se puede eliminar.' : null),
+      onClick: (f: WorkOrderRow | null) => f && setBorrando(f),
+    },
+    {
+      label: verRetirados ? 'Ocultar retirados' : 'Mostrar retirados',
+      sinSeleccion: true,
+      onClick: () => setVerRetirados((v) => !v),
+    },
+    {
+      label: 'Órdenes para facturar',
+      sinSeleccion: true,
+      bloqueo: soloAdmin,
+      onClick: () => navigate('/facturas/pendientes'),
+    },
+    {
+      label: 'Nuevo cliente',
+      sinSeleccion: true,
+      bloqueo: soloAdmin,
+      onClick: () => navigate('/clientes?nuevo=1'),
+    },
+  ];
+
   return (
-    <div className="w-full space-y-6">
-      <PageHeader
-        title="Órdenes de Trabajo"
-        subtitle="Todas las órdenes, en cualquier estado."
-        actions={
-          // Igual que el "+" de la etiqueta del menú: una orden empieza
-          // recibiendo el vehículo, no en la ventana de alta.
-          isAdmin && (
-            <Button onClick={() => navigate('/vehiculos/nuevo?destino=ot')}>
-              <Plus size={16} /> Nueva orden
-            </Button>
-          )
+    <>
+      <ComprobantesListado
+        titulo="Órdenes de trabajo"
+        tipo="orden_trabajo"
+        filas={visibles}
+        loading={loading}
+        error={error}
+        getId={getId}
+        columnas={COLUMNAS}
+        // Igual que el "+" de la tarjeta del menú: una orden empieza
+        // recibiendo el vehículo, no en la ventana de alta.
+        nuevo={isAdmin ? { to: '/vehiculos/nuevo?destino=ot' } : undefined}
+        onAbrir={(f) => navigate(ficha(f))}
+        botones={botones}
+        masAcciones={masAcciones}
+        etiquetasDe={(f) => f.etiquetas}
+        onEtiquetasGuardadas={(id, etiquetas) =>
+          setOrders((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
         }
+        vacio={orders.length === 0 ? 'No hay órdenes cargadas todavía.' : 'No hay órdenes sin retirar.'}
+        aviso={aviso}
+        onCerrarAviso={() => setAviso(null)}
       />
-
-      {error && (
-        <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
-      )}
-
-      {notice && (
-        <div className="flex items-start justify-between gap-3 rounded-md border border-line-strong bg-panel-alt px-4 py-3 text-sm text-text">
-          <span>{notice}</span>
-          <button
-            onClick={() => setNotice(null)}
-            aria-label="Cerrar aviso"
-            className="shrink-0 text-text-soft hover:text-text"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Una sola fila: las columnas se reparten el ancho entre todos los
-          estados que haya, sean cinco o nueve. En pantalla angosta vuelven a
-          envolverse, que es preferible a dejarlas ilegibles. */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {statuses.map((status) => (
-          <button
-            key={status.id}
-            onClick={() => setStatusFilter(statusFilter === status.id ? '' : status.id)}
-            title={status.label}
-            className={cn(
-              // Ancho mínimo por tarjeta y scroll si no entran: apretarlas hasta
-              // que quepan partía las palabras al medio ("INGRESA/DO"), que es
-              // peor que tener que arrastrar la fila en una pantalla angosta.
-              'relative min-w-[7.5rem] flex-1 overflow-hidden rounded-md border px-2 py-1.5 text-left transition-colors',
-              statusFilter === status.id
-                ? 'border-accent bg-accent/10'
-                : 'border-line-strong bg-panel hover:bg-panel-alt'
-            )}
-          >
-            <StateStrip color={status.color} />
-            {/* Envuelve por espacios, nunca al medio de una palabra. */}
-            <span className="block pl-1.5 text-[12px] font-semibold uppercase leading-[1.15] text-text-soft">
-              {status.label}
-            </span>
-            <span className="block pl-1.5 font-display text-lg font-medium leading-tight text-text">
-              {loading ? '—' : counts[status.id] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative sm:w-96">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Número, cliente, vehículo o empleado…"
-            className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
-          />
-        </div>
-
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-text">
-          <input
-            type="checkbox"
-            checked={verRetirados}
-            onChange={(e) => setVerRetirados(e.target.checked)}
-            className="h-4 w-4 accent-accent-deep"
-          />
-          Mostrar retirados
-        </label>
-
-        {isAdmin && selectedOrders.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-              {selectedOrders.length === 1
-                ? '1 orden seleccionada'
-                : `${selectedOrders.length} órdenes seleccionadas`}
-            </span>
-            <Button variant="danger" onClick={() => setShowDelete(true)}>
-              <Trash2 size={16} /> Eliminar
-            </Button>
-          </div>
-        )}
-      </div>
-
-      <Panel className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[15px]">
-            <thead>
-              <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                {isAdmin && (
-                  <th className="w-10 p-3">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected}
-                      onChange={toggleAllFiltered}
-                      disabled={filtered.length === 0}
-                      aria-label="Seleccionar todas las órdenes de la lista"
-                      className="align-middle accent-accent"
-                    />
-                  </th>
-                )}
-                <th className="w-28 p-3 font-semibold">N° OT</th>
-                <th className="p-3 font-semibold">Cliente</th>
-                <th className="p-3 font-semibold">Vehículo / Equipo</th>
-                <th className="w-40 p-3 font-semibold">Estado</th>
-                <th className="w-36 p-3 font-semibold">Factura</th>
-                <th className="w-36 p-3 font-semibold">Empleado</th>
-                <th className="w-28 p-3 font-semibold">Fecha</th>
-                <th className="w-28 p-3 text-right font-semibold">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={isAdmin ? 9 : 8} className="p-8 text-center text-text-soft">Cargando…</td>
-                </tr>
-              )}
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={isAdmin ? 9 : 8} className="p-8 text-center text-text-soft">
-                    {orders.length === 0
-                      ? 'No hay órdenes cargadas todavía.'
-                      : 'Ninguna orden coincide con la búsqueda.'}
-                  </td>
-                </tr>
-              )}
-              {filtered.map((order) => (
-                <tr
-                  key={order.id}
-                  onDoubleClick={() => navigate(`/orden/${order.number}`)}
-                  className="relative cursor-pointer border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"
-                >
-                  {isAdmin && (
-                    // El doble clic de la fila abre la orden; marcar no debe
-                    // navegar, así que el clic muere acá.
-                    <td className="p-3" onDoubleClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(order.id)}
-                        onChange={() => toggleOne(order.id)}
-                        aria-label={`Seleccionar la orden ${order.number}`}
-                        className="align-middle accent-accent"
-                      />
-                    </td>
-                  )}
-                  <td data-primary className="relative py-3 pl-5 pr-3">
-                    <StateStrip color={order.status.color} />
-                    <Link
-                      to={`/orden/${order.number}`}
-                      className="inline-flex items-center gap-1.5 font-mono font-semibold text-text hover:text-accent-deep hover:underline"
-                    >
-                      {order.number}
-                      {order.priceDiffers && (
-                        <span title="El monto de la OT difiere de la cotización original">
-                          <AlertTriangle size={14} className="text-state-wait" />
-                        </span>
-                      )}
-                    </Link>
-                  </td>
-                  <td data-label="Cliente" className="p-3">{order.customerName}</td>
-                  <td data-label="Vehículo" className="p-3">
-                    <span className="block">{order.vehicleLabel}</span>
-                    {order.component && (
-                      <span className="block text-[13px] text-text-soft">{order.component}</span>
-                    )}
-                  </td>
-                  <td data-label="Estado" className="p-3">
-                    <span className="inline-flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-                      <span
-                        aria-hidden
-                        className="inline-block h-2 w-2"
-                        style={{ backgroundColor: order.status.color }}
-                      />
-                      {order.status.label}
-                    </span>
-                  </td>
-                  <td data-label="Factura" className="p-3">
-                    {order.invoiceNumber ? (
-                      <span className="font-mono text-text">{order.invoiceNumber}</span>
-                    ) : (
-                      <span className="text-text-soft">—</span>
-                    )}
-                  </td>
-                  <td data-label="Empleado" className="p-3 text-text-soft">
-                    {order.employeeName ?? '—'}
-                  </td>
-                  <td data-label="Fecha" className="p-3 text-text-soft">
-                    {formatDate(order.createdAt.slice(0, 10))}
-                  </td>
-                  <td className="p-3 text-right">
-                    <Link
-                      to={`/seguimiento/${order.publicToken}`}
-                      title="Ver como lo ve el cliente"
-                      className="inline-block p-1 text-text-soft transition-colors hover:text-accent-deep"
-                    >
-                      <Eye size={16} />
-                    </Link>
-                    <Link
-                      to={`/orden/${order.number}`}
-                      title={isAdmin ? 'Editar orden' : 'Ver detalle'}
-                      className="ml-1 inline-block p-1 text-text-soft transition-colors hover:text-text"
-                    >
-                      <Edit2 size={16} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
 
       {showNewOrder && (
         <NewWorkOrderModal
@@ -403,28 +240,21 @@ export function WorkOrders() {
             setShowNewOrder(false);
             setVehiculoRecibido(null);
           }}
-          // Vuelve al listado en vez de entrar al detalle: es el mismo patrón
-          // que ya tienen Facturas, Compras, Cobranzas, Pagos y Remitos al
-          // guardar un comprobante nuevo.
           onCreated={() => {
             setShowNewOrder(false);
             setVehiculoRecibido(null);
-            loadOrders();
+            cargar();
           }}
         />
       )}
 
-      {showDelete && (
+      {borrando && (
         <DeleteWorkOrdersModal
-          orders={selectedOrders.map((order) => ({
-            id: order.id,
-            number: order.number,
-            customerName: order.customerName,
-          }))}
-          onClose={() => setShowDelete(false)}
+          orders={[{ id: borrando.id, number: borrando.number, customerName: borrando.customerName }]}
+          onClose={() => setBorrando(null)}
           onDeleted={handleDeleted}
         />
       )}
-    </div>
+    </>
   );
 }

@@ -24,7 +24,8 @@ export function WorkOrderPrintBlank() {
   const [error, setError] = React.useState<string | null>(null);
   const yaImprimio = React.useRef(false);
 
-  const destinoAlSalir = `/orden/${number}`;
+  // Desde el listado de órdenes se vuelve al listado; desde la ficha, a la ficha.
+  const destinoAlSalir = searchParams.get('desde') === 'listado' ? '/ordenes' : `/orden/${number}`;
 
   React.useEffect(() => {
     if (!number) return;

@@ -85,6 +85,8 @@ export interface PaymentOrder {
   notes: string | null;
   voidedAt: string | null;
   voidedReason: string | null;
+  enviadoAt: string | null;
+  etiquetas: string[];
   allocations: PaymentAllocation[];
   values: PaymentValue[];
 }
@@ -92,6 +94,7 @@ export interface PaymentOrder {
 const SELECT =
   `id, full_number, status, supplier_id, supplier_name, payment_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
+   enviado_at, etiquetas,
    supplier:suppliers(email, phone),
    allocations:payment_order_allocations(purchase_invoice_id, provisional_credit_note_id, amount,
        doc:purchase_invoices(full_number, doc_type, letter),
@@ -116,6 +119,8 @@ function mapOrder(row: any): PaymentOrder {
     notes: row.notes,
     voidedAt: row.voided_at,
     voidedReason: row.voided_reason,
+    enviadoAt: row.enviado_at ?? null,
+    etiquetas: row.etiquetas ?? [],
     allocations: ((row.allocations ?? []) as any[]).map((a) => ({
       purchaseInvoiceId: a.purchase_invoice_id,
       provisionalCreditNoteId: a.provisional_credit_note_id,
