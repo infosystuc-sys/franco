@@ -37,7 +37,7 @@ import {
  * cómo se llegó a esos números.
  */
 export function Treasury() {
-  const { role, canViewHistory } = useAuth();
+  const { role } = useAuth();
   const [balances, setBalances] = React.useState<MethodBalance[]>([]);
   const [movements, setMovements] = React.useState<TreasuryMovement[]>([]);
   const [concepts, setConcepts] = React.useState<ExpenseConcept[]>([]);
@@ -117,8 +117,8 @@ export function Treasury() {
   return (
     <div className="w-full space-y-6">
       <PageHeader
-        title={canViewHistory ? 'Tesorería' : ''}
-        subtitle={canViewHistory ? 'El libro de caja: gastos sin factura, ingresos y movimientos entre medios.' : undefined}
+        title="Tesorería"
+        subtitle="El libro de caja: gastos sin factura, ingresos y movimientos entre medios."
         actions={
           <>
             <Button variant="ghost" onClick={() => setCreating('TRANSFERENCIA')}>
@@ -139,7 +139,6 @@ export function Treasury() {
       )}
 
       {/* ── Saldos ──────────────────────────────────────────────────── */}
-      {canViewHistory && (
       <section>
         <SectionHeader title="Saldos" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -179,10 +178,8 @@ export function Treasury() {
           </p>
         )}
       </section>
-      )}
 
       {/* ── Movimientos ─────────────────────────────────────────────── */}
-      {canViewHistory && (
       <>
       <SectionHeader title="Movimientos" />
 
@@ -325,7 +322,6 @@ export function Treasury() {
         </table>
       </Panel>
       </>
-      )}
 
       {creating && (
         <MovementModal

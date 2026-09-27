@@ -51,6 +51,13 @@ export interface ReportDefinition {
   /** Si el informe se acota por período. Los de saldos son a hoy. */
   usesPeriod: boolean;
   columns: ReportColumn[];
+  /**
+   * Columna por la que se agrupa. Cada grupo muestra una fila de subtotal
+   * (con las columnas que suman) y su detalle se despliega a pedido: así en
+   * la primera pantalla se ve un renglón por grupo —por cliente, en la
+   * composición de saldos— en vez de todos los comprobantes.
+   */
+  agruparPor?: string;
   run: (params: ReportParams) => Promise<Record<string, unknown>[]>;
 }
 
@@ -145,18 +152,22 @@ export const REPORTS: ReportDefinition[] = [
     id: 'saldos-clientes',
     area: 'CUENTAS_CORRIENTES',
     name: 'Composición de saldos — clientes',
-    description: 'Qué comprobantes forman el saldo de cada cliente, con sus días de mora.',
+    description:
+      'El saldo de cada cliente y qué lo forma: facturas impagas, y en negativo lo que tiene a cuenta. Tocá un cliente para ver el detalle.',
     usesPeriod: false,
+    // Solo suma el saldo: el total y lo cobrado mezclan facturas con recibos y
+    // notas de crédito a cuenta, y esa suma no significa nada.
     columns: [
       { key: 'customer_name', label: 'Cliente', width: 30 },
-      { key: 'comprobante', label: 'Comprobante', width: 22 },
+      { key: 'comprobante', label: 'Comprobante', width: 28 },
       { key: 'issue_date', label: 'Emisión', format: 'date', width: 12 },
       { key: 'due_date', label: 'Vencimiento', format: 'date', width: 12 },
       { key: 'dias_vencido', label: 'Días', format: 'integer', width: 8 },
-      { key: 'total_amount', label: 'Total', format: 'money', total: true, width: 14 },
-      { key: 'paid_amount', label: 'Cobrado', format: 'money', total: true, width: 14 },
+      { key: 'total_amount', label: 'Total', format: 'money', width: 14 },
+      { key: 'paid_amount', label: 'Cobrado', format: 'money', width: 14 },
       { key: 'balance', label: 'Saldo', format: 'money', total: true, width: 14 },
     ],
+    agruparPor: 'customer_name',
     run: () => callReport('report_customer_balances'),
   },
   {
@@ -465,6 +476,23 @@ export function isNumeric(format: ColumnFormat = 'text'): boolean {
   return format === 'money' || format === 'number' || format === 'integer';
 }
 
+export interface GrupoDeInforme {
+  clave: string;
+  filas: Record<string, unknown>[];
+}
+
+/** Agrupa respetando el orden en que vienen las filas (el informe ya las ordena). */
+export function agruparFilas(rows: Record<string, unknown>[], key: string): GrupoDeInforme[] {
+  const grupos = new Map<string, GrupoDeInforme>();
+  for (const row of rows) {
+    const clave = String(row[key] ?? '—');
+    const grupo = grupos.get(clave) ?? { clave, filas: [] };
+    grupo.filas.push(row);
+    grupos.set(clave, grupo);
+  }
+  return [...grupos.values()];
+}
+
 /** Totales de las columnas marcadas. Se calculan sobre lo que se ve. */
 export function computeTotals(
   rows: Record<string, unknown>[],
@@ -514,16 +542,30 @@ export function exportReportToExcel(
     report.columns.map((c) => c.label),
   ];
 
-  for (const row of rows) {
-    matrix.push(
-      report.columns.map((column) => {
-        const value = row[column.key];
-        if (value === null || value === undefined) return isNumeric(column.format) ? 0 : '';
-        if (isNumeric(column.format)) return Number(value);
-        if (column.format === 'date') return formatDate(String(value));
-        return String(value);
-      })
-    );
+  const fila = (row: Record<string, unknown>) =>
+    report.columns.map((column) => {
+      const value = row[column.key];
+      if (value === null || value === undefined) return isNumeric(column.format) ? 0 : '';
+      if (isNumeric(column.format)) return Number(value);
+      if (column.format === 'date') return formatDate(String(value));
+      return String(value);
+    });
+
+  if (report.agruparPor) {
+    // El detalle de cada grupo y, debajo, su subtotal: en la planilla va todo
+    // desplegado, que es lo que se espera al abrirla.
+    for (const grupo of agruparFilas(rows, report.agruparPor)) {
+      for (const row of grupo.filas) matrix.push(fila(row));
+      const sub = computeTotals(grupo.filas, report.columns);
+      matrix.push(
+        report.columns.map((column, index) =>
+          column.total ? sub[column.key] : index === 0 ? `Subtotal ${grupo.clave}` : ''
+        )
+      );
+      matrix.push([]);
+    }
+  } else {
+    for (const row of rows) matrix.push(fila(row));
   }
 
   if (hasTotals && rows.length > 0) {

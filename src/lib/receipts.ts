@@ -217,39 +217,30 @@ export async function fetchOpenInvoices(customerId: string): Promise<OpenInvoice
 }
 
 /**
- * Deuda por cliente: la suma de los saldos de sus facturas vigentes.
- *
- * Se agrega del lado del cliente porque PostgREST no agrupa, y en un taller
- * la cantidad de facturas abiertas es chica. Si algún día deja de serlo, esto
- * se reemplaza por una vista.
+ * El saldo de cada cliente con movimientos: lo que debe, lo que tiene a favor
+ * (recibos y notas de crédito a cuenta, menos lo ya usado) y la diferencia.
+ * Positivo, debe; negativo, tiene a favor. Lo calcula la base
+ * (saldos_de_clientes), y es el mismo número que el subtotal de cada cliente
+ * en la composición de saldos.
  */
-export interface CustomerDebt {
+export interface SaldoCliente {
   customerId: string;
   customerName: string;
-  debt: number;
+  deuda: number;
+  aFavor: number;
+  saldo: number;
 }
 
-export async function fetchCustomerDebts(): Promise<CustomerDebt[]> {
-  const { data, error } = await supabase
-    .from('invoices')
-    .select('customer_id, customer_name, total_amount, paid_amount')
-    .eq('status', 'EMITIDA');
-
+export async function fetchSaldosDeClientes(): Promise<SaldoCliente[]> {
+  const { data, error } = await supabase.rpc('saldos_de_clientes');
   if (error) throw error;
-
-  const map = new Map<string, CustomerDebt>();
-  for (const row of (data ?? []) as any[]) {
-    const balance = Number(row.total_amount) - Number(row.paid_amount);
-    if (balance <= 0) continue;
-    const current = map.get(row.customer_id) ?? {
-      customerId: row.customer_id,
-      customerName: row.customer_name,
-      debt: 0,
-    };
-    current.debt = Math.round((current.debt + balance) * 100) / 100;
-    map.set(row.customer_id, current);
-  }
-  return [...map.values()];
+  return ((data ?? []) as any[]).map((r) => ({
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    deuda: Number(r.deuda),
+    aFavor: Number(r.a_favor),
+    saldo: Number(r.saldo),
+  }));
 }
 
 /** Crédito disponible del cliente: lo cobrado de más que todavía no se usó. */

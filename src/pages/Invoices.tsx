@@ -55,7 +55,7 @@ const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
  * es la que sabe dibujar la factura, imprimirla y mandarla.
  */
 export function Invoices() {
-  const { role, canViewHistory } = useAuth();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [invoices, setInvoices] = React.useState<InvoiceListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -178,7 +178,6 @@ export function Invoices() {
       onEtiquetasGuardadas={(id, etiquetas) =>
         setInvoices((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
       }
-      ocultarListado={!canViewHistory}
       vacio="Todavía no hay facturas emitidas."
     />
   );

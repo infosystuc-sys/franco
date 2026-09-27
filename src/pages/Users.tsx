@@ -207,19 +207,15 @@ export function Users() {
   );
 }
 
-/** El desplegable de cargo, con el select de lugar de trabajo o el tilde de historial según corresponda. */
+/** El desplegable de cargo, con el select de lugar de trabajo cuando es operario. */
 function CargoFields({
   cargo,
   onCargoChange,
-  verHistorial,
-  onVerHistorialChange,
   workplace,
   onWorkplaceChange,
 }: {
   cargo: Cargo;
   onCargoChange: (cargo: Cargo) => void;
-  verHistorial: boolean;
-  onVerHistorialChange: (value: boolean) => void;
   workplace: Workplace | '';
   onWorkplaceChange: (value: Workplace | '') => void;
 }) {
@@ -261,17 +257,7 @@ function CargoFields({
         <span className="self-end pb-2.5 text-xs text-text-soft">
           Ve Informes → Impositivos (libros de IVA, retenciones) y puede exportarlos. Nada más.
         </span>
-      ) : (
-        <label className="flex items-center gap-2 text-sm text-text cursor-pointer self-end pb-2.5">
-          <input
-            type="checkbox"
-            checked={verHistorial}
-            onChange={(e) => onVerHistorialChange(e.target.checked)}
-            className="w-4 h-4 accent-accent-deep"
-          />
-          Ve el historial de comprobantes (Facturación, Cobranzas, Pagos, Compras, Tesorería)
-        </label>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -305,7 +291,6 @@ function UserModal({
   // todavía, así que no se puede llamar a la Edge Function hasta enviar
   // este mismo formulario).
   const [newCargo, setNewCargo] = React.useState<Cargo>('operario');
-  const [newVerHistorial, setNewVerHistorial] = React.useState(true);
   const [newWorkplace, setNewWorkplace] = React.useState<Workplace | ''>('');
   const [createdSummary, setCreatedSummary] = React.useState<string | null>(null);
 
@@ -314,7 +299,6 @@ function UserModal({
   // vuelva a pasar `employee` dejaría el estado mostrando lo viejo.
   const [hasAccess, setHasAccess] = React.useState(!!employee?.profileId);
   const [accessCargo, setAccessCargo] = React.useState<Cargo>('operario');
-  const [accessVerHistorial, setAccessVerHistorial] = React.useState(true);
   const [accessWorkplace, setAccessWorkplace] = React.useState<Workplace | ''>('');
   const [grantingAccess, setGrantingAccess] = React.useState(false);
   const [accessError, setAccessError] = React.useState<string | null>(null);
@@ -339,7 +323,6 @@ function UserModal({
     setAccessError(null);
     try {
       const { usuario } = await darAcceso(employee.id, accessCargo, {
-        verHistorial: accessCargo === 'operario' ? undefined : accessVerHistorial,
         workplace: accessCargo === 'operario' ? (accessWorkplace || null) : null,
       });
       setHasAccess(true);
@@ -409,7 +392,6 @@ function UserModal({
         const input: NewUserInput = {
           ...form,
           cargo: newCargo,
-          verHistorial: newCargo === 'operario' ? undefined : newVerHistorial,
           workplace: newCargo === 'operario' ? (newWorkplace || null) : null,
         };
         const { usuario } = await crearUsuario(input);
@@ -511,8 +493,6 @@ function UserModal({
               <CargoFields
                 cargo={newCargo}
                 onCargoChange={setNewCargo}
-                verHistorial={newVerHistorial}
-                onVerHistorialChange={setNewVerHistorial}
                 workplace={newWorkplace}
                 onWorkplaceChange={setNewWorkplace}
               />
@@ -543,8 +523,6 @@ function UserModal({
                       <CargoFields
                         cargo={accessCargo}
                         onCargoChange={setAccessCargo}
-                        verHistorial={accessVerHistorial}
-                        onVerHistorialChange={setAccessVerHistorial}
                         workplace={accessWorkplace}
                         onWorkplaceChange={setAccessWorkplace}
                       />

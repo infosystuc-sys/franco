@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Search, Truck } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -13,12 +13,15 @@ import {
   fetchCustomers,
   type Customer,
 } from '@/src/lib/customers';
+import { fetchSaldosDeClientes } from '@/src/lib/receipts';
 
 export function Customers() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
+  // Saldo por cliente: positivo debe, negativo tiene a favor. Sin entrada, cero.
+  const [saldos, setSaldos] = React.useState<Map<string, number>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
@@ -41,7 +44,9 @@ export function Customers() {
     setLoading(true);
     setError(null);
     try {
-      setCustomers(await fetchCustomers());
+      const [clientes, conSaldo] = await Promise.all([fetchCustomers(), fetchSaldosDeClientes()]);
+      setCustomers(clientes);
+      setSaldos(new Map(conSaldo.map((s) => [s.customerId, s.saldo])));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -113,6 +118,7 @@ export function Customers() {
                 <th className="p-3 font-semibold w-36">CUIT / CUIL</th>
                 <th className="p-3 font-semibold w-44">Cond. IVA</th>
                 <th className="p-3 font-semibold w-48">Contacto</th>
+                <th className="p-3 font-semibold w-36 text-right">Saldo</th>
                 <th className="p-3 font-semibold w-20 text-center">Vehíc.</th>
                 <th className="p-3 font-semibold w-20 text-center">Estado</th>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
@@ -120,11 +126,11 @@ export function Customers() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={7} className="p-6 text-center text-text-soft">Cargando...</td></tr>
+                <tr><td colSpan={8} className="p-6 text-center text-text-soft">Cargando...</td></tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-text-soft">
+                  <td colSpan={8} className="p-6 text-center text-text-soft">
                     {search ? 'Ningún cliente coincide con la búsqueda.' : 'No hay clientes cargados.'}
                   </td>
                 </tr>
@@ -147,6 +153,9 @@ export function Customers() {
                     {customer.email && <div>{customer.email}</div>}
                     {customer.phone && <div>{customer.phone}</div>}
                     {!customer.email && !customer.phone && <span className="text-text-faint">—</span>}
+                  </td>
+                  <td data-label="Saldo" className="p-3 text-right font-mono">
+                    <SaldoCelda saldo={saldos.get(customer.id) ?? 0} />
                   </td>
                   <td data-label="Vehículos" className="p-3 text-center">
                     <span className="inline-flex items-center gap-1 text-text-soft">
@@ -191,3 +200,11 @@ export function Customers() {
   );
 }
 
+/** Lo que debe en negro, lo que tiene a favor en verde, y un guión si está en cero. */
+function SaldoCelda({ saldo }: { saldo: number }) {
+  if (Math.abs(saldo) < 0.005) return <span className="text-text-faint">—</span>;
+  if (saldo < 0) {
+    return <span className="font-semibold text-state-done" title="A favor del cliente">− $ {formatMoney(-saldo)}</span>;
+  }
+  return <span className="font-semibold text-text">$ {formatMoney(saldo)}</span>;
+}

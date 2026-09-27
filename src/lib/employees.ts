@@ -91,8 +91,6 @@ export interface EmployeeInput {
 /** Lo que se pide al dar de alta un usuario: el registro y el acceso, en un solo paso. */
 export interface NewUserInput extends EmployeeInput {
   cargo: Cargo;
-  /** Solo aplica si cargo !== 'operario'. Sin especificar, la base lo deja en true. */
-  verHistorial?: boolean;
   /** Solo aplica si cargo === 'operario'. */
   workplace?: Workplace | null;
 }
@@ -180,7 +178,7 @@ export async function crearUsuario(input: NewUserInput): Promise<{ usuario: stri
 export async function darAcceso(
   employeeId: string,
   cargo: Cargo,
-  options?: { verHistorial?: boolean; workplace?: Workplace | null }
+  options?: { workplace?: Workplace | null }
 ): Promise<{ usuario: string }> {
   const { data, error } = await supabase.functions.invoke('gestionar-empleado', {
     body: { accion: 'crear', employeeId, cargo, ...options },

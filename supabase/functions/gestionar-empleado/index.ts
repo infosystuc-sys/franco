@@ -145,7 +145,6 @@ function rolDesdeCargo(cargo: Cargo): 'admin' | 'operario' | 'contador' {
 
 interface DatosAcceso {
   cargo: Cargo;
-  verHistorial?: boolean;
   workplace?: Workplace | null;
 }
 
@@ -158,8 +157,7 @@ function leerDatosAcceso(body: Record<string, unknown>): DatosAcceso | { error: 
   if (workplace && !WORKPLACES.includes(workplace)) {
     return { error: `Lugar de trabajo inválido: ${workplace}` };
   }
-  const verHistorial = typeof body.verHistorial === 'boolean' ? body.verHistorial : undefined;
-  return { cargo, verHistorial, workplace };
+  return { cargo, workplace };
 }
 
 /**
@@ -193,7 +191,6 @@ async function otorgarAcceso(
     .update({
       role: rolDesdeCargo(datos.cargo),
       position: datos.cargo,
-      ...(datos.verHistorial !== undefined ? { can_view_history: datos.verHistorial } : {}),
     })
     .eq('id', creado.user.id);
 

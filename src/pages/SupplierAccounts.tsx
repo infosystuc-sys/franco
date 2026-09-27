@@ -74,7 +74,7 @@ function buildAccounts(
 }
 
 export function SupplierAccounts() {
-  const { role, canViewHistory } = useAuth();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [accounts, setAccounts] = React.useState<SupplierAccount[]>([]);
   const [pagado, setPagado] = React.useState(0);
@@ -126,14 +126,12 @@ export function SupplierAccounts() {
         <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
       )}
 
-      {canViewHistory && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <Kpi label="Por pagar" value={`$ ${formatMoney(deuda)}`} danger={deuda > 0} />
           <Kpi label="Vencido" value={`$ ${formatMoney(vencido)}`} danger={vencido > 0} />
           <Kpi label="Saldos a favor" value={`$ ${formatMoney(credito)}`} />
           <Kpi label="Pagado" value={`$ ${formatMoney(pagado)}`} />
         </div>
-      )}
 
       <Panel className="overflow-x-auto overflow-y-hidden">
         <table className="table-stack w-full text-left text-[15px]">

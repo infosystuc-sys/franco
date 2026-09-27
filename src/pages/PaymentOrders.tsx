@@ -46,7 +46,7 @@ const COLUMNAS: ColumnaListado<PaymentOrder>[] = [
 
 /** Órdenes de pago a proveedores, con el listado y las acciones del de Tango. */
 export function PaymentOrders() {
-  const { role, canViewHistory } = useAuth();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = React.useState<PaymentOrder[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -118,7 +118,6 @@ export function PaymentOrders() {
       onEtiquetasGuardadas={(id, etiquetas) =>
         setOrders((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
       }
-      ocultarListado={!canViewHistory}
       vacio="Todavía no hay órdenes de pago."
     />
   );

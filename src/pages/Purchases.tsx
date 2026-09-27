@@ -67,7 +67,7 @@ const COLUMNAS: ColumnaListado<PurchaseListRow>[] = [
  * envían.
  */
 export function Purchases() {
-  const { role, canViewHistory } = useAuth();
+  const { role } = useAuth();
   const navigate = useNavigate();
   const [docs, setDocs] = React.useState<PurchaseListRow[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -169,7 +169,6 @@ export function Purchases() {
       onEtiquetasGuardadas={(id, etiquetas) =>
         setDocs((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
       }
-      ocultarListado={!canViewHistory}
       vacio="Todavía no hay compras cargadas."
     />
   );

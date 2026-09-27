@@ -62,7 +62,6 @@ export function ComprobantesListado<T>({
   masAcciones,
   etiquetasDe,
   onEtiquetasGuardadas,
-  ocultarListado,
   vacio = 'Todavía no hay comprobantes emitidos.',
   aviso,
   onCerrarAviso,
@@ -84,8 +83,6 @@ export function ComprobantesListado<T>({
   etiquetasDe: (fila: T) => string[];
   /** Para que la pantalla actualice la fila sin volver a leer todo. */
   onEtiquetasGuardadas: (id: string, etiquetas: string[]) => void;
-  /** El permiso "sin historial": se ve la botonera pero no los comprobantes. */
-  ocultarListado?: boolean;
   vacio?: string;
   /** Un resultado para contar (no un error): "Se eliminó la orden…". */
   aviso?: string | null;
@@ -130,7 +127,7 @@ export function ComprobantesListado<T>({
     return () => document.removeEventListener('mousedown', cerrar);
   }, [menuAbierto]);
 
-  const elegida = ocultarListado ? null : filas.find((f) => getId(f) === elegidoId) ?? null;
+  const elegida = filas.find((f) => getId(f) === elegidoId) ?? null;
 
   function cambiarVista(nueva: 'lista' | 'tarjetas') {
     setVista(nueva);
@@ -276,11 +273,7 @@ export function ComprobantesListado<T>({
         </div>
       )}
 
-      {ocultarListado ? (
-        <p className="py-10 text-center text-text-soft">
-          Tu usuario no tiene habilitado ver el historial de comprobantes.
-        </p>
-      ) : loading ? (
+      {loading ? (
         <p className="py-10 text-center text-text-soft">Cargando…</p>
       ) : filas.length === 0 ? (
         <p className="py-10 text-center text-text-soft">{vacio}</p>

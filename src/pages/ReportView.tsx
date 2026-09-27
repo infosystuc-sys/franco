@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, FileSpreadsheet, Play, Search, Printer } from 'lucide-react';
+import { XCircle, FileSpreadsheet, Play, Search, Printer, ChevronRight, ChevronDown } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -7,6 +7,7 @@ import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
+  agruparFilas,
   computeTotals,
   describeReportError,
   exportReportToExcel,
@@ -42,6 +43,8 @@ export function ReportView() {
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [ranWith, setRanWith] = React.useState<ReportParams | null>(null);
+  /** Grupos desplegados. Arrancan todos cerrados: la primera vista es un renglón por grupo. */
+  const [abiertos, setAbiertos] = React.useState<Set<string>>(new Set());
 
   const filtered = React.useMemo(() => {
     if (!rows) return [];
@@ -59,6 +62,20 @@ export function ReportView() {
     () => (report ? computeTotals(filtered, report.columns) : {}),
     [filtered, report]
   );
+
+  const grupos = React.useMemo(
+    () => (report?.agruparPor ? agruparFilas(filtered, report.agruparPor) : null),
+    [filtered, report]
+  );
+
+  function alternarGrupo(clave: string) {
+    setAbiertos((actual) => {
+      const nuevo = new Set(actual);
+      if (nuevo.has(clave)) nuevo.delete(clave);
+      else nuevo.add(clave);
+      return nuevo;
+    });
+  }
 
   if (role !== 'admin' && role !== 'contador') return <Navigate to="/" replace />;
   if (!report) return <Navigate to="/informes" replace />;
@@ -185,6 +202,23 @@ export function ReportView() {
         <div className="print-document">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs text-text-soft">
             <span>
+              {grupos && (
+                <>
+                  {grupos.length} {grupos.length === 1 ? 'grupo' : 'grupos'} ·{' '}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAbiertos(
+                        abiertos.size === grupos.length ? new Set() : new Set(grupos.map((g) => g.clave))
+                      )
+                    }
+                    className="no-print font-semibold text-accent-deep hover:underline"
+                  >
+                    {abiertos.size === grupos.length ? 'Ocultar el detalle' : 'Ver el detalle de todos'}
+                  </button>
+                  {' · '}
+                </>
+              )}
               {filtered.length === rows.length
                 ? `${rows.length} ${rows.length === 1 ? 'registro' : 'registros'}`
                 : `${filtered.length} de ${rows.length} registros`}
@@ -224,7 +258,70 @@ export function ReportView() {
                   </tr>
                 )}
 
-                {filtered.map((row, idx) => (
+                {grupos &&
+                  grupos.map((grupo) => {
+                    const abierto = abiertos.has(grupo.clave);
+                    const sub = computeTotals(grupo.filas, report.columns);
+                    return (
+                      <React.Fragment key={grupo.clave}>
+                        <tr
+                          onClick={() => alternarGrupo(grupo.clave)}
+                          className="h-9 cursor-pointer border-b border-line bg-panel-head/60 font-semibold hover:bg-panel-head"
+                        >
+                          {report.columns.map((column, index) => {
+                            const negative = column.total && Number(sub[column.key]) < 0;
+                            return (
+                              <td
+                                key={column.key}
+                                className={cn(
+                                  'px-3 py-1',
+                                  isNumeric(column.format) && 'text-right font-mono',
+                                  negative && 'text-state-done'
+                                )}
+                              >
+                                {index === 0 ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    {abierto ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    {grupo.clave}
+                                    <span className="ml-1 text-[12px] font-normal text-text-faint">
+                                      ({grupo.filas.length})
+                                    </span>
+                                  </span>
+                                ) : column.total ? (
+                                  formatCell(sub[column.key], column.format)
+                                ) : (
+                                  ''
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {abierto &&
+                          grupo.filas.map((row, idx) => (
+                            <tr key={idx} className="h-8 border-b border-line bg-panel">
+                              {report.columns.map((column) => {
+                                const value = row[column.key];
+                                const negative = isNumeric(column.format) && Number(value) < 0;
+                                return (
+                                  <td
+                                    key={column.key}
+                                    className={cn(
+                                      'px-3 py-1',
+                                      isNumeric(column.format) && 'text-right font-mono',
+                                      negative && 'text-danger'
+                                    )}
+                                  >
+                                    {column.key === report.agruparPor ? '' : formatCell(value, column.format)}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                      </React.Fragment>
+                    );
+                  })}
+
+                {!grupos && filtered.map((row, idx) => (
                   <tr
                     key={idx}
                     className={cn('h-8 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}
