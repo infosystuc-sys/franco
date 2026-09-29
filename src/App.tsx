@@ -17,6 +17,7 @@ import { InvoicesPending } from '@/src/pages/InvoicesPending';
 import { CustomerAccounts } from '@/src/pages/CustomerAccounts';
 import { SupplierAccounts } from '@/src/pages/SupplierAccounts';
 import { SaldosInicialesClientes } from '@/src/pages/SaldosInicialesClientes';
+import { CustomersImport } from '@/src/pages/CustomersImport';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
@@ -156,6 +157,7 @@ export default function App() {
                     <Route path="/listas-precios" element={<PriceLists />} />
                     <Route path="/mensajes" element={<Notifications />} />
                     <Route path="/clientes" element={<Customers />} />
+                    <Route path="/clientes/importar" element={<CustomersImport />} />
                     <Route path="/vehiculos" element={<Vehicles />} />
                     <Route path="/vehiculos/nuevo" element={<VehicleNew />} />
                     <Route path="/estados-ot" element={<WorkOrderStatuses />} />

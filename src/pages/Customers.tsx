@@ -1,6 +1,6 @@
 import React from 'react';
-import { Plus, Pencil, Trash2, Search, Truck } from 'lucide-react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet } from 'lucide-react';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
@@ -89,9 +89,16 @@ export function Customers() {
         title="Clientes"
         subtitle="Datos fiscales y vehículos de cada cliente del taller."
         actions={
-          <Button onClick={() => setEditing('new')}>
-            <Plus size={16} /> Nuevo cliente
-          </Button>
+          <>
+            <Link to="/clientes/importar">
+              <Button variant="ghost" type="button">
+                <FileSpreadsheet size={16} /> Importar desde Excel
+              </Button>
+            </Link>
+            <Button onClick={() => setEditing('new')}>
+              <Plus size={16} /> Nuevo cliente
+            </Button>
+          </>
         }
       />
 
