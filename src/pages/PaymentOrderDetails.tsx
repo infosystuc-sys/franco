@@ -18,6 +18,7 @@ import {
   type PaymentOrder,
   type PaymentValue,
 } from '@/src/lib/paymentOrders';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 export function PaymentOrderDetails() {
   const { role } = useAuth();
@@ -29,6 +30,8 @@ export function PaymentOrderDetails() {
   const [voiding, setVoiding] = React.useState(false);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -99,6 +102,8 @@ export function PaymentOrderDetails() {
       setVoiding(false);
     }
   }
+
+  const mensaje = sendModal ? armarMensaje('orden_pago', sendModal, { numero: order.fullNumber, total: formatMoney(order.totalAmount), cliente: order.supplierName }) : null;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -303,12 +308,10 @@ export function PaymentOrderDetails() {
           defaultDestino={(sendModal === 'email' ? order.supplierEmail : order.supplierPhone) ?? null}
           fileName={`${order.fullNumber}.pdf`}
           documentRef={documentRef}
-          subject={`Orden de pago ${order.fullNumber}`}
-          text={
-            sendModal === 'email'
+          subject={mensaje?.asunto || `Orden de pago ${order.fullNumber}`}
+          text={mensaje?.texto || (sendModal === 'email'
               ? `Adjuntamos la orden de pago ${order.fullNumber} por $ ${formatMoney(order.totalAmount)}.`
-              : `Orden de pago ${order.fullNumber} — $ ${formatMoney(order.totalAmount)}`
-          }
+              : `Orden de pago ${order.fullNumber} — $ ${formatMoney(order.totalAmount)}`)}
           onSent={() => marcarEnviado('orden_pago', order.id)}
           onClose={() => {
             setSendModal(null);

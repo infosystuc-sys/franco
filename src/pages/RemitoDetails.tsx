@@ -10,6 +10,7 @@ import { fetchCompanySettings } from '@/src/lib/companySettings';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
 import { marcarEnviado } from '@/src/lib/comprobantes';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 /** Ficha de un remito, con o sin factura. Es también el documento imprimible. */
 export function RemitoDetails() {
@@ -23,6 +24,8 @@ export function RemitoDetails() {
   const [logo, setLogo] = React.useState<string | null>(null);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -87,6 +90,8 @@ export function RemitoDetails() {
 
   const pending = isPending(remito);
 
+  const mensaje = sendModal ? armarMensaje('remito', sendModal, { numero: remito.fullNumber, cliente: remito.customerName }) : null;
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="no-print">
@@ -140,12 +145,10 @@ export function RemitoDetails() {
           defaultDestino={(sendModal === 'email' ? remito.customerEmail : remito.customerPhone) ?? null}
           fileName={`Remito-${remito.fullNumber}.pdf`}
           documentRef={documentRef}
-          subject={`Remito ${remito.fullNumber}`}
-          text={
-            sendModal === 'email'
+          subject={mensaje?.asunto || `Remito ${remito.fullNumber}`}
+          text={mensaje?.texto || (sendModal === 'email'
               ? `Adjuntamos el remito ${remito.fullNumber}.`
-              : `Remito ${remito.fullNumber}`
-          }
+              : `Remito ${remito.fullNumber}`)}
           onSent={() => marcarEnviado('remito', remito.id)}
           onClose={() => {
             setSendModal(null);

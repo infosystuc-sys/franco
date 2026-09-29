@@ -40,6 +40,7 @@ import {
   updateQuotationStatus,
   type QuotationDetail,
 } from '@/src/lib/quotations';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 const QUOTATION_IVA_RATE = 0.21;
 
@@ -63,6 +64,8 @@ export function QuotationDetails() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   /**
    * A dónde se vuelve al terminar. Normalmente el listado, pero si se llegó desde
@@ -215,6 +218,8 @@ export function QuotationDetails() {
 
   const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
+
+  const mensaje = sendModal ? armarMensaje('presupuesto', sendModal, { numero: quotation.number, total: formatMoney(itemsTotal + itemsIva), cliente: quotation.customer?.name }) : null;
 
   return (
     <div className="w-full space-y-6">
@@ -447,12 +452,10 @@ export function QuotationDetails() {
           defaultDestino={(sendModal === 'email' ? quotation.customer?.email : quotation.customer?.phone) ?? null}
           fileName={`Presupuesto-${quotation.number}.pdf`}
           documentRef={documentRef}
-          subject={`Presupuesto ${quotation.number}`}
-          text={
-            sendModal === 'email'
+          subject={mensaje?.asunto || `Presupuesto ${quotation.number}`}
+          text={mensaje?.texto || (sendModal === 'email'
               ? `Adjuntamos el presupuesto ${quotation.number} por $ ${formatMoney(itemsTotal + itemsIva)}.`
-              : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`
-          }
+              : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`)}
           onSent={() => marcarEnviado('presupuesto', quotation.id)}
           onClose={() => { setSendModal(null); volverAlListado(); }}
         />

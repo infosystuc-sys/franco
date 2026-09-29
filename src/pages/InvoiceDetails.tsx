@@ -29,6 +29,7 @@ import {
 import { fetchRemitoByInvoice, type Remito } from '@/src/lib/remitos';
 import { emitirEnArca } from '@/src/lib/arcaFacturacion';
 import { fetchCompanySettings } from '@/src/lib/companySettings';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 /**
  * La factura emitida. Es a la vez el documento que se imprime: las reglas de
@@ -48,6 +49,8 @@ export function InvoiceDetails() {
   const [pidiendoCae, setPidiendoCae] = React.useState(false);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -158,6 +161,8 @@ export function InvoiceDetails() {
       setVoiding(false);
     }
   }
+
+  const mensaje = sendModal ? armarMensaje('factura', sendModal, { tipo: INVOICE_TYPE_LABELS[invoice.invoiceType], numero: invoice.fullNumber, total: formatMoney(invoice.totalAmount), cliente: invoice.customerName }) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -381,12 +386,10 @@ export function InvoiceDetails() {
           defaultDestino={(sendModal === 'email' ? invoice.customerEmail : invoice.customerPhone) ?? null}
           fileName={`${invoice.fullNumber}.pdf`}
           documentRef={documentRef}
-          subject={`${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber}`}
-          text={
-            sendModal === 'email'
+          subject={mensaje?.asunto || `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber}`}
+          text={mensaje?.texto || (sendModal === 'email'
               ? `Adjuntamos la ${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} por $ ${formatMoney(invoice.totalAmount)}.`
-              : `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} — $ ${formatMoney(invoice.totalAmount)}`
-          }
+              : `${INVOICE_TYPE_LABELS[invoice.invoiceType]} ${invoice.fullNumber} — $ ${formatMoney(invoice.totalAmount)}`)}
           onSent={() => marcarEnviado('factura', invoice.id)}
           onClose={() => {
             setSendModal(null);

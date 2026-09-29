@@ -18,6 +18,7 @@ import {
   type Receipt,
   type ReceiptValue,
 } from '@/src/lib/receipts';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 /**
  * El recibo emitido, que es a la vez el documento imprimible: las reglas de
@@ -34,6 +35,8 @@ export function ReceiptDetails() {
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   // El nodo del comprobante impreso: es lo que se convierte en PDF para mandar.
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -104,6 +107,8 @@ export function ReceiptDetails() {
       setVoiding(false);
     }
   }
+
+  const mensaje = sendModal ? armarMensaje('recibo', sendModal, { numero: receipt.fullNumber, total: formatMoney(receipt.totalAmount), cliente: receipt.customerName }) : null;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -318,11 +323,9 @@ export function ReceiptDetails() {
           defaultDestino={sendModal === 'email' ? receipt.customerEmail : receipt.customerPhone}
           fileName={`Recibo ${receipt.fullNumber}.pdf`}
           documentRef={documentRef}
-          subject={`Recibo ${receipt.fullNumber}`}
-          text={
-            `Te enviamos el recibo ${receipt.fullNumber} por $ ${formatMoney(receipt.totalAmount)}. ` +
-            'Gracias por tu pago.'
-          }
+          subject={mensaje?.asunto || `Recibo ${receipt.fullNumber}`}
+          text={mensaje?.texto || (`Te enviamos el recibo ${receipt.fullNumber} por $ ${formatMoney(receipt.totalAmount)}. ` +
+            'Gracias por tu pago.')}
           onSent={() => marcarEnviado('recibo', receipt.id)}
           onClose={() => {
             setSendModal(null);

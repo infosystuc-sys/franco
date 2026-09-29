@@ -18,6 +18,7 @@ import { fetchCompanySettings } from '@/src/lib/companySettings';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
 import { marcarEnviado } from '@/src/lib/comprobantes';
+import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
 
 /** Los códigos de nota de crédito de ARCA, para el QR. */
 const COD_NOTA_CREDITO: Record<string, number> = { A: 3, B: 8, C: 13 };
@@ -33,6 +34,8 @@ export function CreditNoteDetails() {
   const [pidiendoCae, setPidiendoCae] = React.useState(false);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Asunto y texto de los envíos, según lo configurado en Configuración.
+  const armarMensaje = usePlantillasDeEnvio();
 
   const load = React.useCallback(async () => {
     if (!id) return;
@@ -96,6 +99,8 @@ export function CreditNoteDetails() {
       setPidiendoCae(false);
     }
   }
+
+  const mensaje = sendModal ? armarMensaje('nota_credito', sendModal, { numero: nc.fullNumber, total: formatMoney(nc.totalAmount), cliente: nc.customerName }) : null;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -194,12 +199,10 @@ export function CreditNoteDetails() {
           defaultDestino={(sendModal === 'email' ? nc.customerEmail : nc.customerPhone) ?? null}
           fileName={`NC-${nc.fullNumber}.pdf`}
           documentRef={documentRef}
-          subject={`Nota de crédito ${nc.fullNumber}`}
-          text={
-            sendModal === 'email'
+          subject={mensaje?.asunto || `Nota de crédito ${nc.fullNumber}`}
+          text={mensaje?.texto || (sendModal === 'email'
               ? `Adjuntamos la nota de crédito ${nc.fullNumber} por $ ${formatMoney(nc.totalAmount)}.`
-              : `Nota de crédito ${nc.fullNumber} — $ ${formatMoney(nc.totalAmount)}`
-          }
+              : `Nota de crédito ${nc.fullNumber} — $ ${formatMoney(nc.totalAmount)}`)}
           onSent={() => marcarEnviado('nota_credito', nc.id)}
           onClose={() => {
             setSendModal(null);
