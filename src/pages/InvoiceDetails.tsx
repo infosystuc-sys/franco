@@ -74,7 +74,7 @@ export function InvoiceDetails() {
 
   // Los botones del listado llegan acá con la acción en la URL.
   const desdeListado = useAccionDesdeListado({
-    listo: !loading && invoice?.status === 'EMITIDA',
+    listo: !loading && invoice?.status === 'EMITIDA' && !invoice.saldoInicial,
     listado: '/facturas',
     documentRef,
     nombreArchivo: `${invoice?.fullNumber ?? 'factura'}.pdf`,
@@ -227,12 +227,12 @@ export function InvoiceDetails() {
                       : 'Pedir el CAE a ARCA'}
                 </Button>
               )}
-              {!pendiente && (
+              {!pendiente && !invoice.saldoInicial && (
                 <Button variant="ghost" type="button" onClick={() => window.print()}>
                   <Printer size={16} /> Imprimir
                 </Button>
               )}
-              {!voided && !pendiente && (
+              {!voided && !pendiente && !invoice.saldoInicial && (
                 <>
                   <Button variant="ghost" type="button" onClick={() => setSendModal('email')}>
                     <Mail size={16} /> Enviar por mail
@@ -266,6 +266,18 @@ export function InvoiceDetails() {
         {error && (
           <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
             {error}
+          </div>
+        )}
+
+        {invoice.saldoInicial && (
+          <div className="mb-6 flex items-start gap-2 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-text-soft" />
+            <span>
+              Saldo inicial importado del sistema anterior
+              {invoice.referenciaAnterior ? ` (${invoice.referenciaAnterior})` : ''}. No es un
+              comprobante de esta app: no se imprime ni se envía, y no cuenta como venta. Se cobra
+              con un recibo como cualquier factura; si se cargó mal, se anula.
+            </span>
           </div>
         )}
 

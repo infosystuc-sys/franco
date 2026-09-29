@@ -35,7 +35,10 @@ export function CustomerAccounts() {
         if (cancelled) return;
         setAccounts([...saldos].sort((a, b) => b.saldo - a.saldo));
         setCobrado(
-          receipts.filter((r) => r.status === 'REGISTRADO').reduce((sum, r) => sum + r.totalAmount, 0)
+          // Un saldo a favor traído del sistema anterior no es plata cobrada acá.
+          receipts
+            .filter((r) => r.status === 'REGISTRADO' && !r.saldoInicial)
+            .reduce((sum, r) => sum + r.totalAmount, 0)
         );
       })
       .catch((err) => !cancelled && setError(describeReceiptError(getErrorMessage(err))))

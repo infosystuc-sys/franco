@@ -24,8 +24,14 @@ import {
 const SOLO_EMITIDA = (f: InvoiceListRow) =>
   f.status === 'EMITIDA' ? null : 'Solo sobre una factura emitida: esta está anulada o esperando el CAE.';
 
+/** Un saldo inicial no es un comprobante: no se imprime, ni se manda, ni se copia. */
+const NO_SALDO_INICIAL = (f: InvoiceListRow) =>
+  f.saldoInicial ? 'Es un saldo inicial del sistema anterior, no un comprobante: solo se cobra.' : null;
+const COMPROBANTE_EMITIDO = (f: InvoiceListRow) => NO_SALDO_INICIAL(f) ?? SOLO_EMITIDA(f);
+
 function estado(f: InvoiceListRow): string {
   if (f.status === 'ANULADA') return 'Anulado';
+  if (f.saldoInicial) return 'Saldo inicial';
   if (f.status === 'PENDIENTE_CAE') return f.caeRechazo ? 'Rechazado por ARCA' : 'Pendiente de CAE';
   return 'Emitido';
 }
@@ -37,7 +43,10 @@ function cobrado(f: InvoiceListRow): string {
 }
 
 const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
-  { label: 'Comprobante', valor: (f) => `FVA ${f.invoiceType} ${f.fullNumber}` },
+  {
+    label: 'Comprobante',
+    valor: (f) => (f.saldoInicial ? `SI ${f.referenciaAnterior ?? f.fullNumber}` : `FVA ${f.invoiceType} ${f.fullNumber}`),
+  },
   { label: 'Cliente', valor: (f) => f.customerName, ancho: 'w-full' },
   { label: 'Emisión', valor: (f) => formatDate(f.issueDate) },
   { label: 'Vencimiento', valor: (f) => formatDate(f.dueDate) },
@@ -45,7 +54,7 @@ const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
   { label: 'Total', valor: (f) => `$ ${formatMoney(f.totalAmount)}`, derecha: true },
   { label: 'Estado', valor: estado },
   // La X no es fiscal: ARCA no la autoriza, ni tiene por qué.
-  { label: 'Autorizado', valor: (f) => (f.invoiceType === 'X' ? '—' : siNo(f.autorizada)) },
+  { label: 'Autorizado', valor: (f) => (f.invoiceType === 'X' || f.saldoInicial ? '—' : siNo(f.autorizada)) },
   { label: 'Cobrado', valor: cobrado },
 ];
 
@@ -102,10 +111,10 @@ export function Invoices() {
 
   const botones: AccionListado<InvoiceListRow>[] = [
     { label: 'Ver', onClick: (f) => f && navigate(ficha(f)) },
-    { label: 'Imprimir', bloqueo: SOLO_EMITIDA, onClick: (f) => f && navigate(urlDeAccion(ficha(f), 'imprimir')) },
+    { label: 'Imprimir', bloqueo: COMPROBANTE_EMITIDO, onClick: (f) => f && navigate(urlDeAccion(ficha(f), 'imprimir')) },
     {
       label: 'Generar ticket de cambio',
-      bloqueo: SOLO_EMITIDA,
+      bloqueo: COMPROBANTE_EMITIDO,
       onClick: (f) => f && navigate(urlDeAccion(ficha(f), 'ticket')),
     },
   ];
@@ -113,17 +122,19 @@ export function Invoices() {
   const masAcciones = [
     {
       label: 'Descargar comprobante',
-      bloqueo: SOLO_EMITIDA,
+      bloqueo: COMPROBANTE_EMITIDO,
       onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'descargar')),
     },
     {
       label: 'Copiar comprobante',
+      bloqueo: NO_SALDO_INICIAL,
       onClick: (f: InvoiceListRow | null) => f && navigate(`/facturas/nueva?copiar=${f.id}`),
     },
     ETIQUETAR,
     {
       label: 'Generar nota de crédito',
       bloqueo: (f: InvoiceListRow) => {
+        if (f.saldoInicial) return 'Un saldo inicial no lleva nota de crédito: si está mal, se anula desde la ficha.';
         if (f.invoiceType === 'X') return 'La serie X no lleva nota de crédito: se anula desde la ficha.';
         return SOLO_EMITIDA(f);
       },
@@ -131,12 +142,12 @@ export function Invoices() {
     },
     {
       label: 'Enviar comprobante por WhatsApp',
-      bloqueo: SOLO_EMITIDA,
+      bloqueo: COMPROBANTE_EMITIDO,
       onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'whatsapp')),
     },
     {
       label: 'Enviar comprobante por correo',
-      bloqueo: SOLO_EMITIDA,
+      bloqueo: COMPROBANTE_EMITIDO,
       onClick: (f: InvoiceListRow | null) => f && navigate(urlDeAccion(ficha(f), 'email')),
     },
     {

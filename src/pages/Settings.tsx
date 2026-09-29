@@ -911,6 +911,8 @@ function facturaDeMuestra(taller: CompanySettings): InvoiceDetail {
     autorizada: false,
     enviadoAt: null,
     etiquetas: [],
+    saldoInicial: false,
+    referenciaAnterior: null,
     fullNumber: `${String(taller.salesPoint).padStart(4, '0')}-00000001`,
     invoiceType: 'B',
     status: 'EMITIDA',

@@ -14,7 +14,11 @@ import {
 } from '@/src/components/ComprobantesListado';
 
 const SOLO_REGISTRADO = (f: Receipt) =>
-  f.status === 'REGISTRADO' ? null : 'Este recibo está anulado.';
+  f.saldoInicial
+    ? 'Es un saldo a favor traído del sistema anterior, no un recibo.'
+    : f.status === 'REGISTRADO'
+      ? null
+      : 'Este recibo está anulado.';
 
 const COLUMNAS: ColumnaListado<Receipt>[] = [
   { label: 'Comprobante', valor: (f) => f.fullNumber },
@@ -34,7 +38,10 @@ const COLUMNAS: ColumnaListado<Receipt>[] = [
     valor: (f) => (f.onAccountAmount > 0 ? `$ ${formatMoney(f.onAccountAmount)}` : '—'),
     derecha: true,
   },
-  { label: 'Estado', valor: (f) => (f.status === 'ANULADO' ? 'Anulado' : 'Emitido') },
+  {
+    label: 'Estado',
+    valor: (f) => (f.status === 'ANULADO' ? 'Anulado' : f.saldoInicial ? 'Saldo inicial' : 'Emitido'),
+  },
 ];
 
 /**

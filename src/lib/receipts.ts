@@ -91,6 +91,8 @@ export interface Receipt {
   notes: string | null;
   voidedAt: string | null;
   voidedReason: string | null;
+  /** Plata a favor traída del sistema anterior: no es un cobro de verdad. */
+  saldoInicial: boolean;
   enviadoAt: string | null;
   etiquetas: string[];
   allocations: ReceiptAllocation[];
@@ -102,7 +104,7 @@ export interface Receipt {
 const SELECT =
   `id, full_number, status, customer_id, customer_name, receipt_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
-   enviado_at, etiquetas,
+   enviado_at, etiquetas, saldo_inicial,
    customer:customers(email, phone_e164, phone),
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
@@ -129,6 +131,7 @@ function mapReceipt(row: any): Receipt {
     notes: row.notes,
     voidedAt: row.voided_at,
     voidedReason: row.voided_reason,
+    saldoInicial: row.saldo_inicial ?? false,
     enviadoAt: row.enviado_at ?? null,
     etiquetas: row.etiquetas ?? [],
     allocations: ((row.allocations ?? []) as any[]).map((a) => ({
@@ -190,7 +193,10 @@ export interface OpenInvoice {
 export async function fetchOpenInvoices(customerId: string): Promise<OpenInvoice[]> {
   const { data, error } = await supabase
     .from('invoices')
-    .select('id, full_number, invoice_type, issue_date, due_date, total_amount, paid_amount')
+    .select(
+      'id, full_number, invoice_type, issue_date, due_date, total_amount, paid_amount, credited_amount, ' +
+        'saldo_inicial, referencia_anterior'
+    )
     .eq('customer_id', customerId)
     .eq('status', 'EMITIDA')
     .order('issue_date', { ascending: true })
@@ -202,15 +208,18 @@ export async function fetchOpenInvoices(customerId: string): Promise<OpenInvoice
     .map((row: any) => {
       const total = Number(row.total_amount);
       const paid = Number(row.paid_amount);
+      // Lo que cancelaron notas de crédito imputadas tampoco se debe.
+      const credited = Number(row.credited_amount ?? 0);
       return {
         id: row.id,
-        fullNumber: row.full_number,
-        invoiceType: row.invoice_type,
+        // Un saldo inicial se reconoce por el número del sistema anterior.
+        fullNumber: row.saldo_inicial ? row.referencia_anterior ?? row.full_number : row.full_number,
+        invoiceType: row.saldo_inicial ? 'Saldo inicial' : row.invoice_type,
         issueDate: row.issue_date,
         dueDate: row.due_date,
         totalAmount: total,
         paidAmount: paid,
-        balance: Math.round((total - paid) * 100) / 100,
+        balance: Math.round((total - paid - credited) * 100) / 100,
       };
     })
     .filter((invoice) => invoice.balance > 0);

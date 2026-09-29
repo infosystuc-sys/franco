@@ -16,6 +16,7 @@ import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
 import { InvoicesPending } from '@/src/pages/InvoicesPending';
 import { CustomerAccounts } from '@/src/pages/CustomerAccounts';
 import { SupplierAccounts } from '@/src/pages/SupplierAccounts';
+import { SaldosInicialesClientes } from '@/src/pages/SaldosInicialesClientes';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
 import { CreditNoteNew } from '@/src/pages/CreditNoteNew';
@@ -133,6 +134,7 @@ export default function App() {
                     <Route path="/cobranzas" element={<Receipts />} />
                     <Route path="/cobranzas/nueva" element={<ReceiptNew />} />
                     <Route path="/cuenta-corriente-clientes" element={<CustomerAccounts />} />
+                    <Route path="/saldos-iniciales/clientes" element={<SaldosInicialesClientes />} />
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />
                     <Route path="/pagos" element={<PaymentOrders />} />
                     <Route path="/pagos/nueva" element={<PaymentOrderNew />} />

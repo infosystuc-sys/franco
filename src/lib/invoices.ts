@@ -293,6 +293,10 @@ export interface InvoiceListRow {
   /** Cuándo se mandó por última vez por mail o WhatsApp. */
   enviadoAt: string | null;
   etiquetas: string[];
+  /** Deuda traída del sistema anterior: se cobra, pero no es una venta ni un comprobante. */
+  saldoInicial: boolean;
+  /** El número que tenía en el sistema anterior. Solo en los saldos iniciales. */
+  referenciaAnterior: string | null;
 }
 
 export interface InvoiceItem {
@@ -350,6 +354,7 @@ export interface InvoiceDetail extends InvoiceListRow {
 const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_id, customer_name, issue_date, due_date, ' +
   'total_amount, paid_amount, credited_amount, cae, cae_simulated, cae_rechazo, enviado_at, etiquetas, ' +
+  'saldo_inicial, referencia_anterior, ' +
   'work_order:work_orders(number)';
 
 function mapListRow(row: any): InvoiceListRow {
@@ -370,6 +375,8 @@ function mapListRow(row: any): InvoiceListRow {
     autorizada: !!row.cae && !row.cae_simulated,
     enviadoAt: row.enviado_at ?? null,
     etiquetas: row.etiquetas ?? [],
+    saldoInicial: row.saldo_inicial ?? false,
+    referenciaAnterior: row.referencia_anterior ?? null,
   };
 }
 
@@ -389,7 +396,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     .from('invoices')
     .select(
       `id, full_number, invoice_type, sales_point, number, status, enviado_at, etiquetas,
-       customer_id, customer_name, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address,
+       saldo_inicial, referencia_anterior, customer_id, customer_name, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address,
        issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address,
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
