@@ -93,7 +93,7 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- La importación
 -- ---------------------------------------------------------------------------
--- p_filas: [{ cliente, cuit, comprobante, fecha, vencimiento, importe }]
+-- p_filas: [{ cliente, cuit, comprobante, fecha, vencimiento, importe, condicion_iva }]
 -- Importe positivo, el cliente debe; negativo, tiene a favor.
 --
 -- El cliente se busca por CUIT y, si no trae, por nombre exacto (sin
@@ -116,6 +116,7 @@ declare
   v_fecha date;
   v_vence date;
   v_ref text;
+  v_iva text;
   v_numero int;
   v_factura uuid;
   v_recibo int;
@@ -145,6 +146,12 @@ begin
     v_fecha := coalesce((v_fila->>'fecha')::date, current_date);
     v_vence := coalesce((v_fila->>'vencimiento')::date, v_fecha);
     v_ref := nullif(btrim(v_fila->>'comprobante'), '');
+    -- La app la deduce de los comprobantes (a quien se le hizo factura A es
+    -- inscripto). Solo se usa al crear el cliente.
+    v_iva := nullif(v_fila->>'condicion_iva', '');
+    if v_iva is not null and v_iva not in ('RESPONSABLE_INSCRIPTO','MONOTRIBUTO','EXENTO','CONSUMIDOR_FINAL') then
+      raise exception 'Fila %: condición de IVA inválida (%).', v_idx, v_iva;
+    end if;
 
     if v_nombre is null and v_cuit is null then
       raise exception 'Fila %: falta el cliente.', v_idx;
@@ -168,9 +175,9 @@ begin
       insert into customers (name, legal_name, tax_id, tax_condition, condicion_venta)
       values (
         coalesce(v_nombre, v_cuit), v_nombre, v_cuit,
-        -- Sin más datos no se sabe la condición: con CUIT de persona jurídica
-        -- suele ser inscripto, pero eso lo confirma quien carga la ficha.
-        'CONSUMIDOR_FINAL', 'CUENTA_CORRIENTE'
+        -- Sin factura A no se sabe la condición: queda Consumidor Final y la
+        -- confirma quien completa la ficha.
+        coalesce(v_iva, 'CONSUMIDOR_FINAL'), 'CUENTA_CORRIENTE'
       )
       returning * into v_cliente;
       v_creados := v_creados + 1;

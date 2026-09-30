@@ -175,6 +175,13 @@ export function SaldosInicialesClientes() {
             <strong className="text-text">Cliente, CUIT, Comprobante, Fecha, Vencimiento, Importe</strong>.
             Obligatorios: el cliente (o su CUIT) y el importe.
           </p>
+          <p>
+            También sirve tal cual la <strong className="text-text">composición de saldos del sistema anterior</strong>,
+            con columnas <strong className="text-text">Debe</strong> y <strong className="text-text">Haber</strong>: la
+            columna Total (el acumulado) no se lee, y cada cobro que viene en una fila aparte con{' '}
+            <strong className="text-text">Comprobante aplicado</strong> se descuenta de la factura de arriba, que
+            entra con lo que queda debiendo.
+          </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Importe positivo: lo que el cliente debe. Negativo: lo que tiene a favor.</li>
             <li>
@@ -182,6 +189,10 @@ export function SaldosInicialesClientes() {
               —después conviene completarle la ficha: condición de IVA, domicilio, teléfono—.
             </li>
             <li>Sin vencimiento, vence el mismo día de la fecha. Sin fecha, se toma la de hoy.</li>
+            <li>
+              Un cliente nuevo con alguna factura A se crea como Responsable Inscripto; el resto, como
+              Consumidor Final.
+            </li>
             <li>
               Cada deuda se cobra con un recibo común, como una factura. No cuenta como venta ni
               entra en el Libro IVA: esas ventas ya se declararon en el sistema anterior.
@@ -246,9 +257,14 @@ export function SaldosInicialesClientes() {
                         <span className="font-semibold">{f.cliente || '—'}</span>
                         {f.cuit && <span className="ml-2 font-mono text-[12px] text-text-soft">{f.cuit}</span>}
                       </td>
-                      <td className="px-3 py-1.5 text-text-soft">{f.comprobante || '—'}</td>
-                      <td className="px-3 py-1.5">{f.fecha ? formatDate(f.fecha) : 'hoy'}</td>
-                      <td className="px-3 py-1.5">{f.vencimiento ? formatDate(f.vencimiento) : '—'}</td>
+                      <td className="px-3 py-1.5 text-text-soft">
+                        {f.comprobante || '—'}
+                        {f.aplicado.map((a) => (
+                          <span key={a} className="block text-[12px] text-state-done">− {a}</span>
+                        ))}
+                      </td>
+                      <td className="px-3 py-1.5">{fechaLegible(f.fecha, 'hoy')}</td>
+                      <td className="px-3 py-1.5">{fechaLegible(f.vencimiento, '—')}</td>
                       <td
                         className={cn(
                           'px-3 py-1.5 text-right font-mono',
@@ -285,4 +301,11 @@ function Resumen({ label, valor }: { label: string; valor: string }) {
       <span className="block font-display text-xl font-medium text-text">{valor}</span>
     </Panel>
   );
+}
+
+/** La fecha como se lee, o lo que corresponde si falta o no se entendió. */
+function fechaLegible(fecha: string, siFalta: string): string {
+  if (!fecha) return siFalta;
+  if (fecha === 'INVALIDA') return '?';
+  return formatDate(fecha);
 }

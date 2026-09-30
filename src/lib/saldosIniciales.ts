@@ -19,7 +19,21 @@ export interface FilaSaldoInicial {
   vencimiento: string;
   /** Positivo, debe; negativo, tiene a favor. */
   importe: number | null;
+  /** Cobros ya aplicados que se descontaron de esta fila, para mostrarlos. */
+  aplicado: string[];
   errores: string[];
+}
+
+interface Columnas {
+  Cliente: number;
+  CUIT: number;
+  Comprobante: number;
+  Fecha: number;
+  Vencimiento: number;
+  Importe: number;
+  Debe: number;
+  Haber: number;
+  Aplicado: number;
 }
 
 export interface ResultadoImportacion {
@@ -99,7 +113,12 @@ function leerFecha(valor: unknown): string | null {
 
 /**
  * Lee la primera hoja. El encabezado no tiene por qué estar en la fila 1: se
- * busca la primera fila que tenga "cliente" (o CUIT) y "importe" (o saldo).
+ * busca la primera fila que tenga el cliente (o el CUIT) y el importe.
+ *
+ * Acepta dos formas: una columna "Importe" (positivo debe, negativo a favor),
+ * o "Debe" y "Haber" como la composición de saldos que exporta el sistema
+ * anterior, con los cobros ya aplicados en filas aparte ("Comprobante
+ * aplicado") que se descuentan de la factura de arriba.
  */
 export async function leerPlanillaDeSaldos(file: File): Promise<FilaSaldoInicial[]> {
   // Sin cellDates: las fechas llegan como número de serie de Excel y se
@@ -116,18 +135,26 @@ export async function leerPlanillaDeSaldos(file: File): Promise<FilaSaldoInicial
   }) as unknown[][];
 
   let filaEncabezado = -1;
-  let cols: Record<(typeof COLUMNAS)[number], number> | null = null;
+  let cols: Columnas | null = null;
   for (let i = 0; i < Math.min(matriz.length, 30); i++) {
     const encabezado = matriz[i].map((c) => sinAcentos(String(c ?? '')));
-    const c = {
+    const exacta = (...nombres: string[]) => encabezado.findIndex((h) => nombres.includes(h));
+    const debe = exacta('debe');
+    const haber = exacta('haber');
+    const c: Columnas = {
       Cliente: columnaDe(encabezado, 'Cliente'),
       CUIT: columnaDe(encabezado, 'CUIT'),
       Comprobante: columnaDe(encabezado, 'Comprobante'),
       Fecha: columnaDe(encabezado, 'Fecha'),
       Vencimiento: columnaDe(encabezado, 'Vencimiento'),
-      Importe: columnaDe(encabezado, 'Importe'),
+      // Con Debe y Haber, la columna "Total" (o "Saldo") es el acumulado por
+      // cliente, no el importe de la fila: no se lee.
+      Importe: debe >= 0 || haber >= 0 ? -1 : columnaDe(encabezado, 'Importe'),
+      Debe: debe,
+      Haber: haber,
+      Aplicado: exacta('comprobante aplicado', 'aplicado a', 'aplicado'),
     };
-    if ((c.Cliente >= 0 || c.CUIT >= 0) && c.Importe >= 0) {
+    if ((c.Cliente >= 0 || c.CUIT >= 0) && (c.Importe >= 0 || c.Debe >= 0 || c.Haber >= 0)) {
       filaEncabezado = i;
       cols = c;
       break;
@@ -136,48 +163,99 @@ export async function leerPlanillaDeSaldos(file: File): Promise<FilaSaldoInicial
 
   if (!cols) {
     throw new ExcelFormatError(
-      'No encontré el encabezado. La planilla tiene que tener al menos las columnas "Cliente" e "Importe". ' +
-        'Bajá la planilla modelo para ver el formato.'
+      'No encontré el encabezado. La planilla tiene que tener la columna "Cliente" y, o "Importe", o ' +
+        '"Debe" y "Haber". Bajá la planilla modelo para ver el formato.'
     );
   }
-
+  const col = cols;
   const celda = (fila: unknown[], i: number) => (i >= 0 ? fila[i] : '');
+  const texto = (fila: unknown[], i: number) => String(celda(fila, i) ?? '').trim();
 
-  return matriz
-    .slice(filaEncabezado + 1)
-    .map((fila, k) => {
-      const errores: string[] = [];
-      const cliente = String(celda(fila, cols!.Cliente) ?? '').trim();
-      const cuit = String(celda(fila, cols!.CUIT) ?? '').trim();
-      const importe = parsePrice(celda(fila, cols!.Importe));
-      const fecha = leerFecha(celda(fila, cols!.Fecha));
-      const vencimiento = leerFecha(celda(fila, cols!.Vencimiento));
+  /** El importe de la fila: Debe suma, Haber resta (venga con signo o sin él). */
+  function importeDe(fila: unknown[]): number | null {
+    if (col.Importe >= 0) return parsePrice(celda(fila, col.Importe));
+    const debe = parsePrice(celda(fila, col.Debe));
+    const haber = parsePrice(celda(fila, col.Haber));
+    if (debe === null && haber === null) return null;
+    return Math.round(((debe ?? 0) - Math.abs(haber ?? 0)) * 100) / 100;
+  }
 
-      if (!cliente && !cuit) errores.push('Falta el cliente.');
-      const digitos = cuit.replace(/\D/g, '').length;
-      if (cuit && digitos !== 11 && (digitos < 7 || digitos > 8)) {
-        errores.push('El CUIT no tiene 11 dígitos (ni es un DNI de 7 u 8).');
-      }
-      if (importe === null) errores.push('Falta el importe o no es un número.');
-      else if (Math.abs(importe) < 0.005) errores.push('El importe es cero.');
-      if (fecha === null) errores.push('La fecha no se entiende.');
-      if (vencimiento === null) errores.push('El vencimiento no se entiende.');
-      if (fecha && vencimiento && vencimiento < fecha) errores.push('Vence antes de la fecha.');
+  const filas: FilaSaldoInicial[] = [];
 
-      return {
-        filaExcel: filaEncabezado + 2 + k,
-        cliente,
-        cuit,
-        comprobante: String(celda(fila, cols!.Comprobante) ?? '').trim(),
-        fecha: fecha ?? '',
-        vencimiento: vencimiento ?? '',
-        importe,
-        errores,
-      };
-    })
-    // Una fila sin cliente, sin CUIT y sin importe es una fila vacía, y una
-    // que dice "Total" es la suma al pie: ninguna es un saldo, se ignoran.
-    .filter((f) => (f.cliente || f.cuit || f.importe !== null) && !(/^total/i.test(f.cliente) && !f.cuit));
+  matriz.slice(filaEncabezado + 1).forEach((fila, k) => {
+    const filaExcel = filaEncabezado + 2 + k;
+    const cliente = texto(fila, col.Cliente);
+    const cuit = texto(fila, col.CUIT);
+    const comprobante = texto(fila, col.Comprobante);
+    const aplicado = texto(fila, col.Aplicado);
+    const importe = importeDe(fila);
+
+    // Fila vacía, o la suma al pie ("Total"): no es un saldo.
+    if (!cliente && !cuit && importe === null) return;
+    if (/^total/i.test(cliente) && !cuit) return;
+
+    // Un cobro ya aplicado viene en su propia fila, sin comprobante y con el
+    // comprobante aplicado, debajo de la factura que descuenta: se le resta
+    // a esa factura, que queda con lo que de verdad se debe.
+    const anterior = filas[filas.length - 1];
+    const mismoCliente =
+      !!anterior &&
+      (cuit
+        ? anterior.cuit.replace(/\D/g, '') === cuit.replace(/\D/g, '')
+        : anterior.cliente.toLowerCase() === cliente.toLowerCase());
+    if (!comprobante && aplicado && mismoCliente && importe !== null && anterior.importe !== null) {
+      anterior.importe = Math.round((anterior.importe + importe) * 100) / 100;
+      const monto = Math.abs(importe).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+      anterior.aplicado.push(`${aplicado} ($ ${monto})`);
+      anterior.errores = validar(anterior);
+      return;
+    }
+
+    const f: FilaSaldoInicial = {
+      filaExcel,
+      cliente,
+      cuit,
+      comprobante: comprobante || aplicado,
+      fecha: leerFecha(celda(fila, col.Fecha)) ?? 'INVALIDA',
+      vencimiento: leerFecha(celda(fila, col.Vencimiento)) ?? 'INVALIDA',
+      importe,
+      aplicado: [],
+      errores: [],
+    };
+    f.errores = validar(f);
+    filas.push(f);
+  });
+
+  // Una factura que quedó en cero con lo aplicado ya está cobrada: no es saldo.
+  return filas.filter((f) => !(f.aplicado.length > 0 && f.importe !== null && Math.abs(f.importe) < 0.005));
+}
+
+function validar(f: FilaSaldoInicial): string[] {
+  const errores: string[] = [];
+  if (!f.cliente && !f.cuit) errores.push('Falta el cliente.');
+  const digitos = f.cuit.replace(/\D/g, '').length;
+  if (f.cuit && digitos !== 11 && (digitos < 7 || digitos > 8)) {
+    errores.push('El CUIT no tiene 11 dígitos (ni es un DNI de 7 u 8).');
+  }
+  if (f.importe === null) errores.push('Falta el importe o no es un número.');
+  else if (Math.abs(f.importe) < 0.005) errores.push('El importe es cero.');
+  if (f.fecha === 'INVALIDA') errores.push('La fecha no se entiende.');
+  if (f.vencimiento === 'INVALIDA') errores.push('El vencimiento no se entiende.');
+  if (f.fecha && f.vencimiento && f.fecha !== 'INVALIDA' && f.vencimiento !== 'INVALIDA' && f.vencimiento < f.fecha) {
+    errores.push('Vence antes de la fecha.');
+  }
+  return errores;
+}
+
+/**
+ * La condición de IVA que se desprende de los comprobantes: a quien se le
+ * hizo una factura A es Responsable Inscripto. Se usa solo al crear el
+ * cliente; sin factura A queda Consumidor Final y se corrige en la ficha.
+ */
+export function condicionIvaSugerida(filas: FilaSaldoInicial[], f: FilaSaldoInicial): 'RESPONSABLE_INSCRIPTO' | null {
+  const clave = (x: FilaSaldoInicial) => x.cuit.replace(/\D/g, '') || x.cliente.toLowerCase();
+  const esFacturaA = (c: string) => /factura.*\bA\b\s*\d/i.test(c);
+  return filas.some((o) => clave(o) === clave(f) && esFacturaA(o.comprobante)) ? 'RESPONSABLE_INSCRIPTO' : null;
 }
 
 export async function importarSaldosIniciales(filas: FilaSaldoInicial[]): Promise<ResultadoImportacion> {
@@ -189,6 +267,7 @@ export async function importarSaldosIniciales(filas: FilaSaldoInicial[]): Promis
       fecha: f.fecha || null,
       vencimiento: f.vencimiento || null,
       importe: f.importe,
+      condicion_iva: condicionIvaSugerida(filas, f),
     })),
   });
   if (error) throw error;
