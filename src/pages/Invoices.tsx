@@ -8,6 +8,7 @@ import {
   describeInvoiceError,
   fetchInvoices,
   formatDate,
+  letraYNumeroDeSaldoInicial,
   paymentStateOf,
   type InvoiceListRow,
 } from '@/src/lib/invoices';
@@ -45,7 +46,11 @@ function cobrado(f: InvoiceListRow): string {
 const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
   {
     label: 'Comprobante',
-    valor: (f) => (f.saldoInicial ? `SI ${f.referenciaAnterior ?? f.fullNumber}` : `FVA ${f.invoiceType} ${f.fullNumber}`),
+    valor: (f) => {
+      if (!f.saldoInicial) return `FVA ${f.invoiceType} ${f.fullNumber}`;
+      const { letra, numero } = letraYNumeroDeSaldoInicial(f);
+      return letra ? `FVA ${letra} ${numero}` : numero;
+    },
   },
   { label: 'Cliente', valor: (f) => f.customerName, ancho: 'w-full' },
   { label: 'Emisión', valor: (f) => formatDate(f.issueDate) },

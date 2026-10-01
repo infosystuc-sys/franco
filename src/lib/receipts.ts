@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import { letraYNumeroDeSaldoInicial } from '@/src/lib/invoices';
 
 /**
  * Cobranzas: el recibo con el que se cobran las facturas de venta.
@@ -212,9 +213,17 @@ export async function fetchOpenInvoices(customerId: string): Promise<OpenInvoice
       const credited = Number(row.credited_amount ?? 0);
       return {
         id: row.id,
-        // Un saldo inicial se reconoce por el número del sistema anterior.
-        fullNumber: row.saldo_inicial ? row.referencia_anterior ?? row.full_number : row.full_number,
-        invoiceType: row.saldo_inicial ? 'Saldo inicial' : row.invoice_type,
+        // Un saldo inicial se muestra con el número que tenía en el sistema
+        // anterior, con el mismo formato que las facturas de la app.
+        ...(row.saldo_inicial
+          ? (() => {
+              const { letra, numero } = letraYNumeroDeSaldoInicial({
+                referenciaAnterior: row.referencia_anterior,
+                fullNumber: row.full_number,
+              });
+              return { fullNumber: numero, invoiceType: letra };
+            })()
+          : { fullNumber: row.full_number, invoiceType: row.invoice_type }),
         issueDate: row.issue_date,
         dueDate: row.due_date,
         totalAmount: total,

@@ -21,6 +21,7 @@ import {
   formatDate,
   INVOICE_TYPE_LABELS,
   isOverdue,
+  letraYNumeroDeSaldoInicial,
   paymentStateOf,
   PAYMENT_STATE_LABELS,
   voidInvoice,
@@ -170,7 +171,9 @@ export function InvoiceDetails() {
         <PageHeader
           title={
             <span className="font-mono text-3xl font-medium tracking-normal text-text">
-              {invoice.fullNumber}
+              {invoice.saldoInicial
+                ? `${letraYNumeroDeSaldoInicial(invoice).letra} ${letraYNumeroDeSaldoInicial(invoice).numero}`.trim()
+                : invoice.fullNumber}
             </span>
           }
           meta={

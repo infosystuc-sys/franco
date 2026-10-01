@@ -299,6 +299,19 @@ export interface InvoiceListRow {
   referenciaAnterior: string | null;
 }
 
+/**
+ * Cómo se nombra una factura traída del sistema anterior: la letra y el
+ * número que tenía allá ("A 0001-00001651"), en el mismo formato que las que
+ * emite la app. La base ya la guarda normalizada al importar.
+ */
+export function letraYNumeroDeSaldoInicial(
+  invoice: Pick<InvoiceListRow, 'referenciaAnterior' | 'fullNumber'>
+): { letra: string; numero: string } {
+  const ref = invoice.referenciaAnterior ?? invoice.fullNumber;
+  const m = ref.match(/^([ABCMX]) (.+)$/);
+  return m ? { letra: m[1], numero: m[2] } : { letra: '', numero: ref };
+}
+
 export interface InvoiceItem {
   code: string | null;
   description: string;
