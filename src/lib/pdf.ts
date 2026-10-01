@@ -33,6 +33,39 @@ const PX_POR_PUNTO = 96 / 72;
  */
 const VENTANA_DE_ESCRITORIO = 1280;
 
+/**
+ * html2canvas dibuja una copia de la página dentro de un iframe, y esa copia
+ * vuelve a pedir la hoja de estilos por la red. Con la pestaña abierta desde
+ * antes de una publicación nueva en Vercel, esa hoja ya no existe (cada
+ * publicación le cambia el nombre): la pantalla se ve bien porque la cargó
+ * antes, pero la copia queda sin estilos y el PDF sale con el logo a toda
+ * página y el texto desarmado.
+ *
+ * Por eso la copia no usa los <link> de estilos: lleva escritas las reglas que
+ * esta pestaña ya tiene en memoria, que son las mismas con las que se ve la
+ * pantalla. Las hojas de otro origen (las fuentes de Google) no se pueden leer
+ * y se dejan como están.
+ */
+function usarEstilosYaCargados(copia: Document) {
+  const reglas: string[] = [];
+  const leidas = new Set<string>();
+  for (const hoja of Array.from(document.styleSheets)) {
+    try {
+      reglas.push(Array.from(hoja.cssRules).map((r) => r.cssText).join('\n'));
+      if (hoja.href) leidas.add(hoja.href);
+    } catch {
+      // Hoja de otro origen: no se puede leer, queda su <link>.
+    }
+  }
+  for (const link of Array.from(copia.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))) {
+    if (leidas.has(link.href)) link.remove();
+  }
+  for (const estilo of Array.from(copia.querySelectorAll('style'))) estilo.remove();
+  const estilo = copia.createElement('style');
+  estilo.textContent = reglas.join('\n');
+  copia.head.appendChild(estilo);
+}
+
 async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
   const anchoUtil = pdf.internal.pageSize.getWidth() - MARGEN * 2;
@@ -46,7 +79,8 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
     // Alto de sobra: la copia se arma en un iframe de este tamaño y no quiere
     // quedar corta con un comprobante largo.
     windowHeight: 2000,
-    onclone: (_documento, copia) => {
+    onclone: (documento, copia) => {
+      usarEstilosYaCargados(documento);
       // Y el ancho del comprobante se fija en el que va a ocupar impreso, para
       // que el PDF salga igual desde un celular que desde una PC: si se lo deja
       // tomar el ancho de su contenedor, cada pantalla da uno distinto y el
