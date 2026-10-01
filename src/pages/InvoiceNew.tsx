@@ -44,6 +44,7 @@ import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Un dato de la cabecera: rótulo chico arriba, valor abajo. Sin recuadro
@@ -492,18 +493,13 @@ export function InvoiceNew() {
               cargado sin CUIT, que es lo que más pasa— facturar no puede
               obligar a salir a Clientes, arreglarlo y volver a empezar. */}
           <div className="mt-1.5 flex">
-            <select
+            <ClienteCombobox
+              clientes={customers}
               value={order.customer?.id ?? ''}
               disabled={cambiandoCliente || customers.length === 0}
-              onChange={(e) => handleCambiarCliente(e.target.value)}
-              className={cn(selectCabecera, 'w-full rounded-r-none disabled:opacity-50')}
-            >
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => id && handleCambiarCliente(id)}
+              className="rounded-r-none"
+            />
             <AccionesDeCampo
               nuevo={{
                 titulo: 'Dar de alta un cliente nuevo',

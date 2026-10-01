@@ -1,3 +1,4 @@
+import { cn } from '@/src/lib/utils';
 import React from 'react';
 import { X, CalendarPlus } from 'lucide-react';
 import { Button, Label, fieldClass } from '@/src/components/ui';
@@ -17,6 +18,7 @@ import {
   type YardReservation,
   type YardReservationInput,
 } from '@/src/lib/yardReservations';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 const HOY = () => new Date().toISOString().slice(0, 10);
 
@@ -176,18 +178,12 @@ export function NewReservationModal({
 
           <Label>
             Cliente
-            <select
+            <ClienteCombobox
+              clientes={customers}
               value={form.customerId}
-              onChange={(e) => patch({ customerId: e.target.value })}
-              className={fieldClass(true, 'font-normal normal-case')}
-            >
-              <option value="">Elegí un cliente…</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => patch({ customerId: id })}
+              className={cn('mt-1', !form.customerId && 'field-required')}
+            />
           </Label>
 
           <Label>

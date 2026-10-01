@@ -31,6 +31,7 @@ import {
   type VehicleKind,
   type VehicleType,
 } from '@/src/lib/vehicles';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Alta/edición de vehículo. Compartido entre la pantalla de Vehículos y el
@@ -166,16 +167,12 @@ export function VehicleModal({
               {!fixedCustomerId && (
                 <label className={cn(labelClass, 'col-span-6')}>
                   Cliente propietario *
-                  <select
+                  <ClienteCombobox
+                    clientes={customers}
                     value={form.customerId}
-                    onChange={(e) => patch({ customerId: e.target.value })}
-                    className={cn(inputClass, 'bg-panel')}
-                  >
-                    <option value="">Elegí un cliente...</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>{customer.name}</option>
-                    ))}
-                  </select>
+                    onChange={(id) => patch({ customerId: id })}
+                    className="mt-1"
+                  />
                 </label>
               )}
 

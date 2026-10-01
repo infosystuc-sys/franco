@@ -53,6 +53,7 @@ import {
 } from '@/src/lib/vehicleCatalog';
 import { VehiclePhotos } from '@/src/components/VehiclePhotos';
 import { fetchVehiclePhotos, uploadVehiclePhoto, type VehiclePhoto } from '@/src/lib/vehiclePhotos';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
 const inputClass =
@@ -437,18 +438,12 @@ export function VehicleNew() {
                 mandarlo a Clientes y volver le haría perder todo lo que ya
                 cargó en esta pantalla. */}
             <div className="mt-1 flex">
-              <select
+              <ClienteCombobox
+                clientes={customers}
                 value={form.customerId}
-                onChange={(e) => patch({ customerId: e.target.value })}
-                className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel')}
-              >
-                <option value="">Elegí un cliente…</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => patch({ customerId: id })}
+                className={cn('flex-1 rounded-r-none', !form.customerId && 'field-required')}
+              />
               <AccionesDeCampo
                 nuevo={{
                   titulo: 'Dar de alta un cliente nuevo',

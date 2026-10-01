@@ -14,6 +14,7 @@ import {
   VEHICLE_TYPE_LABELS,
   type Vehicle,
 } from '@/src/lib/vehicles';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 export function Vehicles() {
   const { role } = useAuth();
@@ -114,16 +115,15 @@ export function Vehicles() {
             className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
           />
         </div>
-        <select
-          value={customerFilter}
-          onChange={(e) => setCustomerFilter(e.target.value)}
-          className="h-9 border border-line bg-panel px-3 text-sm focus:border-accent-deep focus:outline-none max-w-xs"
-        >
-          <option value="">Todos los clientes</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>{customer.name}</option>
-          ))}
-        </select>
+        <div className="w-full max-w-sm">
+          <ClienteCombobox
+            clientes={customers}
+            value={customerFilter}
+            onChange={(id) => setCustomerFilter(id)}
+            vacio="Todos los clientes"
+            className="h-9 py-1"
+          />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-line bg-panel">

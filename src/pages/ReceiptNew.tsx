@@ -28,6 +28,7 @@ import {
   type ReceiptValueKind,
   type ValueInput,
 } from '@/src/lib/receipts';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /** Un valor en edición. Los campos que no aplican a su tipo quedan vacíos. */
 interface DraftValue extends ValueInput {
@@ -447,18 +448,12 @@ export function ReceiptNew() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Cliente *
-            <select
+            <ClienteCombobox
+              clientes={customers}
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className={cn(inputClass, 'bg-panel', !customerId && 'field-required')}
-            >
-              <option value="">Elegí un cliente</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setCustomerId(id)}
+              className={cn('mt-1', !customerId && 'field-required')}
+            />
             {customer && credit > 0 && (
               <span className="mt-1 block text-[12px] font-normal normal-case text-state-done">
                 Tiene $ {formatMoney(credit)} a favor de cobros anteriores.

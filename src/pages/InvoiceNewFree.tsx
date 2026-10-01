@@ -45,6 +45,7 @@ import { fetchRemitoById, type Remito } from '@/src/lib/remitos';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Facturar sin OT ni cotización: para lo que no sale de una reparación
@@ -296,19 +297,13 @@ export function InvoiceNewFree() {
               Modificar se permite aun con remito —cambia la ficha, no a quién
               se le factura—; dar de alta otro, no. */}
           <div className="flex">
-            <select
+            <ClienteCombobox
+              clientes={customers}
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
+              onChange={(id) => setCustomerId(id)}
               disabled={!!remito}
-              className={cn(selectCabecera, 'w-full rounded-r-none disabled:opacity-60')}
-            >
-              <option value="">Elegí un cliente...</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              className={cn('rounded-r-none', !customerId && 'field-required')}
+            />
             <AccionesDeCampo
               nuevo={{
                 titulo: 'Dar de alta un cliente nuevo',

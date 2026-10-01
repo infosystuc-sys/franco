@@ -1,3 +1,4 @@
+import { cn } from '@/src/lib/utils';
 import React from 'react';
 import { Trash2, X } from 'lucide-react';
 import { useAuth } from '@/src/lib/auth';
@@ -16,6 +17,7 @@ import {
   RECEPTION_KINDS,
   type ReceptionKind,
 } from '@/src/lib/workOrders';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Alta de una OT directa, sin cotización previa.
@@ -267,22 +269,14 @@ export function NewWorkOrderModal({
             <Label>
               Cliente
               <div className="mt-1 flex">
-                <select
+                <ClienteCombobox
+                  clientes={customers}
                   value={customerId}
-                  onChange={(e) => handleCustomerChange(e.target.value)}
+                  onChange={(id) => handleCustomerChange(id)}
                   disabled={loadingCustomers}
-                  className={fieldClass(true, 'mt-0 flex-1 rounded-r-none font-normal normal-case')}
-                >
-                  <option value="">
-                    {loadingCustomers ? 'Cargando clientes…' : 'Elegí un cliente'}
-                  </option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                      {customer.taxId ? ` — ${formatCuit(customer.taxId)}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={loadingCustomers ? 'Cargando clientes…' : undefined}
+                  className={cn('flex-1 rounded-r-none', !customerId && 'field-required')}
+                />
                 <AccionesDeCampo
                   nuevo={{
                     titulo: 'Dar de alta un cliente nuevo',

@@ -1,3 +1,4 @@
+import { cn } from '@/src/lib/utils';
 import React from 'react';
 import { XCircle, Truck, AlertTriangle } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -8,6 +9,7 @@ import { fetchArticles, type Article } from '@/src/lib/articles';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
 import { createRemito, describeRemitoError } from '@/src/lib/remitos';
 import { getErrorMessage, type WorkOrderItemInput } from '@/src/lib/workOrders';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Remito sin factura: registra qué se entrega ahora, para facturar después.
@@ -90,18 +92,12 @@ export function RemitoNew() {
       <Panel className="mb-6 p-5">
         <SectionHeader title="Cliente" />
         <label className="block text-xs font-bold uppercase tracking-wider text-text-soft sm:max-w-sm">
-          <select
+          <ClienteCombobox
+            clientes={customers}
             value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
-          >
-            <option value="">Elegí un cliente...</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}{c.taxId ? ` — ${formatCuit(c.taxId)}` : ''}
-              </option>
-            ))}
-          </select>
+            onChange={(id) => setCustomerId(id)}
+            className={cn('mt-1', !customerId && 'field-required')}
+          />
         </label>
       </Panel>
 
