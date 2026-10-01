@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
@@ -15,6 +15,8 @@ import {
 } from '@/src/lib/customers';
 import { fetchSaldosDeClientes } from '@/src/lib/receipts';
 
+const POR_PAGINA = 50;
+
 export function Customers() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
@@ -25,6 +27,7 @@ export function Customers() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
+  const [pagina, setPagina] = React.useState(0);
   const [editing, setEditing] = React.useState<Customer | 'new' | null>(null);
 
   // El "+" del menú entra con ?nuevo=1 y abre el alta directo. Se limpia el
@@ -67,6 +70,14 @@ export function Customers() {
         .some((field) => String(field).toLowerCase().includes(term))
     );
   }, [customers, search]);
+
+  // Con más de mil clientes, dibujarlos todos juntos hace la pantalla lenta e
+  // inmanejable: se muestran de a páginas. Al buscar se vuelve a la primera,
+  // que es donde quedan los resultados.
+  const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas - 1);
+  const visibles = filtered.slice(paginaActual * POR_PAGINA, (paginaActual + 1) * POR_PAGINA);
+  React.useEffect(() => { setPagina(0); }, [search]);
 
   async function handleDelete(customer: Customer) {
     if (!window.confirm(`¿Eliminar el cliente "${customer.name}"? También se eliminarán sus vehículos.`)) return;
@@ -142,7 +153,7 @@ export function Customers() {
                   </td>
                 </tr>
               )}
-              {filtered.map((customer) => (
+              {visibles.map((customer) => (
                 <tr key={customer.id} className="border-b border-line hover:bg-panel-alt transition-colors">
                   <td data-primary className="p-3">
                     <div className="font-bold text-text">{customer.name}</div>
@@ -193,6 +204,17 @@ export function Customers() {
         </div>
       </div>
 
+      {!loading && filtered.length > 0 && (
+        <Paginador
+          pagina={paginaActual}
+          totalPaginas={totalPaginas}
+          desde={paginaActual * POR_PAGINA + 1}
+          hasta={Math.min((paginaActual + 1) * POR_PAGINA, filtered.length)}
+          total={filtered.length}
+          onCambiar={setPagina}
+        />
+      )}
+
       {editing && (
         <CustomerModal
           customer={editing === 'new' ? null : editing}
@@ -214,4 +236,69 @@ function SaldoCelda({ saldo }: { saldo: number }) {
     return <span className="font-semibold text-state-done" title="A favor del cliente">− $ {formatMoney(-saldo)}</span>;
   }
   return <span className="font-semibold text-text">$ {formatMoney(saldo)}</span>;
+}
+
+function Paginador({
+  pagina,
+  totalPaginas,
+  desde,
+  hasta,
+  total,
+  onCambiar,
+}: {
+  pagina: number;
+  totalPaginas: number;
+  desde: number;
+  hasta: number;
+  total: number;
+  onCambiar: (pagina: number) => void;
+}) {
+  const [irA, setIrA] = React.useState('');
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-soft">
+      <span>
+        {desde}–{hasta} de {total} {total === 1 ? 'cliente' : 'clientes'}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" type="button" onClick={() => onCambiar(0)} disabled={pagina === 0}>
+          Primera
+        </Button>
+        <Button variant="ghost" type="button" onClick={() => onCambiar(pagina - 1)} disabled={pagina === 0}>
+          <ChevronLeft size={16} /> Anterior
+        </Button>
+        <span className="whitespace-nowrap">
+          Página{' '}
+          <input
+            value={irA}
+            onChange={(e) => setIrA(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || !irA) return;
+              onCambiar(Math.min(Math.max(Number(irA), 1), totalPaginas) - 1);
+              setIrA('');
+            }}
+            placeholder={String(pagina + 1)}
+            aria-label="Ir a la página"
+            className="w-12 rounded border border-line bg-panel px-1.5 py-0.5 text-center text-text focus:border-accent-deep focus:outline-none"
+          />{' '}
+          de {totalPaginas}
+        </span>
+        <Button
+          variant="ghost"
+          type="button"
+          onClick={() => onCambiar(pagina + 1)}
+          disabled={pagina >= totalPaginas - 1}
+        >
+          Siguiente <ChevronRight size={16} />
+        </Button>
+        <Button
+          variant="ghost"
+          type="button"
+          onClick={() => onCambiar(totalPaginas - 1)}
+          disabled={pagina >= totalPaginas - 1}
+        >
+          Última
+        </Button>
+      </div>
+    </div>
+  );
 }

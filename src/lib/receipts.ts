@@ -241,9 +241,19 @@ export interface SaldoCliente {
 }
 
 export async function fetchSaldosDeClientes(): Promise<SaldoCliente[]> {
-  const { data, error } = await supabase.rpc('saldos_de_clientes');
-  if (error) throw error;
-  return ((data ?? []) as any[]).map((r) => ({
+  // Como cualquier consulta, la base corta en 1000 filas: de a tandas.
+  const filas: any[] = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await supabase
+      .rpc('saldos_de_clientes')
+      .order('customer_name')
+      .order('customer_id')
+      .range(desde, desde + 999);
+    if (error) throw error;
+    filas.push(...((data ?? []) as any[]));
+    if ((data ?? []).length < 1000) break;
+  }
+  return filas.map((r) => ({
     customerId: r.customer_id,
     customerName: r.customer_name,
     deuda: Number(r.deuda),

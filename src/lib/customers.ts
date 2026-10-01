@@ -73,13 +73,31 @@ function mapCustomer(row: any): Customer {
 const SELECT_WITH_VEHICLES =
   '*, vehicles(id, kind, brand, model, license_plate, reference_number, year, active, size_class)';
 
-export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
-  let query = supabase.from('customers').select(SELECT_WITH_VEHICLES).order('name');
-  if (onlyActive) query = query.eq('active', true);
+/**
+ * La base entrega como máximo 1000 filas por consulta: con más clientes que
+ * eso, los demás no llegaban a ninguna pantalla (ni al listado ni a los
+ * buscadores de facturación y cobranza). Se piden de a tandas hasta traerlos
+ * todos. El id desempata el orden, para que una tanda no repita ni saltee a
+ * dos clientes con el mismo nombre.
+ */
+const TANDA = 1000;
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapCustomer);
+export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
+  const todos: Customer[] = [];
+  for (let desde = 0; ; desde += TANDA) {
+    let query = supabase
+      .from('customers')
+      .select(SELECT_WITH_VEHICLES)
+      .order('name')
+      .order('id')
+      .range(desde, desde + TANDA - 1);
+    if (onlyActive) query = query.eq('active', true);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    todos.push(...(data ?? []).map(mapCustomer));
+    if ((data ?? []).length < TANDA) return todos;
+  }
 }
 
 /** La fila del padrón fiscal más lo que es propio del cliente. */
