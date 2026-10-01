@@ -291,3 +291,100 @@ export async function contarSaldosInicialesCargados(): Promise<number> {
   if (recibos.error) throw recibos.error;
   return (facturas.count ?? 0) + (recibos.count ?? 0);
 }
+
+// ---------------------------------------------------------------------------
+// Carga en pantalla: un cliente a la vez
+// ---------------------------------------------------------------------------
+
+export type TipoSaldoInicial = 'DEBE' | 'A_FAVOR';
+
+export const TIPO_SALDO_INICIAL_LABELS: Record<TipoSaldoInicial, string> = {
+  DEBE: 'Debe (factura o nota de débito)',
+  A_FAVOR: 'A favor (recibo o nota de crédito a cuenta)',
+};
+
+export interface RenglonSaldoInicial {
+  tipo: TipoSaldoInicial;
+  /** "A 0001-00001234": letra, punto de venta y número, como las facturas de la app. */
+  comprobante: string;
+  fecha: string;
+  vencimiento: string;
+  /** Siempre positivo: el signo lo da el tipo. */
+  importe: number;
+}
+
+/**
+ * Carga los renglones de un cliente ya elegido. Usa la misma función que la
+ * importación por planilla (mismas reglas: deuda como factura de saldo
+ * inicial, saldo a favor como recibo a cuenta, sin contar como venta), pero
+ * con el cliente por su id: no hay que buscarlo por nombre.
+ */
+export async function cargarSaldosIniciales(
+  customerId: string,
+  renglones: RenglonSaldoInicial[]
+): Promise<ResultadoImportacion> {
+  const { data, error } = await supabase.rpc('importar_saldos_iniciales_clientes', {
+    p_filas: renglones.map((r) => ({
+      customer_id: customerId,
+      comprobante: r.comprobante,
+      fecha: r.fecha || null,
+      vencimiento: r.vencimiento || null,
+      importe: r.tipo === 'A_FAVOR' ? -Math.abs(r.importe) : Math.abs(r.importe),
+    })),
+  });
+  if (error) throw error;
+  const d = (data ?? {}) as any;
+  return {
+    clientesCreados: Number(d.clientes_creados ?? 0),
+    deudas: Number(d.deudas ?? 0),
+    totalDeuda: Number(d.total_deuda ?? 0),
+    aFavor: Number(d.a_favor ?? 0),
+    totalAFavor: Number(d.total_a_favor ?? 0),
+  };
+}
+
+export interface SaldoInicialCargado {
+  id: string;
+  tipo: 'DEUDA' | 'A_FAVOR';
+  comprobante: string;
+  fecha: string;
+  importe: number;
+}
+
+/** Lo que ese cliente ya tiene cargado como saldo inicial, para no cargarlo dos veces. */
+export async function fetchSaldosInicialesDe(customerId: string): Promise<SaldoInicialCargado[]> {
+  const [facturas, recibos] = await Promise.all([
+    supabase
+      .from('invoices')
+      .select('id, full_number, referencia_anterior, issue_date, total_amount')
+      .eq('customer_id', customerId)
+      .eq('saldo_inicial', true)
+      .neq('status', 'ANULADA')
+      .order('issue_date'),
+    supabase
+      .from('receipts')
+      .select('id, full_number, receipt_date, total_amount')
+      .eq('customer_id', customerId)
+      .eq('saldo_inicial', true)
+      .eq('status', 'REGISTRADO')
+      .order('receipt_date'),
+  ]);
+  if (facturas.error) throw facturas.error;
+  if (recibos.error) throw recibos.error;
+  return [
+    ...((facturas.data ?? []) as any[]).map((f) => ({
+      id: f.id,
+      tipo: 'DEUDA' as const,
+      comprobante: f.referencia_anterior ?? f.full_number,
+      fecha: f.issue_date,
+      importe: Number(f.total_amount),
+    })),
+    ...((recibos.data ?? []) as any[]).map((r) => ({
+      id: r.id,
+      tipo: 'A_FAVOR' as const,
+      comprobante: r.full_number,
+      fecha: r.receipt_date,
+      importe: -Number(r.total_amount),
+    })),
+  ];
+}

@@ -6,6 +6,7 @@ import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchCustomers, type Customer } from '@/src/lib/customers';
+import { CargaSaldosEnPantalla } from '@/src/components/CargaSaldosEnPantalla';
 import {
   contarSaldosInicialesCargados,
   descargarPlanillaModelo,
@@ -37,6 +38,8 @@ function clienteDe(fila: FilaSaldoInicial, clientes: Customer[]): Customer | nul
 export function SaldosInicialesClientes() {
   const { role } = useAuth();
   const [clientes, setClientes] = React.useState<Customer[]>([]);
+  // Las dos formas de cargar: a mano, un cliente a la vez, o una planilla entera.
+  const [modo, setModo] = React.useState<'pantalla' | 'excel'>('pantalla');
   const [yaCargados, setYaCargados] = React.useState(0);
   const [archivo, setArchivo] = React.useState<string | null>(null);
   const [filas, setFilas] = React.useState<FilaSaldoInicial[] | null>(null);
@@ -121,8 +124,9 @@ export function SaldosInicialesClientes() {
     <div className="w-full space-y-6">
       <PageHeader
         title="Saldos iniciales de clientes"
-        subtitle="Lo que cada cliente debía, o tenía a favor, en el sistema anterior. Se carga una vez, al empezar."
+        subtitle="Lo que cada cliente debía, o tenía a favor, en el sistema anterior. Se carga a mano, cliente por cliente, o con una planilla."
         actions={
+          modo === 'excel' && (
           <>
             <Button variant="ghost" type="button" onClick={descargarPlanillaModelo}>
               <Download size={16} /> Planilla modelo
@@ -138,8 +142,43 @@ export function SaldosInicialesClientes() {
               className="hidden"
             />
           </>
+          )
         }
       />
+
+      <div className="flex gap-1 border-b border-line">
+        {(
+          [
+            ['pantalla', 'Cargar en pantalla'],
+            ['excel', 'Importar desde Excel'],
+          ] as const
+        ).map(([clave, rotulo]) => (
+          <button
+            key={clave}
+            type="button"
+            onClick={() => setModo(clave)}
+            className={cn(
+              '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] transition-colors',
+              modo === clave
+                ? 'border-accent text-text'
+                : 'border-transparent text-text-soft hover:text-text'
+            )}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {modo === 'pantalla' && (
+        <CargaSaldosEnPantalla
+          clientes={clientes}
+          onClienteNuevo={(c) => setClientes((cs) => [...cs, c].sort((x, y) => x.name.localeCompare(y.name)))}
+          onCargado={cargarContexto}
+        />
+      )}
+
+      {modo === 'excel' && (
+      <>
 
       {error && (
         <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
@@ -289,6 +328,8 @@ export function SaldosInicialesClientes() {
             </table>
           </Panel>
         </>
+      )}
+      </>
       )}
     </div>
   );
