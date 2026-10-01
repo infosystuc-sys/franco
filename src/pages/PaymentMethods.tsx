@@ -261,14 +261,18 @@ export function PaymentMethods() {
   );
 }
 
-function PaymentMethodModal({
+/**
+ * Alta o modificación de un medio de pago. Se exporta para poder dar de alta
+ * uno desde donde se lo necesita —cobrando o pagando— sin salir a Tesorería.
+ */
+export function PaymentMethodModal({
   method,
   onClose,
   onSaved,
 }: {
   method: PaymentMethod | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (guardado: PaymentMethod) => void;
 }) {
   const [form, setForm] = React.useState<PaymentMethodInput>(
     method
@@ -298,9 +302,8 @@ function PaymentMethodModal({
     setSaving(true);
     setError(null);
     try {
-      if (method) await updatePaymentMethod(method.id, form);
-      else await createPaymentMethod(form);
-      onSaved();
+      const guardado = method ? await updatePaymentMethod(method.id, form) : await createPaymentMethod(form);
+      onSaved(guardado);
     } catch (err) {
       setError(describePaymentMethodError(getErrorMessage(err), form.name));
     } finally {

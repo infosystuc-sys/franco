@@ -343,7 +343,7 @@ function ValueDescription({ value }: { value: ReceiptValue }) {
     return (
       <span className="inline-flex items-center gap-1.5">
         <FileCheck size={12} className="text-accent-deep" />
-        Cheque <span className="font-mono">{value.checkNumber}</span>
+        {value.checkElectronico ? 'eCheq' : 'Cheque físico'} <span className="font-mono">{value.checkNumber}</span>
         {value.checkBank && <span className="text-text-soft">— {value.checkBank}</span>}
       </span>
     );

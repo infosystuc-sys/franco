@@ -3,7 +3,7 @@ import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2 } from 'lucide
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { Button, PageHeader, Panel, SectionHeader, AccionesDeCampo } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchCustomers, formatCuit, type Customer } from '@/src/lib/customers';
@@ -12,7 +12,7 @@ import { fetchTaxRates, type TaxRate } from '@/src/lib/taxRates';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { fetchChecks, type ThirdPartyCheck } from '@/src/lib/checks';
 import { BankCombobox } from '@/src/components/BankCombobox';
-import { CheckDraftModal } from '@/src/components/CheckDraftModal';
+import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import {
   autoAllocate,
   CHANGE_KIND_LABELS,
@@ -29,6 +29,7 @@ import {
   type ValueInput,
 } from '@/src/lib/receipts';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { PaymentMethodModal } from '@/src/pages/PaymentMethods';
 
 /** Un valor en edición. Los campos que no aplican a su tipo quedan vacíos. */
 interface DraftValue extends ValueInput {
@@ -43,7 +44,7 @@ interface DraftChange extends ChangeInput {
 /** Una entrada del desplegable de "Medios de pago": qué kind produce y con qué datos fijos. */
 type MedioOption =
   | { optionKey: string; kind: 'MEDIO_PAGO'; label: string; paymentMethodId: string }
-  | { optionKey: string; kind: 'CHEQUE'; label: string }
+  | { optionKey: string; kind: 'CHEQUE'; label: string; electronico: boolean }
   | { optionKey: string; kind: 'RETENCION'; label: string; taxRateId: string }
   | { optionKey: string; kind: 'SALDO_A_FAVOR'; label: string };
 
@@ -68,6 +69,7 @@ export function ReceiptNew() {
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [methods, setMethods] = React.useState<PaymentMethod[]>([]);
+  const [altaMedio, setAltaMedio] = React.useState(false);
   const [retentions, setRetentions] = React.useState<TaxRate[]>([]);
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -87,6 +89,7 @@ export function ReceiptNew() {
   const [selectedMedioKey, setSelectedMedioKey] = React.useState('');
   const [draftAmount, setDraftAmount] = React.useState(0);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
+  const [chequeElectronico, setChequeElectronico] = React.useState(false);
 
   const [walletChecks, setWalletChecks] = React.useState<ThirdPartyCheck[]>([]);
   const [changes, setChanges] = React.useState<DraftChange[]>([]);
@@ -218,7 +221,10 @@ export function ReceiptNew() {
       label: m.name,
       paymentMethodId: m.id,
     }));
-    options.push({ optionKey: 'cheque', kind: 'CHEQUE', label: 'Cheque' });
+    // Físico y electrónico son dos medios distintos al cobrar; en la cartera
+    // quedan juntos, marcados.
+    options.push({ optionKey: 'cheque', kind: 'CHEQUE', label: 'Cheque físico', electronico: false });
+    options.push({ optionKey: 'echeq', kind: 'CHEQUE', label: 'Cheque electrónico (eCheq)', electronico: true });
     retentions.forEach((r) =>
       options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
     );
@@ -283,6 +289,7 @@ export function ReceiptNew() {
     if (!option) return;
 
     if (option.kind === 'CHEQUE') {
+      setChequeElectronico(option.electronico);
       setCheckModalOpen(true);
       return;
     }
@@ -301,10 +308,15 @@ export function ReceiptNew() {
     setDraftAmount(0);
   }
 
-  function handleAddChecks(checks: Omit<DraftValue, 'key' | 'kind'>[]) {
+  function handleAddChecks(checks: CheckDraft[]) {
     setValues((current) => [
       ...current,
-      ...checks.map((check) => ({ key: nextKey++, kind: 'CHEQUE' as ReceiptValueKind, ...check })),
+      ...checks.map(({ electronico, ...check }) => ({
+        key: nextKey++,
+        kind: 'CHEQUE' as ReceiptValueKind,
+        ...check,
+        checkElectronico: electronico ?? false,
+      })),
     ]);
     setCheckModalOpen(false);
     setSelectedMedioKey('');
@@ -587,19 +599,24 @@ export function ReceiptNew() {
         <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
           <label className={cn(labelClass, 'sm:flex-1')}>
             Medio
-            <select
-              value={selectedMedioKey}
-              onChange={(e) => handleSelectMedio(e.target.value)}
-              className={cn(inputClass, 'bg-panel')}
-            >
-              <option value="">Elegí un medio…</option>
-              {medioOptions.map((o) => (
-                <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
-              ))}
-            </select>
+            <div className="mt-1 flex">
+              <select
+                value={selectedMedioKey}
+                onChange={(e) => handleSelectMedio(e.target.value)}
+                className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel')}
+              >
+                <option value="">Elegí un medio…</option>
+                {medioOptions.map((o) => (
+                  <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
+                ))}
+              </select>
+              <AccionesDeCampo
+                nuevo={{ titulo: 'Dar de alta un medio de pago', onClick: () => setAltaMedio(true) }}
+              />
+            </div>
           </label>
 
-          {selectedMedioKey && selectedMedioKey !== 'cheque' && (
+          {selectedMedioKey && selectedMedioKey !== 'cheque' && selectedMedioKey !== 'echeq' && (
             <label className={cn(labelClass, 'sm:w-40')}>
               Importe
               <input
@@ -617,7 +634,7 @@ export function ReceiptNew() {
             disabled={!selectedMedioKey}
             className="px-3 sm:mb-0"
           >
-            <Plus size={15} /> {selectedMedioKey === 'cheque' ? 'Cargar cheques' : 'Agregar'}
+            <Plus size={15} /> {selectedMedioKey === 'cheque' || selectedMedioKey === 'echeq' ? 'Cargar cheques' : 'Agregar'}
           </Button>
         </div>
 
@@ -635,7 +652,11 @@ export function ReceiptNew() {
                 title={VALUE_KIND_HELP[value.kind]}
                 className="w-32 shrink-0 text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep"
               >
-                {VALUE_KIND_LABELS[value.kind]}
+                {value.kind === 'CHEQUE'
+                  ? value.checkElectronico
+                    ? 'eCheq'
+                    : 'Cheque físico'
+                  : VALUE_KIND_LABELS[value.kind]}
               </span>
 
               {value.kind === 'MEDIO_PAGO' && (
@@ -721,6 +742,7 @@ export function ReceiptNew() {
 
       {checkModalOpen && (
         <CheckDraftModal
+          electronico={chequeElectronico}
           remainingBase={suggestedRemaining}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
@@ -758,7 +780,7 @@ export function ReceiptNew() {
                     >
                       <span>
                         <span className="block text-sm font-medium">
-                          {check.number} · {check.bankName}
+                          {check.electronico ? 'eCheq ' : ''}{check.number} · {check.bankName}
                         </span>
                         <span className="block text-xs text-text-soft">Vence {formatDate(check.dueDate)}</span>
                       </span>
@@ -810,7 +832,7 @@ export function ReceiptNew() {
                           {c.kind === 'CHEQUE_ENDOSADO' &&
                             (() => {
                               const check = walletChecks.find((wc) => wc.id === c.checkId);
-                              return check ? ` — ${check.number} · ${check.bankName}` : '';
+                              return check ? ` — ${check.electronico ? 'eCheq ' : ''}${check.number} · ${check.bankName}` : '';
                             })()}
                         </span>
                         <span className="flex items-center gap-2 font-mono">
@@ -926,6 +948,20 @@ export function ReceiptNew() {
           </Button>
         </div>
       </Panel>
+
+      {altaMedio && (
+        <PaymentMethodModal
+          method={null}
+          onClose={() => setAltaMedio(false)}
+          onSaved={(m) => {
+            setAltaMedio(false);
+            // La cartera de cheques no es un medio que se elija acá.
+            if (m.kind === 'CARTERA_CHEQUES') return;
+            setMethods((actuales) => [...actuales, m].sort((a, b) => a.name.localeCompare(b.name)));
+            handleSelectMedio(`medio:${m.id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

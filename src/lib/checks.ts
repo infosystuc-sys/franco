@@ -74,8 +74,15 @@ export function isInWallet(status: CheckStatus): boolean {
   return status === 'EN_CARTERA' || status === 'DEPOSITADO' || status === 'RECHAZADO';
 }
 
+/** Cómo se lo nombra, según sea de papel o electrónico. */
+export function tipoDeCheque(electronico: boolean): string {
+  return electronico ? 'Electrónico' : 'Físico';
+}
+
 export interface ThirdPartyCheck {
   id: string;
+  /** eCheq: se maneja desde el home banking, no en la mano. */
+  electronico: boolean;
   number: string;
   bankName: string;
   drawer: string | null;
@@ -96,13 +103,14 @@ export interface ThirdPartyCheck {
 }
 
 const SELECT =
-  `id, number, bank_name, drawer, issue_date, due_date, amount, status,
+  `id, electronico, number, bank_name, drawer, issue_date, due_date, amount, status,
    deposited_to_id, deposited_at, endorsed_to_supplier_id, endorsed_to_customer_id, rejected_reason, notes,
    bank:payment_methods(name), supplier:suppliers(name), endorsed_customer:customers(name)`;
 
 function mapCheck(row: any): ThirdPartyCheck {
   return {
     id: row.id,
+    electronico: row.electronico ?? false,
     number: row.number,
     bankName: row.bank_name,
     drawer: row.drawer,
@@ -133,6 +141,7 @@ export async function fetchChecks(): Promise<ThirdPartyCheck[]> {
 }
 
 export interface CheckInput {
+  electronico: boolean;
   number: string;
   bankName: string;
   drawer: string;
@@ -145,6 +154,7 @@ export interface CheckInput {
 }
 
 export const EMPTY_CHECK_FORM: CheckInput = {
+  electronico: false,
   number: '',
   bankName: '',
   drawer: '',
@@ -159,6 +169,7 @@ export const EMPTY_CHECK_FORM: CheckInput = {
 export async function receiveCheck(input: CheckInput): Promise<{ id: string; movementNumber: string }> {
   const { data, error } = await supabase.rpc('receive_check', {
     p_check: {
+      electronico: input.electronico,
       number: input.number.trim(),
       bank_name: input.bankName.trim(),
       drawer: input.drawer.trim() || null,

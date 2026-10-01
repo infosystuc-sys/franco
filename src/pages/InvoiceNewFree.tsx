@@ -88,6 +88,7 @@ export function InvoiceNewFree() {
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
+  const [chequeElectronico, setChequeElectronico] = React.useState(false);
   const [issuing, setIssuing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -252,6 +253,7 @@ export function InvoiceNewFree() {
                 checkNumber: c.checkNumber,
                 checkBank: c.checkBank,
                 checkDueDate: c.checkDueDate,
+                checkElectronico: c.electronico ?? false,
               }))
             : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
           await saveReceipt(
@@ -433,7 +435,10 @@ export function InvoiceNewFree() {
               paymentMethodId={paymentMethodId}
               onPaymentMethodIdChange={setPaymentMethodId}
               checkDrafts={checkDrafts}
-              onOpenCheckModal={() => setCheckModalOpen(true)}
+              onOpenCheckModal={(electronico) => {
+                setChequeElectronico(electronico);
+                setCheckModalOpen(true);
+              }}
               onClearChecks={() => setCheckDrafts(null)}
             />
           </FieldBox>
@@ -504,6 +509,7 @@ export function InvoiceNewFree() {
 
       {checkModalOpen && (
         <CheckDraftModal
+          electronico={chequeElectronico}
           remainingBase={totals.total}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}

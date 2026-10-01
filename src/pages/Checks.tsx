@@ -23,6 +23,7 @@ import {
   rejectCheck,
   type CheckStatus,
   type ThirdPartyCheck,
+  tipoDeCheque,
 } from '@/src/lib/checks';
 
 /**
@@ -41,6 +42,7 @@ export function Checks() {
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<CheckStatus | ''>('');
+  const [tipoFilter, setTipoFilter] = React.useState<'' | 'fisico' | 'electronico'>('');
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -67,10 +69,11 @@ export function Checks() {
     const term = search.trim().toLowerCase();
     return checks.filter((check) => {
       if (statusFilter && check.status !== statusFilter) return false;
+      if (tipoFilter && check.electronico !== (tipoFilter === 'electronico')) return false;
       if (!term) return true;
       return coincideBusqueda(term, [check.number, check.bankName, check.drawer]);
     });
-  }, [checks, search, statusFilter]);
+  }, [checks, search, statusFilter, tipoFilter]);
 
   const totals = React.useMemo(() => {
     const wallet = checks.filter((c) => isInWallet(c.status));
@@ -204,6 +207,16 @@ export function Checks() {
           </button>
         ))}
 
+        <select
+          value={tipoFilter}
+          onChange={(e) => setTipoFilter(e.target.value as '' | 'fisico' | 'electronico')}
+          aria-label="Tipo de cheque"
+          className="h-9 rounded-md border border-line bg-panel px-2 text-sm focus:border-accent-deep focus:outline-none"
+        >
+          <option value="">Físicos y electrónicos</option>
+          <option value="fisico">Solo físicos</option>
+          <option value="electronico">Solo electrónicos (eCheq)</option>
+        </select>
         <div className="relative ml-auto w-full sm:w-64">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
           <input
@@ -220,6 +233,7 @@ export function Checks() {
           <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
               <th className="px-4 py-1 w-32">Número</th>
+              <th className="px-3 py-1 w-28">Tipo</th>
               <th className="px-3 py-1">Banco / Librador</th>
               <th className="px-3 py-1 w-28">Cobro</th>
               <th className="px-3 py-1 w-32 text-right">Importe</th>
@@ -229,12 +243,12 @@ export function Checks() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-text-soft">Cargando cheques…</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-text-soft">Cargando cheques…</td></tr>
             )}
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-text-soft">
+                <td colSpan={7} className="px-4 py-10 text-center text-text-soft">
                   {checks.length === 0
                     ? 'Todavía no hay cheques cargados.'
                     : 'Ningún cheque coincide con el filtro.'}
@@ -250,6 +264,17 @@ export function Checks() {
                     <td data-primary className="relative px-4 py-1">
                       <StateStrip color={CHECK_STATUS_STRIP[check.status]} />
                       <span className="font-mono font-semibold text-text">{check.number}</span>
+                    </td>
+
+                    <td data-label="Tipo" className="px-3 py-1">
+                      <span
+                        className={cn(
+                          'rounded-sm px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-[0.04em]',
+                          check.electronico ? 'bg-[#2b6cb0]/15 text-[#2b6cb0]' : 'bg-panel-head text-text-soft'
+                        )}
+                      >
+                        {tipoDeCheque(check.electronico)}
+                      </span>
                     </td>
 
                     <td data-label="Banco" className="px-3 py-1">

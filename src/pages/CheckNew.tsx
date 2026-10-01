@@ -112,6 +112,23 @@ export function CheckNew() {
 
       <Panel className="p-5">
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {([false, true] as const).map((electronico) => (
+              <button
+                key={String(electronico)}
+                type="button"
+                onClick={() => patch({ electronico })}
+                className={cn(
+                  'rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors',
+                  form.electronico === electronico
+                    ? 'border-accent bg-accent/15 text-text'
+                    : 'border-line text-text-soft hover:bg-panel-alt'
+                )}
+              >
+                {electronico ? 'Cheque electrónico (eCheq)' : 'Cheque físico'}
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className={labelClass}>
               Número *

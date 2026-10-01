@@ -7,6 +7,8 @@ import { BankCombobox } from '@/src/components/BankCombobox';
 import type { Bank } from '@/src/lib/banks';
 
 export interface CheckDraft {
+  /** eCheq. Se elige como un medio aparte del cheque de papel. */
+  electronico?: boolean;
   amount: number;
   checkNumber: string;
   checkBank: string;
@@ -36,7 +38,10 @@ export function CheckDraftModal({
   onBankCreated,
   onConfirm,
   onClose,
+  electronico = false,
 }: {
+  /** Cheques electrónicos (eCheq) en vez de físicos: cambia el título y la marca de cada uno. */
+  electronico?: boolean;
   remainingBase: number;
   banks: Bank[];
   onBankCreated: (bank: Bank) => void;
@@ -77,6 +82,7 @@ export function CheckDraftModal({
     if (!valid) return;
     onConfirm(
       rows.map((r) => ({
+        electronico,
         amount: Number(r.amount) || 0,
         checkNumber: r.checkNumber,
         checkBank: r.checkBank,
@@ -88,14 +94,16 @@ export function CheckDraftModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <Panel className="max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-text">Cargar cheques</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-text">
+          {electronico ? 'Cargar cheques electrónicos (eCheq)' : 'Cargar cheques físicos'}
+        </h3>
 
         <ul className="mt-3 space-y-3">
           {rows.map((row, idx) => (
             <li key={row.rowKey} className="border border-line bg-panel-alt p-3">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-accent-deep">
-                  Cheque {idx + 1}
+                  {electronico ? 'eCheq' : 'Cheque'} {idx + 1}
                 </span>
                 {rows.length > 1 && (
                   <button

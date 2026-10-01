@@ -3,7 +3,7 @@ import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, Fi
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
-import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
+import { Button, PageHeader, Panel, SectionHeader, AccionesDeCampo } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
@@ -30,6 +30,7 @@ import {
   type ProvisionalCreditNote,
 } from '@/src/lib/paymentOrders';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { PaymentMethodModal } from '@/src/pages/PaymentMethods';
 
 interface DraftValue extends PaymentValueInput {
   key: number;
@@ -88,6 +89,7 @@ export function PaymentOrderNew() {
 
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [methods, setMethods] = React.useState<PaymentMethod[]>([]);
+  const [altaMedio, setAltaMedio] = React.useState(false);
   const [retentions, setRetentions] = React.useState<TaxRate[]>([]);
   const [walletChecks, setWalletChecks] = React.useState<ThirdPartyCheck[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -705,7 +707,10 @@ export function PaymentOrderNew() {
                         className="h-4 w-4 accent-accent-deep"
                       />
                     </td>
-                    <td data-primary className="px-3 py-1 font-mono font-semibold">{c.number}</td>
+                    <td data-primary className="px-3 py-1 font-mono font-semibold">
+                      {c.number}
+                      {c.electronico && <span className="ml-1.5 rounded-sm bg-[#2b6cb0]/15 px-1 font-sans text-[11px] font-semibold uppercase text-[#2b6cb0]">eCheq</span>}
+                    </td>
                     <td data-label="Banco" className="px-3 py-1">{c.bankName}</td>
                     <td data-label="Vence" className="px-3 py-1 text-text-soft">{formatDate(c.dueDate)}</td>
                     <td data-label="Importe" className="px-3 py-1 text-right font-mono">$ {formatMoney(c.amount)}</td>
@@ -756,16 +761,21 @@ export function PaymentOrderNew() {
         <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
           <label className={cn(labelClass, 'sm:flex-1')}>
             Medio
-            <select
-              value={selectedMedioKey}
-              onChange={(e) => handleSelectMedio(e.target.value)}
-              className={cn(inputClass, 'bg-panel')}
-            >
-              <option value="">Elegí un medio…</option>
-              {medioOptions.map((o) => (
-                <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
-              ))}
-            </select>
+            <div className="mt-1 flex">
+              <select
+                value={selectedMedioKey}
+                onChange={(e) => handleSelectMedio(e.target.value)}
+                className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel')}
+              >
+                <option value="">Elegí un medio…</option>
+                {medioOptions.map((o) => (
+                  <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
+                ))}
+              </select>
+              <AccionesDeCampo
+                nuevo={{ titulo: 'Dar de alta un medio de pago', onClick: () => setAltaMedio(true) }}
+              />
+            </div>
           </label>
 
           {selectedMedioKey && (
@@ -847,7 +857,7 @@ export function PaymentOrderNew() {
                     .filter((c) => c.id === value.checkId || !values.some((v) => v.checkId === c.id))
                     .map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.number} — {c.bankName} — vence {formatDate(c.dueDate)}
+                        {c.electronico ? 'eCheq ' : ''}{c.number} — {c.bankName} — vence {formatDate(c.dueDate)}
                       </option>
                     ))}
                 </select>
@@ -935,6 +945,20 @@ export function PaymentOrderNew() {
           </Button>
         </div>
       </Panel>
+
+      {altaMedio && (
+        <PaymentMethodModal
+          method={null}
+          onClose={() => setAltaMedio(false)}
+          onSaved={(m) => {
+            setAltaMedio(false);
+            // La cartera de cheques no es un medio que se elija acá.
+            if (m.kind === 'CARTERA_CHEQUES') return;
+            setMethods((actuales) => [...actuales, m].sort((a, b) => a.name.localeCompare(b.name)));
+            handleSelectMedio(`medio:${m.id}`);
+          }}
+        />
+      )}
     </div>
   );
 }

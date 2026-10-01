@@ -145,6 +145,7 @@ export function EndorseCheck() {
                 <tr key={check.id} className="h-12 border-b border-line last:border-b-0 hover:bg-panel-alt">
                   <td data-primary className="px-4 py-1 font-mono font-semibold text-text">
                     {check.number}
+                    {check.electronico && <span className="ml-1.5 rounded-sm bg-[#2b6cb0]/15 px-1 text-[11px] font-semibold uppercase text-[#2b6cb0]">eCheq</span>}
                   </td>
                   <td data-label="Banco" className="px-3 py-1">
                     <span className="block">{check.bankName}</span>
@@ -212,7 +213,7 @@ function EndorseModal({
       <Panel className="max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
         <h3 className="text-sm font-bold uppercase tracking-wider text-text">Endosar cheque</h3>
         <p className="mt-1 text-xs text-text-soft">
-          {check.number} — {check.bankName} · $ {formatMoney(check.amount)}
+          {check.electronico ? 'eCheq ' : ''}{check.number} — {check.bankName} · $ {formatMoney(check.amount)}
         </p>
 
         <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-text-soft">

@@ -204,6 +204,7 @@ export function InvoiceNew() {
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
+  const [chequeElectronico, setChequeElectronico] = React.useState(false);
   const [articles, setArticles] = React.useState<Article[]>([]);
 
   const [loading, setLoading] = React.useState(true);
@@ -440,6 +441,7 @@ export function InvoiceNew() {
                 checkNumber: c.checkNumber,
                 checkBank: c.checkBank,
                 checkDueDate: c.checkDueDate,
+                checkElectronico: c.electronico ?? false,
               }))
             : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
           await saveReceipt(
@@ -613,7 +615,10 @@ export function InvoiceNew() {
               paymentMethodId={paymentMethodId}
               onPaymentMethodIdChange={setPaymentMethodId}
               checkDrafts={checkDrafts}
-              onOpenCheckModal={() => setCheckModalOpen(true)}
+              onOpenCheckModal={(electronico) => {
+                setChequeElectronico(electronico);
+                setCheckModalOpen(true);
+              }}
               onClearChecks={() => setCheckDrafts(null)}
             />
           </FieldBox>
@@ -733,6 +738,7 @@ export function InvoiceNew() {
 
       {checkModalOpen && (
         <CheckDraftModal
+          electronico={chequeElectronico}
           remainingBase={totals.total}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
@@ -806,6 +812,7 @@ export function InvoiceTotals({
  */
 /** Valor centinela del select: elegirlo abre el modal de carga en vez de fijar un medio. */
 const CHEQUE_OPTION_VALUE = '__cheque__';
+const ECHEQ_OPTION_VALUE = '__echeq__';
 
 export function CashCheckoutFields({
   paymentMethods,
@@ -819,7 +826,8 @@ export function CashCheckoutFields({
   paymentMethodId: string;
   onPaymentMethodIdChange: (value: string) => void;
   checkDrafts: CheckDraft[] | null;
-  onOpenCheckModal: () => void;
+  /** electronico: si se eligió eCheq en vez de cheque físico. */
+  onOpenCheckModal: (electronico: boolean) => void;
   onClearChecks: () => void;
 }) {
   // La cartera de cheques no es un medio de pago elegible acá: se mueve
@@ -832,7 +840,9 @@ export function CashCheckoutFields({
     return (
       <div className="rounded-md border border-line bg-panel-alt px-2 py-1.5 text-[12px]">
         <span className="block font-semibold uppercase tracking-wider text-text-soft">
-          {checkDrafts.length === 1 ? 'Cheque cargado' : `${checkDrafts.length} cheques cargados`}
+          {checkDrafts[0]?.electronico
+            ? checkDrafts.length === 1 ? 'eCheq cargado' : `${checkDrafts.length} eCheqs cargados`
+            : checkDrafts.length === 1 ? 'Cheque cargado' : `${checkDrafts.length} cheques cargados`}
         </span>
         {checkDrafts.map((c, i) => (
           <span key={i} className="mt-0.5 block truncate normal-case text-text">
@@ -855,7 +865,8 @@ export function CashCheckoutFields({
       <select
         value={paymentMethodId}
         onChange={(e) => {
-          if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal();
+          if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal(false);
+          else if (e.target.value === ECHEQ_OPTION_VALUE) onOpenCheckModal(true);
           else onPaymentMethodIdChange(e.target.value);
         }}
         className={cn(selectCabecera, 'w-full', !paymentMethodId && 'border-danger text-danger')}
@@ -864,7 +875,8 @@ export function CashCheckoutFields({
         {selectableMethods.map((m) => (
           <option key={m.id} value={m.id}>{m.name}</option>
         ))}
-        <option value={CHEQUE_OPTION_VALUE}>Cheque</option>
+        <option value={CHEQUE_OPTION_VALUE}>Cheque físico</option>
+        <option value={ECHEQ_OPTION_VALUE}>Cheque electrónico (eCheq)</option>
       </select>
       <span className="mt-1 block text-[11px] normal-case text-text-soft">
         {selectableMethods.length === 0

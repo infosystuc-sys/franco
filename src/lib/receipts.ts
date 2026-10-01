@@ -63,6 +63,8 @@ export interface ReceiptValue {
   checkId: string | null;
   checkNumber: string | null;
   checkBank: string | null;
+  /** Si el cheque es un eCheq. */
+  checkElectronico: boolean;
   taxRateName: string | null;
   certificateNumber: string | null;
 }
@@ -110,7 +112,7 @@ const SELECT =
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
           method:payment_methods(name), rate:tax_rates(name),
-          check:third_party_checks(number, bank_name)),
+          check:third_party_checks(number, bank_name, electronico)),
    changes:receipt_changes(kind, amount, note, method:payment_methods(name),
           check:third_party_checks(number, bank_name))`;
 
@@ -148,6 +150,7 @@ function mapReceipt(row: any): Receipt {
       checkId: v.check_id,
       checkNumber: v.check?.number ?? null,
       checkBank: v.check?.bank_name ?? null,
+      checkElectronico: v.check?.electronico ?? false,
       taxRateName: v.rate?.name ?? null,
       certificateNumber: v.certificate_number,
     })),
@@ -298,6 +301,8 @@ export interface ValueInput {
   checkDrawer?: string;
   checkIssueDate?: string;
   checkDueDate?: string;
+  /** eCheq: se elige como un medio aparte del cheque de papel. */
+  checkElectronico?: boolean;
 }
 
 export interface ChangeInput {
@@ -333,6 +338,7 @@ export async function saveReceipt(
       check_drawer: v.checkDrawer ?? null,
       check_issue_date: v.checkIssueDate || null,
       check_due_date: v.checkDueDate || null,
+      check_electronico: v.checkElectronico ?? false,
     })),
     p_changes: changes && changes.length > 0
       ? changes.map((change) => ({
