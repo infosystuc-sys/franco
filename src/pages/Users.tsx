@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, X, Search, UserCheck, Eye, EyeOff } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { Button, Label, PageHeader, Panel, fieldClass } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -69,7 +69,7 @@ export function Users() {
     const term = search.trim().toLowerCase();
     if (!term) return employees;
     return employees.filter((e) =>
-      [e.name, e.role, e.phone].filter(Boolean).some((field) => String(field).toLowerCase().includes(term))
+      coincideBusqueda(term, [e.name, e.role, e.phone])
     );
   }, [employees, search]);
 

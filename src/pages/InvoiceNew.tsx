@@ -45,6 +45,7 @@ import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
  * Un dato de la cabecera: rótulo chico arriba, valor abajo. Sin recuadro
@@ -208,6 +209,7 @@ export function InvoiceNew() {
   const [loading, setLoading] = React.useState(true);
   const [issuing, setIssuing] = React.useState(false);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [cambiandoCliente, setCambiandoCliente] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -510,6 +512,11 @@ export function InvoiceNew() {
                 onClick: () => clienteElegido && setFichaCliente({ customer: clienteElegido }),
                 disabled: !clienteElegido,
               }}
+              arca={{
+                titulo: 'Actualizar los datos del cliente desde ARCA',
+                onClick: () => clienteElegido && setArcaCliente(clienteElegido),
+                disabled: !clienteElegido,
+              }}
             />
           </div>
           <span className="mt-1 block text-[11px] normal-case text-text-soft">
@@ -668,6 +675,39 @@ export function InvoiceNew() {
             // copian los datos nuevos en vez de recargarla. Recargar volvería a
             // traer los renglones de la OT y se perderían los retoques hechos
             // en esta pantalla.
+            setOrder((actual) =>
+              actual && actual.customer?.id === guardado.id
+                ? {
+                    ...actual,
+                    customer: {
+                      id: guardado.id,
+                      name: guardado.name,
+                      phone: guardado.phone,
+                      legal_name: guardado.legalName,
+                      tax_id: guardado.taxId,
+                      tax_condition: guardado.taxCondition,
+                      address_street: guardado.addressStreet,
+                      address_city: guardado.addressCity,
+                      address_state: guardado.addressState,
+                      address_zip: guardado.addressZip,
+                    },
+                  }
+                : actual
+            );
+          }}
+        />
+      )}
+
+      {arcaCliente && (
+        <ActualizarClienteArca
+          cliente={arcaCliente}
+          onClose={() => setArcaCliente(null)}
+          onActualizado={(guardado) => {
+            setArcaCliente(null);
+            setCustomers((actuales) => actuales.map((x) => (x.id === guardado.id ? guardado : x)));
+            // La orden ya apunta a este cliente: se le copian los datos nuevos
+            // (de ellos sale la letra) sin recargarla, igual que al modificar
+            // la ficha a mano.
             setOrder((actual) =>
               actual && actual.customer?.id === guardado.id
                 ? {

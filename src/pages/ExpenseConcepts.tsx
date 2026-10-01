@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Check, Search } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -49,7 +49,7 @@ export function ExpenseConcepts() {
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return concepts;
-    return concepts.filter((concept) => concept.name.toLowerCase().includes(term));
+    return concepts.filter((concept) => coincideBusqueda(term, [concept.name]));
   }, [concepts, search]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
-import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
+import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -68,9 +68,7 @@ export function Checks() {
     return checks.filter((check) => {
       if (statusFilter && check.status !== statusFilter) return false;
       if (!term) return true;
-      return [check.number, check.bankName, check.drawer]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term));
+      return coincideBusqueda(term, [check.number, check.bankName, check.drawer]);
     });
   }, [checks, search, statusFilter]);
 

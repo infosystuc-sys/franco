@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { Landmark, Pencil, Plus } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
 /**
@@ -135,13 +135,17 @@ export function fieldClass(required?: boolean, extra?: string) {
 export function AccionesDeCampo({
   nuevo,
   modificar,
+  arca,
 }: {
   nuevo?: { onClick: () => void; titulo: string; disabled?: boolean };
   modificar?: { onClick: () => void; titulo: string; disabled?: boolean };
+  /** Actualizar la ficha con lo que tiene ARCA. */
+  arca?: { onClick: () => void; titulo: string; disabled?: boolean };
 }) {
   const acciones = [
     nuevo && { ...nuevo, Icono: Plus, clave: 'nuevo' },
     modificar && { ...modificar, Icono: Pencil, clave: 'modificar' },
+    arca && { ...arca, Icono: Landmark, clave: 'arca' },
   ].filter(Boolean) as {
     onClick: () => void;
     titulo: string;

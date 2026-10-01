@@ -40,6 +40,7 @@ import {
   requestExtraction,
   type PurchaseExtraction,
 } from '@/src/lib/purchaseExtractions';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null, conceptId: null, code: '', description: '',
@@ -896,16 +897,13 @@ export function PurchaseAIReview() {
                   <span className="ml-1.5 text-[12px] font-normal normal-case text-state-wait">elegilo a mano</span>
                 )}
                 <div className="mt-1 flex">
-                  <select
+                  <ClienteCombobox
+                    entidad="proveedor"
+                    clientes={suppliers}
                     value={supplierId}
-                    onChange={(e) => setSupplierId(e.target.value)}
-                    className={cn(inputClass, 'mt-0 flex-1 rounded-r-none bg-panel', !supplierId && 'field-required')}
-                  >
-                    <option value="">Elegí un proveedor</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}{s.taxId ? ` — ${formatCuit(s.taxId)}` : ''}</option>
-                    ))}
-                  </select>
+                    onChange={(id) => setSupplierId(id)}
+                    className={cn('flex-1 rounded-r-none', !supplierId && 'field-required')}
+                  />
                   <AccionesDeCampo
                     nuevo={{
                       titulo: 'Dar de alta un proveedor nuevo',

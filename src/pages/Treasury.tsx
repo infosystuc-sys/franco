@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Search, Ban, AlertTriangle, Wallet, ArrowRight } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
-import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
+import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
@@ -75,9 +75,7 @@ export function Treasury() {
     return movements.filter((mv) => {
       if (typeFilter && mv.movementType !== typeFilter) return false;
       if (!term) return true;
-      return [mv.fullNumber, mv.description, mv.payee, mv.conceptName]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term));
+      return coincideBusqueda(term, [mv.fullNumber, mv.description, mv.payee, mv.conceptName]);
     });
   }, [movements, search, typeFilter]);
 

@@ -54,6 +54,7 @@ import {
 import { VehiclePhotos } from '@/src/components/VehiclePhotos';
 import { fetchVehiclePhotos, uploadVehiclePhoto, type VehiclePhoto } from '@/src/lib/vehiclePhotos';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
 const inputClass =
@@ -100,6 +101,7 @@ export function VehicleNew() {
 
   const [form, setForm] = React.useState<VehicleInput>(EMPTY_VEHICLE_FORM);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [brands, setBrands] = React.useState<VehicleBrand[]>([]);
   const [models, setModels] = React.useState<VehicleModel[]>([]);
   const [vehicles, setVehicles] = React.useState<Vehicle[]>([]);
@@ -452,6 +454,11 @@ export function VehicleNew() {
                 modificar={{
                   titulo: 'Modificar la ficha del cliente',
                   onClick: () => clienteElegido && setFichaCliente(clienteElegido),
+                  disabled: !clienteElegido,
+                }}
+                arca={{
+                  titulo: 'Actualizar los datos del cliente desde ARCA',
+                  onClick: () => clienteElegido && setArcaCliente(clienteElegido),
                   disabled: !clienteElegido,
                 }}
               />
@@ -836,6 +843,16 @@ export function VehicleNew() {
             // recién corregido se relee para que los datos de abajo se
             // actualicen sin recargar la pantalla.
             patch({ customerId: customer.id });
+          }}
+        />
+      )}
+      {arcaCliente && (
+        <ActualizarClienteArca
+          cliente={arcaCliente}
+          onClose={() => setArcaCliente(null)}
+          onActualizado={(c) => {
+            setArcaCliente(null);
+            setCustomers((actuales) => actuales.map((x) => (x.id === c.id ? c : x)));
           }}
         />
       )}

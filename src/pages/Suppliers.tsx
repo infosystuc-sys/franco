@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -60,9 +60,7 @@ export function Suppliers() {
     const term = search.trim().toLowerCase();
     if (!term) return suppliers;
     return suppliers.filter((s) =>
-      [s.name, s.legalName, s.taxId, s.email, s.phone]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term))
+      coincideBusqueda(term, [s.name, s.legalName, s.taxId, s.email, s.phone, s.addressCity])
     );
   }, [suppliers, search]);
 

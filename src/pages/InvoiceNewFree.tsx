@@ -46,6 +46,7 @@ import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
  * Facturar sin OT ni cotización: para lo que no sale de una reparación
@@ -63,6 +64,7 @@ export function InvoiceNewFree() {
   const copiarId = searchParams.get('copiar');
 
   const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [company, setCompany] = React.useState<CompanySettings | null>(null);
   const [articles, setArticles] = React.useState<Article[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -317,6 +319,11 @@ export function InvoiceNewFree() {
                 onClick: () => customer && setFichaCliente({ customer }),
                 disabled: !customer,
               }}
+              arca={{
+                titulo: 'Actualizar los datos del cliente desde ARCA',
+                onClick: () => customer && setArcaCliente(customer),
+                disabled: !customer,
+              }}
             />
           </div>
           {remito && (
@@ -480,6 +487,17 @@ export function InvoiceNewFree() {
             );
             // Queda elegido: es para eso que se lo dio de alta desde acá.
             if (eraAlta) setCustomerId(guardado.id);
+          }}
+        />
+      )}
+
+      {arcaCliente && (
+        <ActualizarClienteArca
+          cliente={arcaCliente}
+          onClose={() => setArcaCliente(null)}
+          onActualizado={(c) => {
+            setArcaCliente(null);
+            setCustomers((actuales) => actuales.map((x) => (x.id === c.id ? c : x)));
           }}
         />
       )}

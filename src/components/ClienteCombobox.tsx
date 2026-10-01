@@ -104,6 +104,7 @@ export function ClienteCombobox<T extends ClienteBuscable>({
   className,
   vacio,
   autoFocus,
+  entidad = 'cliente',
 }: {
   clientes: T[];
   value: string;
@@ -115,6 +116,8 @@ export function ClienteCombobox<T extends ClienteBuscable>({
   /** Si se puede dejar sin cliente, el texto de esa opción ("Todos los clientes"). */
   vacio?: string;
   autoFocus?: boolean;
+  /** Para los textos: el mismo buscador sirve para clientes y proveedores. */
+  entidad?: 'cliente' | 'proveedor';
 }) {
   const [abierto, setAbierto] = React.useState(false);
   const [consulta, setConsulta] = React.useState('');
@@ -238,7 +241,7 @@ export function ClienteCombobox<T extends ClienteBuscable>({
           {elegido && vacio !== undefined && !disabled && (
             <span
               role="button"
-              aria-label="Quitar el cliente elegido"
+              aria-label={`Quitar el ${entidad} elegido`}
               onClick={(e) => { e.stopPropagation(); onChange('', null); }}
               className="shrink-0 rounded p-0.5 text-text-soft hover:bg-panel-head hover:text-text"
             >
@@ -256,7 +259,7 @@ export function ClienteCombobox<T extends ClienteBuscable>({
             onChange={(e) => setConsulta(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={placeholder}
-            aria-label="Buscar cliente"
+            aria-label={`Buscar ${entidad}`}
             aria-expanded
             role="combobox"
             className="min-w-0 flex-1 bg-transparent text-sm normal-case tracking-normal text-text placeholder:text-text-faint focus:outline-none"
@@ -273,7 +276,7 @@ export function ClienteCombobox<T extends ClienteBuscable>({
             </p>
           )}
           {suficiente && resultados.total === 0 && (
-            <p className="px-3 py-3 text-[13px] text-text-soft">Ningún cliente coincide con «{consulta.trim()}».</p>
+            <p className="px-3 py-3 text-[13px] text-text-soft">Ningún {entidad} coincide con «{consulta.trim()}».</p>
           )}
           {opciones.length > 0 && (
             <ul ref={listaRef} role="listbox" className="max-h-80 overflow-y-auto py-1">

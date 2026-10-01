@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -64,9 +64,7 @@ export function Vehicles() {
     return vehicles.filter((v) => {
       if (customerFilter && v.customerId !== customerFilter) return false;
       if (!term) return true;
-      return [v.brand, v.model, v.licensePlate, v.vin, v.engineNumber, v.engineModel, v.customerName]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term));
+      return coincideBusqueda(term, [v.brand, v.model, v.licensePlate, v.vin, v.engineNumber, v.engineModel, v.customerName]);
     });
   }, [vehicles, search, customerFilter]);
 

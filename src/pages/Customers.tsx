@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { cn, formatMoney } from '@/src/lib/utils';
+import { cn, formatMoney, coincideBusqueda } from '@/src/lib/utils';
 import { Button, PageHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -65,9 +65,7 @@ export function Customers() {
     const term = search.trim().toLowerCase();
     if (!term) return customers;
     return customers.filter((c) =>
-      [c.name, c.legalName, c.taxId, c.email, c.phone]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term))
+      coincideBusqueda(term, [c.name, c.legalName, c.taxId, c.email, c.phone, c.addressCity])
     );
   }, [customers, search]);
 

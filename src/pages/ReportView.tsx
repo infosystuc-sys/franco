@@ -1,7 +1,7 @@
 import React from 'react';
 import { XCircle, FileSpreadsheet, Play, Search, Printer, ChevronRight, ChevronDown } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { cn, todayLocal } from '@/src/lib/utils';
+import { cn, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
@@ -51,7 +51,7 @@ export function ReportView() {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((row) =>
-      Object.values(row).some((v) => v !== null && String(v).toLowerCase().includes(term))
+      coincideBusqueda(term, Object.values(row))
     );
   }, [rows, search]);
 

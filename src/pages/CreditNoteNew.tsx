@@ -1,7 +1,7 @@
 import React from 'react';
 import { XCircle, FileMinus, AlertTriangle, ArrowRight, Search } from 'lucide-react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import { cn, formatMoney } from '@/src/lib/utils';
+import { cn, formatMoney, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { Button, Panel, SectionHeader } from '@/src/components/ui';
@@ -177,7 +177,7 @@ export function CreditNoteNew() {
   const filtradas = candidatas.filter((c) => {
     const term = buscando.trim().toLowerCase();
     if (!term) return true;
-    return [c.fullNumber, c.customerName].some((v) => String(v).toLowerCase().includes(term));
+    return coincideBusqueda(term, [c.fullNumber, c.customerName]);
   });
 
   return (

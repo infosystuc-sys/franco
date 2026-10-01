@@ -27,6 +27,7 @@ import {
   type PriceImport,
 } from '@/src/lib/priceLists';
 import { SupplierColumnMapper } from '@/src/components/SupplierColumnMapper';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 export function PriceLists() {
   const { role } = useAuth();
@@ -368,16 +369,13 @@ function ImportSection({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label className="text-xs font-bold uppercase tracking-wider text-text-soft">
           Proveedor
-          <select
+          <ClienteCombobox
+            entidad="proveedor"
+            clientes={suppliers}
             value={supplierId}
-            onChange={(e) => handleSupplierChange(e.target.value)}
-            className="mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case bg-panel"
-          >
-            <option value="">Elegí el proveedor de esta lista...</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+            onChange={(id) => handleSupplierChange(id)}
+            className="mt-1"
+          />
         </label>
 
         <label className="text-xs font-bold uppercase tracking-wider text-text-soft">

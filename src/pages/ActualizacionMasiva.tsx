@@ -16,6 +16,7 @@ import {
   type FiltroArticulos,
   type ValoresDeClasificacion,
 } from '@/src/lib/actualizacionMasiva';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /** Los campos que se pueden cambiar en masa, y cómo se los nombra. */
 const CAMPOS = [
@@ -220,14 +221,14 @@ export function ActualizacionMasiva() {
 
           <label className={labelClass}>
             Proveedor
-            <select
+            <ClienteCombobox
+              entidad="proveedor"
+              clientes={suppliers}
               value={filtro.supplierId ?? ''}
-              onChange={(e) => setFiltro({ ...filtro, supplierId: e.target.value || undefined })}
-              className={inputClass}
-            >
-              <option value="">Cualquiera</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+              onChange={(id) => setFiltro({ ...filtro, supplierId: id || undefined })}
+              vacio="Cualquiera"
+              className="mt-1"
+            />
           </label>
           <label className={labelClass}>
             Tipo de pieza

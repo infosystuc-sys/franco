@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowRightLeft, Search, XCircle, CheckCircle2 } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
+import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -12,6 +12,7 @@ import {
   fetchChecks,
   type ThirdPartyCheck,
 } from '@/src/lib/checks';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Endosar un cheque de la cartera a un proveedor: reemplaza el prompt del
@@ -62,11 +63,7 @@ export function EndorseCheck() {
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return checks;
-    return checks.filter((check) =>
-      [check.number, check.bankName, check.drawer]
-        .filter(Boolean)
-        .some((field) => String(field).toLowerCase().includes(term))
-    );
+    return checks.filter((check) => coincideBusqueda(term, [check.number, check.bankName, check.drawer]));
   }, [checks, search]);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
@@ -220,20 +217,14 @@ function EndorseModal({
 
         <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-text-soft">
           Proveedor
-          <select
+          <ClienteCombobox
+            entidad="proveedor"
+            clientes={suppliers}
             value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className={cn(
-              'mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none',
-              supplierId === '' && 'field-required'
-            )}
+            onChange={(id) => setSupplierId(id)}
             autoFocus
-          >
-            <option value="">— elegir —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+            className={cn('mt-1', supplierId === '' && 'field-required')}
+          />
         </label>
 
         <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-text-soft">

@@ -18,6 +18,7 @@ import {
   type ReceptionKind,
 } from '@/src/lib/workOrders';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
  * Alta de una OT directa, sin cotización previa.
@@ -38,6 +39,7 @@ export function NewWorkOrderModal({
 }) {
   const { session } = useAuth();
   const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
   const [customerId, setCustomerId] = React.useState('');
   // Quién la toma. Opcional: en la recepción puede no estar decidido todavía.
@@ -282,6 +284,11 @@ export function NewWorkOrderModal({
                     titulo: 'Dar de alta un cliente nuevo',
                     onClick: () => setCreatingCustomer(true),
                   }}
+                  arca={{
+                    titulo: 'Actualizar los datos del cliente desde ARCA',
+                    onClick: () => selectedCustomer && setArcaCliente(selectedCustomer),
+                    disabled: !selectedCustomer,
+                  }}
                 />
               </div>
               {!loadingCustomers && customers.length === 0 && (
@@ -449,10 +456,21 @@ export function NewWorkOrderModal({
       </div>
     </div>
 
-    {/* Van DESPUÉS del modal de la OT a propósito: los tres comparten z-[60],
+    {/* Van DESPUÉS del modal de la OT a propósito: todos comparten z-[60],
         así que con igual z-index manda el orden del DOM y el que va último
         pinta encima. Alternativa era subirle el z a los componentes
         compartidos, que los usan otras tres pantallas. */}
+    {arcaCliente && (
+      <ActualizarClienteArca
+        cliente={arcaCliente}
+        onClose={() => setArcaCliente(null)}
+        onActualizado={(c) => {
+          setArcaCliente(null);
+          setCustomers((actuales) => actuales.map((x) => (x.id === c.id ? c : x)));
+        }}
+      />
+    )}
+
     {creatingCustomer && (
       <CustomerModal
         customer={null}

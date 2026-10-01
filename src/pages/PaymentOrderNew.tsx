@@ -29,6 +29,7 @@ import {
   type PaymentValueInput,
   type ProvisionalCreditNote,
 } from '@/src/lib/paymentOrders';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 interface DraftValue extends PaymentValueInput {
   key: number;
@@ -466,18 +467,13 @@ export function PaymentOrderNew() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <label className={cn(labelClass, 'sm:col-span-2')}>
             Proveedor *
-            <select
+            <ClienteCombobox
+              entidad="proveedor"
+              clientes={suppliers}
               value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              className={cn(inputClass, 'bg-panel', !supplierId && 'field-required')}
-            >
-              <option value="">Elegí un proveedor</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}{s.taxId ? ` — ${formatCuit(s.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setSupplierId(id)}
+              className={cn('mt-1', !supplierId && 'field-required')}
+            />
             {supplierId && credit > 0 && (
               <span className="mt-1 block text-[12px] font-normal normal-case text-state-done">
                 Tenés $ {formatMoney(credit)} a favor con este proveedor.

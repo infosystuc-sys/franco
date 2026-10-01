@@ -1,3 +1,4 @@
+import { coincideBusqueda } from '@/src/lib/utils';
 import { supabase } from '@/src/lib/supabase';
 
 export interface Article {
@@ -91,7 +92,9 @@ export function articuloCoincide(article: Article, termino: string): boolean {
     article.preferredSupplierCode,
     article.preferredSupplierName,
   ];
-  if (textos.some((t) => t && t.toLowerCase().includes(term))) return true;
+  // Varias palabras en cualquier orden, sin importar acentos: la regla de
+  // búsqueda de toda la app.
+  if (coincideBusqueda(termino, textos)) return true;
 
   if (article.factoryCode) {
     const buscado = normalizar(termino);

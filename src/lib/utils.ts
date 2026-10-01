@@ -47,3 +47,28 @@ export function formatDate(value: string | null): string {
   const [year, month, day] = value.slice(0, 10).split('-');
   return `${day}/${month}/${year}`;
 }
+
+/** Minúsculas, sin acentos ni puntos: para comparar lo que se busca con lo que hay. */
+export function normalizarBusqueda(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,]/g, '')
+    .trim();
+}
+
+/**
+ * La regla de búsqueda de toda la app (la misma del buscador de clientes):
+ * cada palabra buscada tiene que estar en alguno de los campos, en cualquier
+ * orden y sin importar acentos ni mayúsculas, y una palabra de números se
+ * busca también sin guiones ni espacios (un CUIT, un teléfono, una patente).
+ */
+export function coincideBusqueda(consulta: string, campos: unknown[]): boolean {
+  const palabras = normalizarBusqueda(consulta).split(/\s+/).filter(Boolean);
+  if (palabras.length === 0) return true;
+  const textos = campos.filter((c) => c !== null && c !== undefined && c !== '').map((c) => String(c));
+  const texto = normalizarBusqueda(textos.join(' '));
+  const compacto = texto.replace(/[\s-]/g, '');
+  return palabras.every((p) => texto.includes(p) || compacto.includes(p.replace(/-/g, '')));
+}

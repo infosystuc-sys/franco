@@ -30,6 +30,7 @@ import {
   type PurchaseLetter,
   type PurchaseLine,
 } from '@/src/lib/purchases';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null,
@@ -299,18 +300,13 @@ export function PurchaseNew() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
           <label className={cn(labelClass, 'sm:col-span-3')}>
             Proveedor *
-            <select
+            <ClienteCombobox
+              entidad="proveedor"
+              clientes={suppliers}
               value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              className={cn(inputClass, 'bg-panel', !supplierId && 'field-required')}
-            >
-              <option value="">Elegí un proveedor</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}{s.taxId ? ` — ${formatCuit(s.taxId)}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setSupplierId(id)}
+              className={cn('mt-1', !supplierId && 'field-required')}
+            />
             {supplier && (
               <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                 {TAX_CONDITION_LABELS[supplier.taxCondition]} · plazo {supplier.paymentTermsDays} días
