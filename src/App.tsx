@@ -14,8 +14,7 @@ import { Imputaciones } from '@/src/pages/Imputaciones';
 import { ArticulosDuplicados } from '@/src/pages/ArticulosDuplicados';
 import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
 import { InvoicesPending } from '@/src/pages/InvoicesPending';
-import { CustomerAccounts } from '@/src/pages/CustomerAccounts';
-import { SupplierAccounts } from '@/src/pages/SupplierAccounts';
+import { ComposicionSaldos } from '@/src/pages/ComposicionSaldos';
 import { SaldosInicialesClientes } from '@/src/pages/SaldosInicialesClientes';
 import { CustomersImport } from '@/src/pages/CustomersImport';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
@@ -134,12 +133,12 @@ export default function App() {
                     <Route path="/informe/:id" element={<ReportView />} />
                     <Route path="/cobranzas" element={<Receipts />} />
                     <Route path="/cobranzas/nueva" element={<ReceiptNew />} />
-                    <Route path="/cuenta-corriente-clientes" element={<CustomerAccounts />} />
+                    <Route path="/cuenta-corriente-clientes" element={<ComposicionSaldos key="clientes" lado="clientes" />} />
                     <Route path="/saldos-iniciales/clientes" element={<SaldosInicialesClientes />} />
                     <Route path="/recibo/:id" element={<ReceiptDetails />} />
                     <Route path="/pagos" element={<PaymentOrders />} />
                     <Route path="/pagos/nueva" element={<PaymentOrderNew />} />
-                    <Route path="/cuenta-corriente-proveedores" element={<SupplierAccounts />} />
+                    <Route path="/cuenta-corriente-proveedores" element={<ComposicionSaldos key="proveedores" lado="proveedores" />} />
                     <Route path="/pago/:id" element={<PaymentOrderDetails />} />
                     <Route path="/tesoreria" element={<Treasury />} />
                     <Route path="/tesoreria/endosar-cheque" element={<EndorseCheck />} />
