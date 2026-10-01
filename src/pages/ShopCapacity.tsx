@@ -158,7 +158,7 @@ export function ShopCapacity() {
       {!loading && sinConfigurar && (
         <div className="rounded-md border border-line bg-panel-alt px-4 py-3 text-sm text-text-soft">
           Todavía no cargaste cuántas celdas tiene el taller. Configurala en{' '}
-          <Link to="/configuracion" className="font-semibold text-accent-deep hover:underline">Configuración</Link>{' '}
+          <Link to="/configuracion?pestana=playa" className="font-semibold text-accent-deep hover:underline">Configuración</Link>{' '}
           para que esta pantalla pueda decir cuánto lugar queda.
         </div>
       )}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { PlantillasMensajes } from '@/src/components/PlantillasMensajes';
 import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload, Activity, Image as ImageIcon } from 'lucide-react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
@@ -78,7 +78,30 @@ const EMPTY_FORM: CompanySettingsInput = {
  * definen la letra del comprobante, así que esta pantalla es requisito para
  * poder facturar.
  */
+const PESTANAS = [
+  { clave: 'datos', rotulo: 'Datos del taller' },
+  { clave: 'comprobantes', rotulo: 'Comprobantes' },
+  { clave: 'arca', rotulo: 'ARCA' },
+  { clave: 'mensajes', rotulo: 'Mail y WhatsApp' },
+  { clave: 'ia', rotulo: 'Inteligencia artificial' },
+  { clave: 'playa', rotulo: 'Playa' },
+] as const;
+
+type Pestana = (typeof PESTANAS)[number]['clave'];
+
 export function Settings() {
+  // La pestaña va en la URL: se puede volver a ella, o mandar a alguien
+  // directo a "Mail y WhatsApp", sin que tenga que buscarla.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pestanaUrl = searchParams.get('pestana');
+  const pestana: Pestana = PESTANAS.some((x) => x.clave === pestanaUrl) ? (pestanaUrl as Pestana) : 'datos';
+  function cambiarPestana(clave: Pestana) {
+    setSearchParams((actuales) => {
+      const proximos = new URLSearchParams(actuales);
+      proximos.set('pestana', clave);
+      return proximos;
+    }, { replace: true });
+  }
   const { role } = useAuth();
   const [form, setForm] = React.useState<CompanySettingsInput>(EMPTY_FORM);
   const [loading, setLoading] = React.useState(true);
@@ -315,12 +338,14 @@ export function Settings() {
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Configuración"
-        subtitle="Los datos fiscales del taller. Encabezan cada factura y definen la letra del comprobante."
+        subtitle="Los datos del taller, los comprobantes, ARCA, los mensajes y el resto de lo que se ajusta una vez."
         actions={
-          <Button onClick={handleSave} disabled={saving || !canSave}>
-            {saved && !saving ? <Check size={16} /> : <Save size={16} />}
-            {saving ? 'Guardando…' : saved ? 'Guardado' : 'Guardar'}
-          </Button>
+          pestana === 'datos' && (
+            <Button onClick={handleSave} disabled={saving || !canSave}>
+              {saved && !saving ? <Check size={16} /> : <Save size={16} />}
+              {saving ? 'Guardando…' : saved ? 'Guardado' : 'Guardar'}
+            </Button>
+          )
         }
       />
 
@@ -337,6 +362,24 @@ export function Settings() {
         </div>
       )}
 
+      <div className="flex flex-wrap gap-1 border-b border-line">
+        {PESTANAS.map(({ clave, rotulo }) => (
+          <button
+            key={clave}
+            type="button"
+            onClick={() => cambiarPestana(clave)}
+            className={cn(
+              '-mb-px border-b-2 px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.06em] transition-colors',
+              pestana === clave ? 'border-accent text-text' : 'border-transparent text-text-soft hover:text-text'
+            )}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
+      {pestana === 'datos' && (
+      <>
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Building2 size={14} /> Identificación</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -529,11 +572,25 @@ export function Settings() {
         Estos datos se copian dentro de cada factura al emitirla. Cambiarlos acá
         no altera los comprobantes ya emitidos.
       </p>
+      </>
+      )}
 
+      {pestana === 'comprobantes' && (
+      <>
       <NumeracionFacturas />
 
       <LogoDelComprobante />
+      </>
+      )}
 
+      {pestana === 'arca' && (
+      <>
+      <CertificadosArca />
+      </>
+      )}
+
+      {pestana === 'mensajes' && (
+      <>
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Mail size={14} /> Envío de facturas por mail</h3>
         <p className="text-xs text-text-soft">
@@ -582,7 +639,11 @@ export function Settings() {
       </Panel>
 
       <PlantillasMensajes />
+      </>
+      )}
 
+      {pestana === 'ia' && (
+      <>
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Sparkles size={14} /> Lectura de comprobantes con IA</h3>
         <p className="text-xs text-text-soft">
@@ -685,9 +746,11 @@ export function Settings() {
           })}
         </div>
       </Panel>
+      </>
+      )}
 
-      <CertificadosArca />
-
+      {pestana === 'playa' && (
+      <>
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Warehouse size={14} /> Capacidad de la playa</h3>
         <p className="text-xs text-text-soft">
@@ -710,6 +773,8 @@ export function Settings() {
           />
         </label>
       </Panel>
+      </>
+      )}
     </div>
   );
 }
