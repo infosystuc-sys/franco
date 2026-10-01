@@ -132,13 +132,29 @@ function mapArticle(row: any): Article {
 const SELECT_WITH_SUPPLIERS =
   '*, suppliers:article_suppliers(supplier_code, purchase_price, is_preferred, supplier:suppliers(name))';
 
-export async function fetchArticles(includeInactive = true): Promise<Article[]> {
-  let query = supabase.from('articles').select(SELECT_WITH_SUPPLIERS).order('code');
-  if (!includeInactive) query = query.eq('active', true);
+/**
+ * La base entrega como máximo 1000 filas por consulta: con más artículos que
+ * eso, los últimos en orden de código (los que empiezan con letras más
+ * avanzadas, como una Z) no llegaban a ninguna pantalla. Se piden de a tandas
+ * hasta traerlos todos, igual que con los clientes (ver fetchCustomers).
+ */
+const TANDA = 1000;
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapArticle);
+export async function fetchArticles(includeInactive = true): Promise<Article[]> {
+  const todos: Article[] = [];
+  for (let desde = 0; ; desde += TANDA) {
+    let query = supabase
+      .from('articles')
+      .select(SELECT_WITH_SUPPLIERS)
+      .order('code')
+      .range(desde, desde + TANDA - 1);
+    if (!includeInactive) query = query.eq('active', true);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    todos.push(...(data ?? []).map(mapArticle));
+    if ((data ?? []).length < TANDA) return todos;
+  }
 }
 
 function toRow(input: ArticleInput) {
