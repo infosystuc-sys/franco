@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquareText, RotateCcw, Save, Check, AlertTriangle } from 'lucide-react';
+import { MessageSquareText, RotateCcw, Save, Check, AlertTriangle, Pencil } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Button, Panel } from '@/src/components/ui';
 import { inputClass, labelClass } from '@/src/components/FiscalFields';
@@ -166,8 +166,7 @@ function EditorPlantilla({
       const nuevoAsunto = conAsunto ? asunto : plantilla.asunto;
       await guardarPlantilla(plantilla.clave, nuevoAsunto, cuerpo);
       onGuardada({ ...plantilla, asunto: nuevoAsunto, cuerpo });
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 2000);
+      onAbrir();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -177,19 +176,38 @@ function EditorPlantilla({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onAbrir}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-panel-alt"
-      >
+      <div className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[16rem_1fr_auto] sm:items-start">
         <span>
           <span className="block text-sm font-semibold text-text">{definicion.titulo}</span>
           <span className="block text-xs text-text-soft">{definicion.descripcion}</span>
+          <span className="mt-0.5 block text-[11px] text-text-faint">
+            {plantilla.cuerpo === plantilla.cuerpoOriginal && (plantilla.asunto ?? '') === (plantilla.asuntoOriginal ?? '')
+              ? 'Texto original'
+              : 'Modificado'}
+          </span>
         </span>
-        <span className="shrink-0 text-xs text-text-faint">
-          {esOriginal ? 'Texto original' : 'Modificado'}
-        </span>
-      </button>
+        {!abierta ? (
+          <div className="whitespace-pre-line text-[13px] text-text">
+            {conAsunto && plantilla.asunto && <p className="mb-1 font-semibold">{plantilla.asunto}</p>}
+            {plantilla.cuerpo}
+          </div>
+        ) : (
+          <span className="text-[13px] text-text-soft">Editando…</span>
+        )}
+        {!abierta && (
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => {
+              setAsunto(plantilla.asunto ?? '');
+              setCuerpo(plantilla.cuerpo);
+              onAbrir();
+            }}
+          >
+            <Pencil size={14} /> Modificar
+          </Button>
+        )}
+      </div>
 
       {abierta && (
         <div className="space-y-3 border-t border-line bg-panel-alt px-4 py-4">
@@ -256,6 +274,9 @@ function EditorPlantilla({
             >
               <RotateCcw size={14} /> Texto original
             </Button>
+            <Button variant="ghost" type="button" onClick={onAbrir} disabled={guardando}>
+              Cancelar
+            </Button>
             <Button type="button" onClick={guardar} disabled={guardando || !cambiado}>
               {guardado ? <Check size={14} /> : <Save size={14} />}
               {guardando ? 'Guardando…' : guardado ? 'Guardado' : 'Guardar'}
@@ -276,9 +297,9 @@ function MensajeDeEstado({
   texto: string;
   onGuardado: (t: string) => void;
 }) {
+  const [editando, setEditando] = React.useState(false);
   const [valor, setValor] = React.useState(texto);
   const [guardando, setGuardando] = React.useState(false);
-  const [guardado, setGuardado] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   async function guardar() {
@@ -287,8 +308,7 @@ function MensajeDeEstado({
     try {
       await guardarMensajeDeEstado(estado.id, valor.trim());
       onGuardado(valor.trim());
-      setGuardado(true);
-      setTimeout(() => setGuardado(false), 2000);
+      setEditando(false);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -298,7 +318,7 @@ function MensajeDeEstado({
 
   return (
     <div className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[12rem_1fr_auto] sm:items-start">
-      <span className="pt-2 text-sm">
+      <span className="text-sm">
         <span className="font-semibold text-text">{estado.label}</span>
         {estado.notifiesClient && (
           <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-state-done">
@@ -306,18 +326,42 @@ function MensajeDeEstado({
           </span>
         )}
       </span>
-      <textarea
-        value={valor}
-        onChange={(e) => setValor(e.target.value)}
-        rows={2}
-        placeholder="Sin texto para este estado"
-        className={cn(inputClass, 'mt-0 text-[13px] normal-case')}
-      />
+
+      {editando ? (
+        <textarea
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          rows={3}
+          autoFocus
+          placeholder="Sin texto para este estado"
+          className={cn(inputClass, 'mt-0 text-[13px] normal-case')}
+        />
+      ) : (
+        <p className={cn('whitespace-pre-line text-[13px]', texto ? 'text-text' : 'italic text-text-faint')}>
+          {texto || 'Sin texto para este estado'}
+        </p>
+      )}
+
       <div className="flex flex-col items-end gap-1">
-        <Button type="button" onClick={guardar} disabled={guardando || valor.trim() === texto.trim()}>
-          {guardado ? <Check size={14} /> : <Save size={14} />}
-          {guardando ? 'Guardando…' : guardado ? 'Guardado' : 'Guardar'}
-        </Button>
+        {editando ? (
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => { setValor(texto); setEditando(false); setError(null); }}
+              disabled={guardando}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={guardar} disabled={guardando || valor.trim() === texto.trim()}>
+              <Save size={14} /> {guardando ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="ghost" type="button" onClick={() => { setValor(texto); setEditando(true); }}>
+            <Pencil size={14} /> Modificar
+          </Button>
+        )}
         {error && <span className="text-xs text-danger">{error}</span>}
       </div>
     </div>
