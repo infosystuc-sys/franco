@@ -7,7 +7,8 @@ import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   computeSalePrice,
-  articuloCoincide,
+  filtrarArticulos,
+  ARTICULOS_A_MOSTRAR,
   createArticle,
   deleteArticle,
   fetchArticles,
@@ -77,10 +78,10 @@ export function Inventory() {
     if (isAdmin) loadArticles();
   }, [isAdmin, loadArticles]);
 
-  const filtered = React.useMemo(
-    () => (search.trim() === '' ? articles : articles.filter((a) => articuloCoincide(a, search))),
-    [articles, search]
-  );
+  // La lista se recalcula con la búsqueda "diferida": el campo responde a
+  // cada tecla en el acto y el filtrado va detrás, sin trabar lo que se tipea.
+  const busqueda = React.useDeferredValue(search);
+  const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
 
   async function handleDelete(article: Article) {
     if (!window.confirm(`¿Eliminar el artículo ${article.code}?`)) return;
@@ -159,7 +160,7 @@ export function Inventory() {
                   </td>
                 </tr>
               )}
-              {filtered.map((article) => (
+              {filtered.slice(0, ARTICULOS_A_MOSTRAR).map((article) => (
                 <tr key={article.id} className={cn(
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !article.active && "opacity-55"
@@ -228,6 +229,13 @@ export function Inventory() {
                   </td>
                 </tr>
               ))}
+              {filtered.length > ARTICULOS_A_MOSTRAR && (
+                <tr>
+                  <td colSpan={8} className="p-3 text-center text-xs text-text-soft">
+                    Se muestran {ARTICULOS_A_MOSTRAR} de {filtered.length.toLocaleString('es-AR')}. Escribí más para acotar la búsqueda.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

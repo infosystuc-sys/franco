@@ -1,4 +1,4 @@
-import { coincideBusqueda } from '@/src/lib/utils';
+import { normalizarBusqueda } from '@/src/lib/utils';
 import { supabase } from '@/src/lib/supabase';
 
 export interface Article {
@@ -82,27 +82,80 @@ function normalizar(valor: string): string {
  * Normalizar todo rompería la búsqueda por descripción de más de una palabra.
  */
 export function articuloCoincide(article: Article, termino: string): boolean {
-  const term = termino.trim().toLowerCase();
-  if (term === '') return true;
-
-  const textos = [
-    article.code,
-    article.description,
-    article.brand,
-    article.preferredSupplierCode,
-    article.preferredSupplierName,
-  ];
-  // Varias palabras en cualquier orden, sin importar acentos: la regla de
-  // búsqueda de toda la app.
-  if (coincideBusqueda(termino, textos)) return true;
-
-  if (article.factoryCode) {
-    const buscado = normalizar(termino);
-    if (buscado !== '' && normalizar(article.factoryCode).includes(buscado)) return true;
-  }
-
-  return false;
+  return coincideConClave(claveDeBusqueda(article), prepararTermino(termino));
 }
+
+/**
+ * Lo que se compara de cada artículo, ya normalizado. Normalizar (minúsculas,
+ * sin acentos, sin separadores) es lo caro de buscar, y hacerlo de nuevo en
+ * cada tecla sobre ~20.000 artículos trababa el buscador de la factura. Se
+ * calcula una vez por artículo y queda guardado mientras el objeto exista.
+ */
+interface ClaveDeBusqueda {
+  texto: string;
+  compacto: string;
+  fabrica: string;
+}
+
+const claves = new WeakMap<Article, ClaveDeBusqueda>();
+
+function claveDeBusqueda(article: Article): ClaveDeBusqueda {
+  let clave = claves.get(article);
+  if (!clave) {
+    const textos = [
+      article.code,
+      article.description,
+      article.brand,
+      article.preferredSupplierCode,
+      article.preferredSupplierName,
+    ].filter((c) => c !== null && c !== undefined && c !== '');
+    const texto = normalizarBusqueda(textos.join(' '));
+    clave = {
+      texto,
+      compacto: texto.replace(/[\s-]/g, ''),
+      fabrica: article.factoryCode ? normalizar(article.factoryCode) : '',
+    };
+    claves.set(article, clave);
+  }
+  return clave;
+}
+
+interface TerminoPreparado {
+  palabras: { tal: string; sinGuiones: string }[];
+  fabrica: string;
+}
+
+function prepararTermino(termino: string): TerminoPreparado {
+  return {
+    palabras: normalizarBusqueda(termino)
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((p) => ({ tal: p, sinGuiones: p.replace(/-/g, '') })),
+    fabrica: normalizar(termino),
+  };
+}
+
+// La misma regla que coincideBusqueda (cada palabra en algún campo, en
+// cualquier orden), más el número de fábrica comparado sin separadores.
+function coincideConClave(clave: ClaveDeBusqueda, t: TerminoPreparado): boolean {
+  if (t.palabras.length === 0) return true;
+  if (t.palabras.every((p) => clave.texto.includes(p.tal) || clave.compacto.includes(p.sinGuiones))) return true;
+  return t.fabrica !== '' && clave.fabrica !== '' && clave.fabrica.includes(t.fabrica);
+}
+
+/** Los artículos que coinciden con lo escrito, en el orden en que vienen. */
+export function filtrarArticulos(articles: Article[], termino: string): Article[] {
+  if (termino.trim() === '') return articles;
+  const t = prepararTermino(termino);
+  return articles.filter((a) => coincideConClave(claveDeBusqueda(a), t));
+}
+
+/**
+ * Cuántos renglones dibuja un buscador de artículos. Dibujar los ~20.000 del
+ * catálogo (o los miles que coinciden con una letra) es lo que más tardaba:
+ * nadie los recorre a mano, se escribe más para acotar.
+ */
+export const ARTICULOS_A_MOSTRAR = 100;
 
 function mapArticle(row: any): Article {
   const suppliers: any[] = row.suppliers ?? [];

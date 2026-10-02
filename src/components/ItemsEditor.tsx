@@ -6,7 +6,7 @@ import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { fetchComboArticleIds } from '@/src/lib/articleCombos';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import { articuloCoincide, type Article } from '@/src/lib/articles';
+import { filtrarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 
 /**
@@ -258,10 +258,10 @@ function ArticlePicker({
     fetchComboArticleIds().then(setCombos).catch(() => {});
   }, []);
 
-  const filtered = React.useMemo(
-    () => (search.trim() === '' ? articles : articles.filter((a) => articuloCoincide(a, search))),
-    [articles, search]
-  );
+  // La lista se recalcula con la búsqueda "diferida": el campo responde a
+  // cada tecla en el acto y el filtrado va detrás, sin trabar lo que se tipea.
+  const busqueda = React.useDeferredValue(search);
+  const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
 
   // No se cierra al elegir: se puede seguir cargando renglones sin volver a
   // abrir la ventana. Se limpia la búsqueda y vuelve el foco, como si el
@@ -328,7 +328,7 @@ function ArticlePicker({
                   </td>
                 </tr>
               )}
-              {filtered.map((article) => (
+              {filtered.slice(0, ARTICULOS_A_MOSTRAR).map((article) => (
                 <tr
                   key={article.id}
                   onClick={() => handlePick(article)}
@@ -365,6 +365,13 @@ function ArticlePicker({
                   </td>
                 </tr>
               ))}
+              {filtered.length > ARTICULOS_A_MOSTRAR && (
+                <tr>
+                  <td colSpan={4} className="p-3 text-center text-xs text-text-soft">
+                    Se muestran {ARTICULOS_A_MOSTRAR} de {filtered.length.toLocaleString('es-AR')}. Escribí más para acotar la búsqueda.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
