@@ -33,6 +33,7 @@ export function ItemsEditor({
   editable,
   title = 'Renglones',
   totals,
+  descripcionEditable = false,
 }: {
   items: WorkOrderItemInput[];
   onChange: (items: WorkOrderItemInput[]) => void;
@@ -45,6 +46,12 @@ export function ItemsEditor({
    * no se discrimina, así que el 21% fijo de acá no sirve.
    */
   totals?: React.ReactNode;
+  /**
+   * Deja corregir la descripción de un renglón de catálogo. La usa la
+   * facturación: el texto cambia solo en ese comprobante, el artículo queda
+   * como estaba.
+   */
+  descripcionEditable?: boolean;
 }) {
   const [showPicker, setShowPicker] = React.useState(false);
   // Artículos creados al vuelo desde el buscador: el catálogo que llega por
@@ -140,7 +147,18 @@ export function ItemsEditor({
                             {item.code}
                           </span>
                         </td>
-                        <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
+                        {descripcionEditable ? (
+                          <td data-label="Descripción" className="px-1 py-1">
+                            <input
+                              value={item.description}
+                              onChange={(e) => updateItem(idx, { description: e.target.value })}
+                              title="Cambia solo en este comprobante, no en el artículo"
+                              className="w-full bg-transparent px-2 py-1"
+                            />
+                          </td>
+                        ) : (
+                          <td data-label="Descripción" className="px-3 py-1">{item.description}</td>
+                        )}
                       </>
                     ) : (
                       <>
@@ -163,7 +181,7 @@ export function ItemsEditor({
                       />
                     </td>
                     <td data-label="P. unit." className="px-1 py-1">
-                      <input type="number" step="0.01" min="0" value={item.unitPrice} onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })} className="w-full bg-transparent px-2 py-1 text-right" />
+                      <CampoImporte value={item.unitPrice} onChange={(n) => updateItem(idx, { unitPrice: n })} className="w-full bg-transparent px-2 py-1 text-right" />
                     </td>
                   </>
                 ) : (
@@ -463,3 +481,68 @@ const FilaDeArticulo = React.memo(function FilaDeArticulo({
     </tr>
   );
 });
+
+/**
+ * "1.234,56", "1234,56", "1.500" o "10.5" → el número. La coma es siempre el
+ * decimal; un punto seguido de tres cifras se toma como separador de miles,
+ * que es como se escribe acá, y si no, como decimal. Vacío o ilegible → 0.
+ */
+function leerImporte(texto: string): number {
+  const limpio = texto.includes(',') || /\.\d{3}$/.test(texto)
+    ? texto.replace(/\./g, '').replace(',', '.')
+    : texto;
+  const n = Number(limpio);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function mostrarImporte(valor: number): string {
+  return valor ? String(valor).replace('.', ',') : '';
+}
+
+/**
+ * El precio de un renglón. Con un input numérico el cero quedaba escrito y
+ * había que borrarlo para cargar el precio; acá, si vale cero, el campo
+ * aparece vacío, al entrar se selecciona lo que tenga y se escribe libre,
+ * con coma o punto decimal.
+ */
+function CampoImporte({
+  value,
+  onChange,
+  className,
+}: {
+  value: number;
+  onChange: (valor: number) => void;
+  className?: string;
+}) {
+  const [texto, setTexto] = React.useState(() => mostrarImporte(value));
+  const editando = React.useRef(false);
+
+  // Si el precio cambia desde afuera (otro artículo en el renglón), se
+  // muestra; mientras se escribe, manda lo tipeado.
+  React.useEffect(() => {
+    if (!editando.current) setTexto(mostrarImporte(value));
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={texto}
+      placeholder="0,00"
+      onFocus={(e) => {
+        editando.current = true;
+        e.target.select();
+      }}
+      onBlur={() => {
+        editando.current = false;
+        setTexto(mostrarImporte(value));
+      }}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[^0-9.,]/g, '');
+        setTexto(t);
+        onChange(leerImporte(t));
+      }}
+      className={className}
+    />
+  );
+}

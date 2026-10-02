@@ -661,6 +661,7 @@ export function InvoiceNew() {
 
       <Panel className="mb-4 rounded-lg p-4">
         <ItemsEditor
+          descripcionEditable
           items={items}
           onChange={setItems}
           articles={articles}

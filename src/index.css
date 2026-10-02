@@ -314,3 +314,15 @@
     margin: 14mm;
   }
 }
+
+/* Sin las flechitas de subir/bajar en los campos numéricos (cantidades,
+   precios, importes): nadie las usa y tapan parte del número. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
