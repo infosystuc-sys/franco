@@ -227,12 +227,9 @@ export async function fetchArticles(includeInactive = true): Promise<Article[]> 
 }
 
 function toRow(input: ArticleInput) {
-  const code = input.code.trim();
+  // El código no se manda nunca: lo asigna la base con la secuencia del
+  // catálogo al dar de alta y no deja cambiarlo después.
   return {
-    // Se omite cuando está vacío: ahí lo pone el default de la columna, que
-    // toma el siguiente de la secuencia del catálogo. Mandarlo en blanco
-    // violaría el not null.
-    ...(code === '' ? {} : { code }),
     description: input.description,
     brand: input.brand,
     factory_code: input.factoryCode,

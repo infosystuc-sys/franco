@@ -174,8 +174,8 @@ export function ArticleModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.code.trim() || !form.description.trim()) {
-      setError('Código y descripción son obligatorios.');
+    if (!form.description.trim()) {
+      setError('La descripción es obligatoria.');
       return;
     }
     if (esCombo && componentes.length === 0) {
@@ -257,17 +257,18 @@ export function ArticleModal({
 
           {/* Identificación */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
-            {/* El código lo pone la base con la secuencia del catálogo. Se
-                deja editable por si hay que corregir uno viejo, pero en un
-                alta se deja en blanco y sale solo: escribirlo a mano no
-                agrega nada, nadie lo busca por ahí. */}
+            {/* El código lo pone la base con la secuencia del catálogo, al
+                guardar el alta, y no se puede cambiar: es el que quedó en
+                facturas, órdenes y remitos. Se muestra, no se edita. */}
             <label className={cn(labelClass, 'col-span-2')}>
               Nuestro código
               <input
-                value={form.code}
-                onChange={(e) => patch({ code: e.target.value })}
-                className={cn(inputClass, 'font-mono')}
-                placeholder={article ? '' : 'Se asigna solo'}
+                value={article ? article.code : ''}
+                readOnly
+                tabIndex={-1}
+                className={cn(inputClass, 'font-mono cursor-not-allowed bg-panel-alt text-text-soft')}
+                placeholder="Se asigna al guardar"
+                title="Lo asigna el sistema y no se puede modificar"
               />
             </label>
             <label className={cn(labelClass, 'col-span-2')}>
