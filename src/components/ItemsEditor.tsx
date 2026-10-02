@@ -6,7 +6,7 @@ import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { fetchComboArticleIds } from '@/src/lib/articleCombos';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import { filtrarArticulos, articulosExactos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
+import { articulosExactos, buscarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 
 /**
@@ -310,15 +310,9 @@ function ArticlePicker({
   // quedaba un rato en pantalla antes de volver a mostrar todo el catálogo.
   const [busqueda, setBusqueda] = React.useState(busquedaInicial);
   const [, startTransition] = React.useTransition();
-  // Los que coinciden exacto (varios artículos con el mismo número de
-  // fábrica, por ejemplo) van primero; después, los parecidos.
-  const filtered = React.useMemo(() => {
-    const parecidos = filtrarArticulos(articles, busqueda);
-    const exactos = articulosExactos(articles, busqueda);
-    if (exactos.length === 0) return parecidos;
-    const ids = new Set(exactos.map((a) => a.id));
-    return [...exactos, ...parecidos.filter((a) => !ids.has(a.id))];
-  }, [articles, busqueda]);
+  // Exactos primero, después los que empiezan con lo escrito y al final el
+  // resto de los que lo contienen.
+  const filtered = React.useMemo(() => buscarArticulos(articles, busqueda), [articles, busqueda]);
 
   function buscar(valor: string) {
     setSearch(valor);
@@ -643,18 +637,10 @@ function BuscadorDeArticulo({
   const listaRef = React.useRef<HTMLUListElement>(null);
   const id = React.useId();
 
-  const sugerencias = React.useMemo(() => {
-    if (busqueda.trim() === '') return [];
-    const exactos = articulosExactos(articles, busqueda);
-    const ids = new Set(exactos.map((a) => a.id));
-    const resto = filtrarArticulos(articles, busqueda);
-    const lista = [...exactos];
-    for (const a of resto) {
-      if (lista.length >= SUGERENCIAS) break;
-      if (!ids.has(a.id)) lista.push(a);
-    }
-    return lista.slice(0, SUGERENCIAS);
-  }, [articles, busqueda]);
+  const sugerencias = React.useMemo(
+    () => (busqueda.trim() === '' ? [] : buscarArticulos(articles, busqueda).slice(0, SUGERENCIAS)),
+    [articles, busqueda]
+  );
 
   const visible = abierta && sugerencias.length > 0;
 

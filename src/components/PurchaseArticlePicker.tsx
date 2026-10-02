@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, X } from 'lucide-react';
 import { cn, formatMoney } from '@/src/lib/utils';
-import { filtrarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
+import { buscarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
 
 /**
  * Buscador de artículos para cargar una compra.
@@ -26,7 +26,7 @@ export function PurchaseArticlePicker({
   // La lista se recalcula con la búsqueda "diferida": el campo responde a
   // cada tecla en el acto y el filtrado va detrás, sin trabar lo que se tipea.
   const busqueda = React.useDeferredValue(search);
-  const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
+  const filtered = React.useMemo(() => buscarArticulos(articles, busqueda), [articles, busqueda]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">

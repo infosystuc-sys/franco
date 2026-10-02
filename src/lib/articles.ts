@@ -93,6 +93,7 @@ export function articuloCoincide(article: Article, termino: string): boolean {
  */
 interface ClaveDeBusqueda {
   texto: string;
+  descripcion: string;
   compacto: string;
   fabrica: string;
 }
@@ -112,6 +113,7 @@ function claveDeBusqueda(article: Article): ClaveDeBusqueda {
     const texto = normalizarBusqueda(textos.join(' '));
     clave = {
       texto,
+      descripcion: normalizarBusqueda(article.description),
       compacto: texto.replace(/[\s-]/g, ''),
       fabrica: article.factoryCode ? normalizar(article.factoryCode) : '',
     };
@@ -395,4 +397,35 @@ export function articulosExactos(articles: Article[], termino: string): Article[
     }
   }
   return resultado;
+}
+
+/**
+ * Lo que muestran los buscadores de artículos, en orden de relevancia: los
+ * que coinciden exacto, después los que EMPIEZAN con lo escrito (en nuestro
+ * código, el de fábrica o la descripción) y al final el resto de los que lo
+ * contienen.
+ *
+ * Sin este orden, los resultados salían por código: los artículos propios
+ * con código de letras (ZRICR200 - REPARACION INYECTOR CR) quedaban al fondo,
+ * detrás de cientos de inyectores numerados, y no entraban en la lista.
+ */
+export function buscarArticulos(articles: Article[], termino: string): Article[] {
+  if (termino.trim() === '') return articles;
+  const exactos = articulosExactos(articles, termino);
+  const ids = new Set(exactos.map((a) => a.id));
+  const codigo = termino.trim().toUpperCase();
+  const fabrica = normalizar(termino);
+  const descripcion = normalizarBusqueda(termino);
+  const empiezan: Article[] = [];
+  const contienen: Article[] = [];
+  for (const a of filtrarArticulos(articles, termino)) {
+    if (ids.has(a.id)) continue;
+    const clave = claveDeBusqueda(a);
+    const empieza =
+      a.code.toUpperCase().startsWith(codigo) ||
+      (fabrica !== '' && clave.fabrica.startsWith(fabrica)) ||
+      (descripcion !== '' && clave.descripcion.startsWith(descripcion));
+    (empieza ? empiezan : contienen).push(a);
+  }
+  return [...exactos, ...empiezan, ...contienen];
 }

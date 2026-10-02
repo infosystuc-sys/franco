@@ -7,7 +7,7 @@ import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   computeSalePrice,
-  filtrarArticulos,
+  buscarArticulos,
   ARTICULOS_A_MOSTRAR,
   createArticle,
   deleteArticle,
@@ -81,7 +81,7 @@ export function Inventory() {
   // La lista se recalcula con la búsqueda "diferida": el campo responde a
   // cada tecla en el acto y el filtrado va detrás, sin trabar lo que se tipea.
   const busqueda = React.useDeferredValue(search);
-  const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
+  const filtered = React.useMemo(() => buscarArticulos(articles, busqueda), [articles, busqueda]);
 
   async function handleDelete(article: Article) {
     if (!window.confirm(`¿Eliminar el artículo ${article.code}?`)) return;
