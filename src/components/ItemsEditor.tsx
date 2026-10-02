@@ -123,6 +123,10 @@ export function ItemsEditor({
           inputRef={codigoRef}
           onElegir={addArticle}
           onAbrirCatalogo={() => setPicker('')}
+          onArticuloCreado={(article) => {
+            handleArticleCreated(article);
+            setTimeout(() => codigoRef.current?.focus(), 0);
+          }}
         />
       )}
 
@@ -433,7 +437,14 @@ function ArticlePicker({
  * stock y sin proveedor: quien lo cargaba en el apuro de una recepción no
  * volvía después a completarlo, y el catálogo se llenaba de fichas a medias.
  */
-function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void }) {
+function NewArticleToggle({
+  onCreated,
+  compacto = false,
+}: {
+  onCreated: (article: Article) => void;
+  /** Solo el "+", del mismo tamaño que la lupa del campo producto. */
+  compacto?: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [defaultMarkup, setDefaultMarkup] = React.useState(0);
@@ -449,9 +460,21 @@ function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void
 
   return (
     <>
-      <Button type="button" variant="ghost" onClick={() => setOpen(true)} className="px-3 whitespace-nowrap">
-        <PackagePlus size={16} /> Nuevo artículo
-      </Button>
+      {compacto ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Nuevo artículo"
+          aria-label="Nuevo artículo"
+          className="flex h-10 w-11 items-center justify-center border border-l-0 border-line bg-panel-alt text-text-soft hover:text-text"
+        >
+          <Plus size={16} />
+        </button>
+      ) : (
+        <Button type="button" variant="ghost" onClick={() => setOpen(true)} className="px-3 whitespace-nowrap">
+          <PackagePlus size={16} /> Nuevo artículo
+        </Button>
+      )}
 
       {open && (
         <ArticleModal
@@ -603,11 +626,14 @@ function BuscadorDeArticulo({
   inputRef,
   onElegir,
   onAbrirCatalogo,
+  onArticuloCreado,
 }: {
   articles: Article[];
   inputRef: React.RefObject<HTMLInputElement>;
   onElegir: (article: Article) => void;
   onAbrirCatalogo: () => void;
+  /** El "+" de al lado de la lupa: alta de un artículo que entra como renglón. */
+  onArticuloCreado: (article: Article) => void;
 }) {
   const [texto, setTexto] = React.useState('');
   const [busqueda, setBusqueda] = React.useState('');
@@ -708,13 +734,14 @@ function BuscadorDeArticulo({
         >
           <Search size={16} />
         </button>
+        <NewArticleToggle compacto onCreated={onArticuloCreado} />
 
         {visible && (
           <ul
             id={`${id}-lista`}
             ref={listaRef}
             role="listbox"
-            className="absolute left-0 right-11 top-full z-40 max-h-64 overflow-y-auto border border-line bg-panel shadow-lg"
+            className="absolute left-0 right-[5.5rem] top-full z-40 max-h-64 overflow-y-auto border border-line bg-panel shadow-lg"
           >
             {sugerencias.map((a, i) => (
               <li
