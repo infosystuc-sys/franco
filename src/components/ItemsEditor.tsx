@@ -258,20 +258,34 @@ function ArticlePicker({
     fetchComboArticleIds().then(setCombos).catch(() => {});
   }, []);
 
-  // La lista se recalcula con la búsqueda "diferida": el campo responde a
-  // cada tecla en el acto y el filtrado va detrás, sin trabar lo que se tipea.
-  const busqueda = React.useDeferredValue(search);
+  // Lo que filtra la lista va aparte de lo que muestra el campo. Al tipear,
+  // el campo se actualiza en el acto y el filtrado va como transición, sin
+  // trabar el teclado. Al elegir un artículo, en cambio, las dos se limpian
+  // juntas y en el mismo instante: con una búsqueda "diferida" la lista vieja
+  // quedaba un rato en pantalla antes de volver a mostrar todo el catálogo.
+  const [busqueda, setBusqueda] = React.useState('');
+  const [, startTransition] = React.useTransition();
   const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
+
+  function buscar(valor: string) {
+    setSearch(valor);
+    startTransition(() => setBusqueda(valor));
+  }
 
   // No se cierra al elegir: se puede seguir cargando renglones sin volver a
   // abrir la ventana. Se limpia la búsqueda y vuelve el foco, como si el
   // artículo elegido ya "saliera de la lista" para pasar al siguiente.
-  function handlePick(article: Article) {
-    onPick(article);
+  // Estable entre renders (onPick llega nuevo cada vez): así los renglones,
+  // memorizados, no se vuelven a dibujar cuando cambia la factura de atrás.
+  const onPickRef = React.useRef(onPick);
+  onPickRef.current = onPick;
+  const handlePick = React.useCallback((article: Article) => {
+    onPickRef.current(article);
     setJustAdded(article.description);
     setSearch('');
+    setBusqueda('');
     searchRef.current?.focus();
-  }
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
@@ -291,7 +305,7 @@ function ArticlePicker({
                 ref={searchRef}
                 autoFocus
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => buscar(e.target.value)}
                 placeholder="Buscar por código o descripción..."
                 className="w-full h-9 pl-9 pr-3 border border-line text-sm"
               />
@@ -329,41 +343,7 @@ function ArticlePicker({
                 </tr>
               )}
               {filtered.slice(0, ARTICULOS_A_MOSTRAR).map((article) => (
-                <tr
-                  key={article.id}
-                  onClick={() => handlePick(article)}
-                  className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
-                >
-                  <td data-primary className="p-2 font-bold">
-                    {/* El número de fábrica primero: es el que se busca y el
-                        que está escrito en la pieza. El nuestro es interno. */}
-                    <span className="font-mono">{article.factoryCode ?? article.code}</span>
-                    {combos.has(article.id) && (
-                      // Se avisa acá porque el combo entra como un renglón
-                      // solo: sin la marca, quien carga no sabe que ese
-                      // renglón se lleva varias piezas del estante.
-                      <span className="ml-1.5 rounded-full bg-accent/25 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
-                        Combo
-                      </span>
-                    )}
-                  </td>
-                  <td data-label="Descripción" className="p-2">{article.description}</td>
-                  <td data-label="Precio" className="p-2 text-right">$ {formatMoney(article.unitPrice)}</td>
-                  <td data-label="Stock" className="p-2 text-center">
-                    {article.tracksStock ? (
-                      <span className={cn(
-                        "px-2 py-0.5 text-[12px] font-bold",
-                        article.stockQuantity === 0 ? "bg-red-100 text-danger"
-                          : article.stockQuantity <= 5 ? "bg-orange-100 text-orange-700"
-                          : "bg-green-100 text-green-700"
-                      )}>
-                        {article.stockQuantity === 0 ? 'Sin stock' : article.stockQuantity}
-                      </span>
-                    ) : (
-                      <span className="text-text-faint text-[12px] uppercase tracking-wider">—</span>
-                    )}
-                  </td>
-                </tr>
+                <FilaDeArticulo key={article.id} article={article} esCombo={combos.has(article.id)} onPick={handlePick} />
               ))}
               {filtered.length > ARTICULOS_A_MOSTRAR && (
                 <tr>
@@ -431,3 +411,55 @@ function NewArticleToggle({ onCreated }: { onCreated: (article: Article) => void
     </>
   );
 }
+
+/**
+ * Un renglón del buscador. Memorizado: al elegir un artículo cambia la
+ * factura de atrás y todo se vuelve a dibujar; los renglones que no cambiaron
+ * no tienen por qué.
+ */
+const FilaDeArticulo = React.memo(function FilaDeArticulo({
+  article,
+  esCombo,
+  onPick,
+}: {
+  article: Article;
+  esCombo: boolean;
+  onPick: (article: Article) => void;
+}) {
+  return (
+    <tr
+      onClick={() => onPick(article)}
+      className="border-b border-line transition-colors hover:bg-panel-alt cursor-pointer"
+    >
+      <td data-primary className="p-2 font-bold">
+        {/* El número de fábrica primero: es el que se busca y el
+            que está escrito en la pieza. El nuestro es interno. */}
+        <span className="font-mono">{article.factoryCode ?? article.code}</span>
+        {esCombo && (
+          // Se avisa acá porque el combo entra como un renglón
+          // solo: sin la marca, quien carga no sabe que ese
+          // renglón se lleva varias piezas del estante.
+          <span className="ml-1.5 rounded-full bg-accent/25 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-accent-deep">
+            Combo
+          </span>
+        )}
+      </td>
+      <td data-label="Descripción" className="p-2">{article.description}</td>
+      <td data-label="Precio" className="p-2 text-right">$ {formatMoney(article.unitPrice)}</td>
+      <td data-label="Stock" className="p-2 text-center">
+        {article.tracksStock ? (
+          <span className={cn(
+            "px-2 py-0.5 text-[12px] font-bold",
+            article.stockQuantity === 0 ? "bg-red-100 text-danger"
+              : article.stockQuantity <= 5 ? "bg-orange-100 text-orange-700"
+              : "bg-green-100 text-green-700"
+          )}>
+            {article.stockQuantity === 0 ? 'Sin stock' : article.stockQuantity}
+          </span>
+        ) : (
+          <span className="text-text-faint text-[12px] uppercase tracking-wider">—</span>
+        )}
+      </td>
+    </tr>
+  );
+});
