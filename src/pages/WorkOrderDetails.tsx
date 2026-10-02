@@ -962,7 +962,11 @@ export function WorkOrderDetails() {
               otro. Estirados a todo el ancho, una orden con dos estados los
               mostraba en los extremos con un metro de línea en el medio, como
               si faltaran pasos que en realidad no existen. */}
-          <div className="relative flex items-start justify-start overflow-x-auto pb-1">
+          {/* pt-1.5 (6px) le da lugar al -mt-[6px] de cada casillero: sin ese
+              margen, overflow-x-auto obliga al navegador a recortar también
+              en vertical (overflow-y pasa a 'auto' por la especificación de
+              CSS) y el ícono del paso actual queda tapado arriba. */}
+          <div className="relative flex items-start justify-start overflow-x-auto pt-1.5 pb-1">
             {recorrido.map((status, idx) => {
               const esActual = idx === recorrido.length - 1;
               const esUltimo = idx === recorrido.length - 1;
