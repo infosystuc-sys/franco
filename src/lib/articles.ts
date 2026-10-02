@@ -135,26 +135,42 @@ const SELECT_WITH_SUPPLIERS =
 /**
  * La base entrega como máximo 1000 filas por consulta: con más artículos que
  * eso, los últimos en orden de código (los que empiezan con letras más
- * avanzadas, como una Z) no llegaban a ninguna pantalla. Se piden de a tandas
- * hasta traerlos todos, igual que con los clientes (ver fetchCustomers).
+ * avanzadas, como una Z) no llegaban a ninguna pantalla.
+ *
+ * Se piden de a tandas hasta traerlos todos, pero no una después de la otra:
+ * con ~20.000 artículos eso son veinte viajes de ida y vuelta en fila, y cada
+ * pantalla que factura, cotiza o compra espera esa fila entera antes de poder
+ * usarse. La primera tanda trae también el total (count: 'exact'), y con eso
+ * se sabe cuántas tandas más hacen falta y se piden todas juntas.
  */
 const TANDA = 1000;
 
-export async function fetchArticles(includeInactive = true): Promise<Article[]> {
-  const todos: Article[] = [];
-  for (let desde = 0; ; desde += TANDA) {
-    let query = supabase
-      .from('articles')
-      .select(SELECT_WITH_SUPPLIERS)
-      .order('code')
-      .range(desde, desde + TANDA - 1);
-    if (!includeInactive) query = query.eq('active', true);
+function tandaDeArticulos(includeInactive: boolean, desde: number, hasta: number, conTotal: boolean) {
+  let query = supabase
+    .from('articles')
+    .select(SELECT_WITH_SUPPLIERS, conTotal ? { count: 'exact' } : undefined)
+    .order('code')
+    .range(desde, hasta);
+  if (!includeInactive) query = query.eq('active', true);
+  return query;
+}
 
-    const { data, error } = await query;
-    if (error) throw error;
-    todos.push(...(data ?? []).map(mapArticle));
-    if ((data ?? []).length < TANDA) return todos;
-  }
+export async function fetchArticles(includeInactive = true): Promise<Article[]> {
+  const primera = await tandaDeArticulos(includeInactive, 0, TANDA - 1, true);
+  if (primera.error) throw primera.error;
+
+  const total = primera.count ?? (primera.data ?? []).length;
+  const tandasQueFaltan = Math.max(0, Math.ceil(total / TANDA) - 1);
+
+  const resto = await Promise.all(
+    Array.from({ length: tandasQueFaltan }, (_, i) => {
+      const desde = (i + 1) * TANDA;
+      return tandaDeArticulos(includeInactive, desde, desde + TANDA - 1, false);
+    })
+  );
+  for (const r of resto) if (r.error) throw r.error;
+
+  return [...(primera.data ?? []), ...resto.flatMap((r) => r.data ?? [])].map(mapArticle);
 }
 
 function toRow(input: ArticleInput) {

@@ -82,22 +82,37 @@ const SELECT_WITH_VEHICLES =
  */
 const TANDA = 1000;
 
-export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
-  const todos: Customer[] = [];
-  for (let desde = 0; ; desde += TANDA) {
-    let query = supabase
-      .from('customers')
-      .select(SELECT_WITH_VEHICLES)
-      .order('name')
-      .order('id')
-      .range(desde, desde + TANDA - 1);
-    if (onlyActive) query = query.eq('active', true);
+function tandaDeClientes(onlyActive: boolean, desde: number, hasta: number, conTotal: boolean) {
+  let query = supabase
+    .from('customers')
+    .select(SELECT_WITH_VEHICLES, conTotal ? { count: 'exact' } : undefined)
+    .order('name')
+    .order('id')
+    .range(desde, hasta);
+  if (onlyActive) query = query.eq('active', true);
+  return query;
+}
 
-    const { data, error } = await query;
-    if (error) throw error;
-    todos.push(...(data ?? []).map(mapCustomer));
-    if ((data ?? []).length < TANDA) return todos;
-  }
+export async function fetchCustomers(onlyActive = false): Promise<Customer[]> {
+  // La primera tanda trae también el total (count: 'exact'); con eso se sabe
+  // cuántas tandas más hacen falta y se piden todas juntas, en vez de una
+  // después de la otra: con miles de clientes esa fila de viajes de ida y
+  // vuelta es la diferencia entre instantáneo y varios segundos de espera.
+  const primera = await tandaDeClientes(onlyActive, 0, TANDA - 1, true);
+  if (primera.error) throw primera.error;
+
+  const total = primera.count ?? (primera.data ?? []).length;
+  const tandasQueFaltan = Math.max(0, Math.ceil(total / TANDA) - 1);
+
+  const resto = await Promise.all(
+    Array.from({ length: tandasQueFaltan }, (_, i) => {
+      const desde = (i + 1) * TANDA;
+      return tandaDeClientes(onlyActive, desde, desde + TANDA - 1, false);
+    })
+  );
+  for (const r of resto) if (r.error) throw r.error;
+
+  return [...(primera.data ?? []), ...resto.flatMap((r) => r.data ?? [])].map(mapCustomer);
 }
 
 /** La fila del padrón fiscal más lo que es propio del cliente. */

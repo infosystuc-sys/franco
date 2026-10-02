@@ -253,18 +253,30 @@ export interface SaldoCliente {
 }
 
 export async function fetchSaldosDeClientes(): Promise<SaldoCliente[]> {
-  // Como cualquier consulta, la base corta en 1000 filas: de a tandas.
-  const filas: any[] = [];
-  for (let desde = 0; ; desde += 1000) {
-    const { data, error } = await supabase
-      .rpc('saldos_de_clientes')
+  // Como cualquier consulta, la base corta en 1000 filas: de a tandas, todas
+  // pedidas juntas (la primera dice cuántas hacen falta) y no una por una.
+  const TANDA = 1000;
+  const tanda = (desde: number, hasta: number, conTotal: boolean) =>
+    supabase
+      .rpc('saldos_de_clientes', {}, conTotal ? { count: 'exact' } : undefined)
       .order('customer_name')
       .order('customer_id')
-      .range(desde, desde + 999);
-    if (error) throw error;
-    filas.push(...((data ?? []) as any[]));
-    if ((data ?? []).length < 1000) break;
-  }
+      .range(desde, hasta);
+
+  const primera = await tanda(0, TANDA - 1, true);
+  if (primera.error) throw primera.error;
+  const total = primera.count ?? (primera.data ?? []).length;
+  const tandasQueFaltan = Math.max(0, Math.ceil(total / TANDA) - 1);
+
+  const resto = await Promise.all(
+    Array.from({ length: tandasQueFaltan }, (_, i) => {
+      const desde = (i + 1) * TANDA;
+      return tanda(desde, desde + TANDA - 1, false);
+    })
+  );
+  for (const r of resto) if (r.error) throw r.error;
+
+  const filas: any[] = [...(primera.data ?? []), ...resto.flatMap((r) => r.data ?? [])];
   return filas.map((r) => ({
     customerId: r.customer_id,
     customerName: r.customer_name,
