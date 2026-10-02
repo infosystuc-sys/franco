@@ -97,12 +97,22 @@ export function InvoiceNewFree() {
   React.useEffect(() => {
     if (role !== 'admin') return;
     let cancelled = false;
-    Promise.all([fetchCustomers(true), fetchCompanySettings(), fetchArticles(false)])
-      .then(([customerRows, settings, articleRows]) => {
+    // El catálogo no frena la pantalla: con ~20.000 artículos es lo más pesado
+    // de traer, y solo hace falta para agregar renglones. Se pide en paralelo y
+    // la pantalla se muestra en cuanto están el taller y los clientes. Copiar
+    // una factura o facturar un remito sí lo esperan, porque arman los
+    // renglones a partir de él.
+    const catalogo = fetchArticles(false);
+    catalogo
+      .then((rows) => !cancelled && setArticles(rows))
+      .catch(() => {/* sin catálogo se puede facturar igual, con renglones a mano */});
+    Promise.all([fetchCustomers(true), fetchCompanySettings()])
+      .then(async ([customerRows, settings]) => {
         if (cancelled) return;
         setCustomers(customerRows);
         setCompany(settings);
-        setArticles(articleRows);
+        const articleRows = copiarId || remitoId ? await catalogo.catch(() => [] as Article[]) : [];
+        if (cancelled) return;
         if (copiarId) {
           return fetchInvoiceById(copiarId).then((original) => {
             if (cancelled || !original) return;
@@ -194,6 +204,17 @@ export function InvoiceNewFree() {
 
   if (loading) {
     return <div className="w-full p-8 text-center text-text-soft">Cargando…</div>;
+  }
+
+  // Si no se pudo leer la configuración, decir eso: antes caía en "faltan los
+  // datos fiscales" y mandaba a cargar algo que ya estaba cargado.
+  if (!company && error) {
+    return (
+      <Blocked title="No se pudo abrir la pantalla de facturar.">
+        <p className="mb-4 text-sm text-text-soft">{error}</p>
+        <Button onClick={() => window.location.reload()}>Reintentar</Button>
+      </Blocked>
+    );
   }
 
   if (!isReadyToInvoice(company)) {

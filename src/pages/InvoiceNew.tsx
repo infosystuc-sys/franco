@@ -331,6 +331,17 @@ export function InvoiceNew() {
     return <div className="w-full p-8 text-center text-text-soft">Cargando orden…</div>;
   }
 
+  // Un error al leer no es "no existe la orden" ni "faltan los datos fiscales":
+  // se dice lo que pasó y se deja reintentar.
+  if (error && (!order || !company)) {
+    return (
+      <Blocked title="No se pudo abrir la pantalla de facturar.">
+        <p className="mb-4 text-sm text-text-soft">{error}</p>
+        <Button onClick={() => window.location.reload()}>Reintentar</Button>
+      </Blocked>
+    );
+  }
+
   if (!order) {
     return (
       <Blocked title={`No se encontró la orden ${otNumber}.`}>
