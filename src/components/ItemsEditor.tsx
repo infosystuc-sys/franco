@@ -56,7 +56,6 @@ export function ItemsEditor({
   // El buscador abierto: null = cerrado. Con texto, lo abrió el campo código
   // porque no encontró un artículo exacto; vacío, la lupa con el campo vacío.
   const [picker, setPicker] = React.useState<string | null>(null);
-  const [codigo, setCodigo] = React.useState('');
   const codigoRef = React.useRef<HTMLInputElement>(null);
   // Artículos creados al vuelo desde el buscador: el catálogo que llega por
   // prop no se refresca solo, así que se suman acá para que aparezcan de
@@ -92,31 +91,8 @@ export function ItemsEditor({
     ]);
   }
 
-  /**
-   * El campo código, como en Tango: se escribe un número de fábrica, nuestro
-   * código o la descripción y Enter. Si hay un único artículo que coincide
-   * exacto, entra directo como renglón; si no (ninguno, o varios con el mismo
-   * número de fábrica), se abre el buscador con lo escrito para elegir.
-   */
-  function buscarCodigo() {
-    const termino = codigo.trim();
-    if (termino === '') {
-      setPicker('');
-      return;
-    }
-    const exactos = articulosExactos(allArticles, termino);
-    if (exactos.length === 1) {
-      addArticle(exactos[0]);
-      setCodigo('');
-      codigoRef.current?.focus();
-      return;
-    }
-    setPicker(termino);
-  }
-
   function cerrarPicker() {
     setPicker(null);
-    setCodigo('');
     // Al volver, el foco queda en el campo para cargar el siguiente.
     setTimeout(() => codigoRef.current?.focus(), 0);
   }
@@ -142,33 +118,12 @@ export function ItemsEditor({
       />
 
       {editable && (
-        <label className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
-          Producto / servicio
-          <div className="mt-1 flex">
-            <input
-              ref={codigoRef}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  buscarCodigo();
-                }
-              }}
-              placeholder="Código de fábrica, nuestro código o descripción — Enter para agregar"
-              className="h-10 min-w-0 flex-1 border border-line bg-panel px-3 font-mono text-[15px] normal-case tracking-normal text-text focus:border-accent focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={buscarCodigo}
-              title="Buscar en el catálogo"
-              aria-label="Buscar en el catálogo"
-              className="flex h-10 w-11 items-center justify-center border border-l-0 border-line bg-panel-alt text-text-soft hover:text-text"
-            >
-              <Search size={16} />
-            </button>
-          </div>
-        </label>
+        <BuscadorDeArticulo
+          articles={allArticles}
+          inputRef={codigoRef}
+          onElegir={addArticle}
+          onAbrirCatalogo={() => setPicker('')}
+        />
       )}
 
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
@@ -629,5 +584,161 @@ function CampoImporte({
       }}
       className={className}
     />
+  );
+}
+
+/** Cuántas sugerencias muestra la lista que se despliega bajo el campo. */
+const SUGERENCIAS = 50;
+
+/**
+ * El campo "Producto / servicio", como en Tango: a medida que se escribe se
+ * despliega debajo la lista de artículos que coinciden por número de
+ * fábrica, nuestro código o descripción ("CÓDIGO - DESCRIPCIÓN - ..."). Con
+ * las flechas se recorre, Enter agrega el marcado y Escape la cierra; también
+ * se elige con el mouse. Los que coinciden exacto van primero, así un código
+ * completo + Enter entra directo.
+ */
+function BuscadorDeArticulo({
+  articles,
+  inputRef,
+  onElegir,
+  onAbrirCatalogo,
+}: {
+  articles: Article[];
+  inputRef: React.RefObject<HTMLInputElement>;
+  onElegir: (article: Article) => void;
+  onAbrirCatalogo: () => void;
+}) {
+  const [texto, setTexto] = React.useState('');
+  const [busqueda, setBusqueda] = React.useState('');
+  const [, startTransition] = React.useTransition();
+  const [abierta, setAbierta] = React.useState(false);
+  const [marcado, setMarcado] = React.useState(0);
+  const listaRef = React.useRef<HTMLUListElement>(null);
+  const id = React.useId();
+
+  const sugerencias = React.useMemo(() => {
+    if (busqueda.trim() === '') return [];
+    const exactos = articulosExactos(articles, busqueda);
+    const ids = new Set(exactos.map((a) => a.id));
+    const resto = filtrarArticulos(articles, busqueda);
+    const lista = [...exactos];
+    for (const a of resto) {
+      if (lista.length >= SUGERENCIAS) break;
+      if (!ids.has(a.id)) lista.push(a);
+    }
+    return lista.slice(0, SUGERENCIAS);
+  }, [articles, busqueda]);
+
+  const visible = abierta && sugerencias.length > 0;
+
+  // El marcado siempre a la vista al moverse con las flechas.
+  React.useEffect(() => {
+    if (!visible) return;
+    const item = listaRef.current?.children[marcado] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: 'nearest' });
+  }, [marcado, visible]);
+
+  function escribir(valor: string) {
+    setTexto(valor);
+    setAbierta(true);
+    setMarcado(0);
+    startTransition(() => setBusqueda(valor));
+  }
+
+  function elegir(article: Article) {
+    onElegir(article);
+    setTexto('');
+    setBusqueda('');
+    setAbierta(false);
+    setMarcado(0);
+    inputRef.current?.focus();
+  }
+
+  function alApretar(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!abierta) setAbierta(true);
+      setMarcado((m) => Math.min(m + 1, sugerencias.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMarcado((m) => Math.max(m - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Lo escrito puede no haber llegado todavía a la lista (va como
+      // transición): con un código completo se resuelve en el acto.
+      if (busqueda !== texto) {
+        const exactos = articulosExactos(articles, texto);
+        if (exactos.length === 1) elegir(exactos[0]);
+        else escribir(texto);
+        return;
+      }
+      if (visible && sugerencias[marcado]) elegir(sugerencias[marcado]);
+      else if (texto.trim() === '') onAbrirCatalogo();
+    } else if (e.key === 'Escape') {
+      setAbierta(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+      <label htmlFor={id}>Producto / servicio</label>
+      <div className="relative mt-1 flex">
+        <input
+          id={id}
+          ref={inputRef}
+          value={texto}
+          onChange={(e) => escribir(e.target.value)}
+          onKeyDown={alApretar}
+          onFocus={() => texto && setAbierta(true)}
+          onBlur={() => setAbierta(false)}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={visible}
+          aria-controls={`${id}-lista`}
+          placeholder="Código de fábrica, nuestro código o descripción"
+          className="h-10 min-w-0 flex-1 border border-line bg-panel px-3 text-[15px] font-normal normal-case tracking-normal text-text focus:border-accent focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={onAbrirCatalogo}
+          title="Buscar en el catálogo"
+          aria-label="Buscar en el catálogo"
+          className="flex h-10 w-11 items-center justify-center border border-l-0 border-line bg-panel-alt text-text-soft hover:text-text"
+        >
+          <Search size={16} />
+        </button>
+
+        {visible && (
+          <ul
+            id={`${id}-lista`}
+            ref={listaRef}
+            role="listbox"
+            className="absolute left-0 right-11 top-full z-40 max-h-64 overflow-y-auto border border-line bg-panel shadow-lg"
+          >
+            {sugerencias.map((a, i) => (
+              <li
+                key={a.id}
+                role="option"
+                aria-selected={i === marcado}
+                // mousedown y no click: con click el campo pierde el foco
+                // antes, la lista se cierra y la elección no llega.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  elegir(a);
+                }}
+                onMouseEnter={() => setMarcado(i)}
+                className={cn(
+                  'cursor-pointer truncate px-3 py-1.5 text-[14px] font-normal normal-case tracking-normal text-text',
+                  i === marcado ? 'bg-panel-head' : 'hover:bg-panel-alt'
+                )}
+              >
+                {[a.code, a.description, a.factoryCode, a.brand].filter(Boolean).join(' - ')}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
