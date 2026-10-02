@@ -136,10 +136,26 @@ async function enviarPorMail(pedido: CuerpoPedido): Promise<string | null> {
   verdad.
 */
 function candidatosWhatsapp(numeroCrudo: string): string[] {
-  const digitos = numeroCrudo.replace(/\D/g, '');
-  if (!digitos.startsWith('54')) return [digitos];
-  const resto = digitos.slice(2);
-  return resto.startsWith('9') ? [digitos, '54' + resto.slice(1)] : [digitos, '549' + resto];
+  let digitos = numeroCrudo.replace(/\D/g, '');
+  if (digitos.startsWith('54')) {
+    const resto = digitos.slice(2);
+    return resto.startsWith('9') ? [digitos, '54' + resto.slice(1)] : [digitos, '549' + resto];
+  }
+  // Número cargado como se dice en el país, sin el 54: "3813045236",
+  // "0381 15 3045236". Sin el código de país WhatsApp lo busca en otro lado y
+  // contesta que no existe. Se le saca el 0 de larga distancia y el 15 de
+  // celular (que puede ir después de una característica de 2, 3 o 4 cifras)
+  // y se prueban las variantes con y sin el 9.
+  digitos = digitos.replace(/^0+/, '');
+  const locales = new Set<string>();
+  if (digitos.length === 10) locales.add(digitos);
+  if (digitos.length === 12) {
+    for (const largo of [2, 3, 4]) {
+      if (digitos.slice(largo, largo + 2) === '15') locales.add(digitos.slice(0, largo) + digitos.slice(largo + 2));
+    }
+  }
+  if (locales.size === 0) return [digitos];
+  return [...locales].flatMap((local) => ['549' + local, '54' + local]);
 }
 
 /**
