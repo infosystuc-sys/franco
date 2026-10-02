@@ -88,19 +88,15 @@ export async function fetchDefaultMarkup(): Promise<number> {
 }
 
 /**
- * Cambia la utilidad global y recalcula los precios de venta de los artículos
- * que no tienen utilidad propia. Devuelve cuántos precios cambiaron.
+ * Cambia la utilidad global. Por ahora no recalcula ningún precio de venta:
+ * se cargan a mano (ver sin_precio_de_venta_automatico.sql).
  */
-export async function updateDefaultMarkup(percent: number): Promise<number> {
+export async function updateDefaultMarkup(percent: number): Promise<void> {
   const { error } = await supabase
     .from('app_settings')
     .update({ value: String(percent), updated_at: new Date().toISOString() })
     .eq('key', 'default_markup_percent');
   if (error) throw error;
-
-  const { data, error: rpcError } = await supabase.rpc('recalculate_all_sale_prices');
-  if (rpcError) throw rpcError;
-  return Number(data ?? 0);
 }
 
 // ===== Proveedores de un artículo =====

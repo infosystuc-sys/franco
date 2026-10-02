@@ -375,39 +375,27 @@ export function ArticleModal({
                 </span>
               </label>
 
-              {preferred ? (
-                <div className="col-span-4 bg-panel-alt border border-line p-3 text-sm">
-                  <div className="flex justify-between text-xs text-text-soft">
-                    <span>Precio de compra ({preferred.supplierName}):</span>
-                    <span className="text-text">$ {preferred.purchasePrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-text-soft mt-1">
-                    <span>+ Utilidad {effectiveMarkup}%:</span>
-                    <span className="text-text">
-                      $ {(previewSalePrice! - preferred.purchasePrice).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between border-t border-line pt-2 mt-2">
-                    <span className="font-bold text-[13px] uppercase tracking-wider text-text">Precio de venta:</span>
-                    <span className="text-base font-bold text-accent-deep">$ {previewSalePrice!.toFixed(2)}</span>
-                  </div>
-                </div>
-              ) : (
-                <label className={cn(labelClass, 'col-span-4')}>
-                  Precio de venta (manual)
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.unitPrice}
-                    onChange={(e) => patch({ unitPrice: Number(e.target.value) })}
-                    className={cn(inputClass, 'text-right')}
-                  />
+              {/* Por ahora el precio de venta se carga a mano: la base ya no lo
+                  recalcula con la compra y la utilidad. Si hay proveedor
+                  preferido, ese cálculo se muestra solo como referencia. */}
+              <label className={cn(labelClass, 'col-span-4')}>
+                Precio de venta
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.unitPrice || ''}
+                  placeholder="0,00"
+                  onChange={(e) => patch({ unitPrice: Number(e.target.value) })}
+                  className={cn(inputClass, 'text-right')}
+                />
+                {preferred && (
                   <span className="block mt-1 text-[12px] font-normal normal-case text-text-soft">
-                    Sin proveedor preferido no hay precio de compra del que calcularlo (ej. mano de obra).
+                    Referencia: compra a {preferred.supplierName} $ {preferred.purchasePrice.toFixed(2)} + utilidad {effectiveMarkup}% = $ {previewSalePrice!.toFixed(2)}.
+                    No se aplica sola.
                   </span>
-                </label>
-              )}
+                )}
+              </label>
             </div>
           </div>
 

@@ -76,10 +76,10 @@ export function PriceLists() {
     setError(null);
     setNotice(null);
     try {
-      const updated = await updateDefaultMarkup(value);
+      await updateDefaultMarkup(value);
       setNotice(
-        `Utilidad global actualizada a ${value}%. Se recalcularon ${updated} precio(s) de venta ` +
-        'de los artículos que heredan este valor.'
+        `Utilidad global guardada en ${value}%. Por ahora es solo de referencia: ` +
+        'los precios de venta se cargan a mano y no se recalculan.'
       );
       await loadAll();
     } catch (err) {
@@ -95,7 +95,7 @@ export function PriceLists() {
     <div className="w-full space-y-6">
       <PageHeader
         title="Listas de precios"
-        subtitle="Importá la lista de compra de cada proveedor. El precio de venta se recalcula solo."
+        subtitle="Importá la lista de compra de cada proveedor. Por ahora el precio de venta se carga a mano en cada artículo."
       />
 
       {error && (
@@ -114,8 +114,8 @@ export function PriceLists() {
           <Percent size={14} /> Utilidad por defecto
         </h2>
         <p className="text-xs text-text-soft">
-          Se aplica a los artículos que no tienen una utilidad propia cargada.
-          Al cambiarla se recalculan sus precios de venta.
+          La de los artículos que no tienen una utilidad propia. Por ahora es
+          solo de referencia: cambiarla no toca ningún precio de venta.
         </p>
         <div className="flex items-end gap-2">
           <label className="text-xs font-bold uppercase tracking-wider text-text-soft">
@@ -137,7 +137,7 @@ export function PriceLists() {
             disabled={busy || Number(markupDraft) === markup}
             className="bg-accent-deep text-white text-[13px] font-bold uppercase tracking-wider px-4 py-2 hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
-            {busy ? 'Aplicando...' : 'Guardar y recalcular'}
+            {busy ? 'Guardando...' : 'Guardar'}
           </button>
         </div>
       </section>
