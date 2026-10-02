@@ -377,9 +377,11 @@ export function InvoiceDetails() {
       {desdeListado.accion === 'ticket' ? (
         <TicketDeCambio invoice={invoice} logo={logo} />
       ) : (
-        <div ref={documentRef}>
+        // data-hojas-separadas: la factura y el remito van cada uno en su
+        // hoja, al imprimir y en el PDF que se manda.
+        <div ref={documentRef} data-hojas-separadas>
           <InvoiceDocument invoice={invoice} logo={logo} />
-          {remito && <RemitoDocument remito={remito} logo={logo} />}
+          {remito && <RemitoDocument remito={remito} logo={logo} hojaNueva />}
         </div>
       )}
 
@@ -464,13 +466,23 @@ function TicketDeCambio({ invoice, logo }: { invoice: InvoiceDetail; logo?: stri
 
 /**
  * El remito: mismos renglones que la factura, sin precios. Se imprime junto
- * con la factura (comparte la clase print-document) porque en la práctica
- * viajan juntos con la mercadería.
+ * con la factura porque en la práctica viajan juntos con la mercadería, pero
+ * en su propia hoja (hoja-nueva): es otro comprobante, y el que recibe la
+ * mercadería firma ese papel solo.
  */
-export function RemitoDocument({ remito, logo }: { remito: Remito; logo?: string | null }) {
+export function RemitoDocument({
+  remito,
+  logo,
+  hojaNueva = false,
+}: {
+  remito: Remito;
+  logo?: string | null;
+  /** Va después de la factura: al imprimir arranca en otra hoja. */
+  hojaNueva?: boolean;
+}) {
   const voided = remito.status === 'ANULADO';
   return (
-    <div className="print-document relative mt-6 border border-line bg-panel p-6 md:p-8">
+    <div className={cn('print-document relative mt-6 border border-line bg-panel p-6 md:p-8', hojaNueva && 'hoja-nueva')}>
       {voided && (
         <div
           aria-hidden

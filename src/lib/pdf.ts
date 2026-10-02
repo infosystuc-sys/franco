@@ -68,6 +68,19 @@ function usarEstilosYaCargados(copia: Document) {
 
 async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+  // Con data-hojas-separadas, cada hijo es un comprobante y arranca en una
+  // hoja nueva (la factura y su remito); si no, va todo seguido.
+  const partes = element.hasAttribute('data-hojas-separadas')
+    ? (Array.from(element.children) as HTMLElement[])
+    : [element];
+  for (let i = 0; i < partes.length; i++) {
+    if (i > 0) pdf.addPage();
+    await dibujarEnPdf(pdf, partes[i]);
+  }
+  return pdf;
+}
+
+async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
   const anchoUtil = pdf.internal.pageSize.getWidth() - MARGEN * 2;
   const altoUtil = pdf.internal.pageSize.getHeight() - MARGEN * 2;
 
@@ -129,8 +142,6 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
     primera = false;
     desde += alto;
   }
-
-  return pdf;
 }
 
 export async function renderElementToPdfBase64(element: HTMLElement): Promise<string> {

@@ -303,6 +303,13 @@
     break-inside: avoid;
   }
 
+  /* Un comprobante que viaja con otro (el remito con su factura) arranca en
+     una hoja nueva. */
+  .hoja-nueva {
+    break-before: page;
+    margin-top: 0 !important;
+  }
+
   /* El sello de anulada se imprime: una factura anulada tiene que decirlo. */
   .print-document {
     -webkit-print-color-adjust: exact;
