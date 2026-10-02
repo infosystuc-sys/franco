@@ -72,7 +72,9 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const altoUtil = pdf.internal.pageSize.getHeight() - MARGEN * 2;
 
   const canvas = await html2canvas(element, {
-    scale: 2,
+    // Tres píxeles por punto de pantalla: con dos, el QR de ARCA salía con los
+    // bordes de los módulos borroneados y a algunos celulares les costaba leerlo.
+    scale: 3,
     useCORS: true,
     backgroundColor: '#ffffff',
     windowWidth: VENTANA_DE_ESCRITORIO,
@@ -116,7 +118,7 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
 
     if (!primera) pdf.addPage();
     pdf.addImage(
-      pedazo.toDataURL('image/jpeg', 0.92),
+      pedazo.toDataURL('image/jpeg', 0.95),
       'JPEG',
       MARGEN,
       MARGEN,

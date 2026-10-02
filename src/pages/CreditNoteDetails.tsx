@@ -218,13 +218,13 @@ function QrDeArca({ url }: { url: string }) {
   const [svg, setSvg] = React.useState<string | null>(null);
   React.useEffect(() => {
     let vigente = true;
-    QRCode.toString(url, { type: 'svg', margin: 0 })
-      .then((s) => vigente && setSvg(s))
+    QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+      .then((s) => vigente && setSvg(s.replace('<svg ', '<svg shape-rendering="crispEdges" ')))
       .catch(() => vigente && setSvg(null));
     return () => { vigente = false; };
   }, [url]);
   if (!svg) return null;
-  return <div className="h-21.5 w-21.5 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div className="h-32 w-32 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 export function CreditNoteDocument({

@@ -685,8 +685,8 @@ function AfipQr({ url }: { url: string }) {
 
   React.useEffect(() => {
     let vigente = true;
-    QRCode.toString(url, { type: 'svg', margin: 0 })
-      .then((s) => vigente && setSvg(s))
+    QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+      .then((s) => vigente && setSvg(s.replace('<svg ', '<svg shape-rendering="crispEdges" ')))
       .catch(() => vigente && setSvg(null));
     return () => {
       vigente = false;
@@ -696,7 +696,7 @@ function AfipQr({ url }: { url: string }) {
   if (!svg) return null;
   // El SVG lo arma la librería a partir de la URL; no lleva nada del texto
   // adentro, solo los módulos del código.
-  return <div className="h-21.5 w-21.5 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return <div className="h-32 w-32 shrink-0" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 export function InvoiceDocument({
