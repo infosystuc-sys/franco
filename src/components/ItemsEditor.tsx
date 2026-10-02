@@ -6,7 +6,7 @@ import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { fetchComboArticleIds } from '@/src/lib/articleCombos';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
-import { filtrarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
+import { filtrarArticulos, articulosExactos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
 
 /**
@@ -53,7 +53,11 @@ export function ItemsEditor({
    */
   descripcionEditable?: boolean;
 }) {
-  const [showPicker, setShowPicker] = React.useState(false);
+  // El buscador abierto: null = cerrado. Con texto, lo abrió el campo código
+  // porque no encontró un artículo exacto; vacío, la lupa con el campo vacío.
+  const [picker, setPicker] = React.useState<string | null>(null);
+  const [codigo, setCodigo] = React.useState('');
+  const codigoRef = React.useRef<HTMLInputElement>(null);
   // Artículos creados al vuelo desde el buscador: el catálogo que llega por
   // prop no se refresca solo, así que se suman acá para que aparezcan de
   // inmediato en la misma sesión de carga.
@@ -88,6 +92,35 @@ export function ItemsEditor({
     ]);
   }
 
+  /**
+   * El campo código, como en Tango: se escribe un número de fábrica, nuestro
+   * código o la descripción y Enter. Si hay un único artículo que coincide
+   * exacto, entra directo como renglón; si no (ninguno, o varios con el mismo
+   * número de fábrica), se abre el buscador con lo escrito para elegir.
+   */
+  function buscarCodigo() {
+    const termino = codigo.trim();
+    if (termino === '') {
+      setPicker('');
+      return;
+    }
+    const exactos = articulosExactos(allArticles, termino);
+    if (exactos.length === 1) {
+      addArticle(exactos[0]);
+      setCodigo('');
+      codigoRef.current?.focus();
+      return;
+    }
+    setPicker(termino);
+  }
+
+  function cerrarPicker() {
+    setPicker(null);
+    setCodigo('');
+    // Al volver, el foco queda en el campo para cargar el siguiente.
+    setTimeout(() => codigoRef.current?.focus(), 0);
+  }
+
   function handleArticleCreated(article: Article) {
     setExtraArticles((current) => [...current, article]);
     addArticle(article);
@@ -100,9 +133,6 @@ export function ItemsEditor({
         actions={
           editable && (
             <>
-              <Button type="button" onClick={() => setShowPicker(true)} className="px-3">
-                <Package size={16} /> Agregar artículo
-              </Button>
               <Button type="button" variant="ghost" onClick={addManualItem} className="px-3">
                 <Plus size={16} /> Línea manual
               </Button>
@@ -110,6 +140,36 @@ export function ItemsEditor({
           )
         }
       />
+
+      {editable && (
+        <label className="block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          Producto / servicio
+          <div className="mt-1 flex">
+            <input
+              ref={codigoRef}
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  buscarCodigo();
+                }
+              }}
+              placeholder="Código de fábrica, nuestro código o descripción — Enter para agregar"
+              className="h-10 min-w-0 flex-1 border border-line bg-panel px-3 font-mono text-[15px] normal-case tracking-normal text-text focus:border-accent focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={buscarCodigo}
+              title="Buscar en el catálogo"
+              aria-label="Buscar en el catálogo"
+              className="flex h-10 w-11 items-center justify-center border border-l-0 border-line bg-panel-alt text-text-soft hover:text-text"
+            >
+              <Search size={16} />
+            </button>
+          </div>
+        </label>
+      )}
 
       <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
         <table className="table-stack w-full text-left text-[15px]">
@@ -238,12 +298,14 @@ export function ItemsEditor({
         </div>
       )}
 
-      {showPicker && (
+      {picker !== null && (
         <ArticlePicker
           articles={allArticles}
+          busquedaInicial={picker}
+          cerrarAlElegir={picker !== ''}
           onPick={addArticle}
           onArticleCreated={handleArticleCreated}
-          onClose={() => setShowPicker(false)}
+          onClose={cerrarPicker}
           addedCount={items.length}
         />
       )}
@@ -253,18 +315,24 @@ export function ItemsEditor({
 
 function ArticlePicker({
   articles,
+  busquedaInicial = '',
+  cerrarAlElegir = false,
   onPick,
   onArticleCreated,
   onClose,
   addedCount,
 }: {
   articles: Article[];
+  /** Lo que se escribió en el campo código y no dio un artículo exacto. */
+  busquedaInicial?: string;
+  /** Abierto desde el campo código: se elige uno y vuelve al campo. */
+  cerrarAlElegir?: boolean;
   onPick: (article: Article) => void;
   onArticleCreated: (article: Article) => void;
   onClose: () => void;
   addedCount: number;
 }) {
-  const [search, setSearch] = React.useState('');
+  const [search, setSearch] = React.useState(busquedaInicial);
   const [justAdded, setJustAdded] = React.useState<string | null>(null);
   const searchRef = React.useRef<HTMLInputElement>(null);
   /** Cuáles del catálogo son combos, para marcarlos en la lista. */
@@ -281,9 +349,17 @@ function ArticlePicker({
   // trabar el teclado. Al elegir un artículo, en cambio, las dos se limpian
   // juntas y en el mismo instante: con una búsqueda "diferida" la lista vieja
   // quedaba un rato en pantalla antes de volver a mostrar todo el catálogo.
-  const [busqueda, setBusqueda] = React.useState('');
+  const [busqueda, setBusqueda] = React.useState(busquedaInicial);
   const [, startTransition] = React.useTransition();
-  const filtered = React.useMemo(() => filtrarArticulos(articles, busqueda), [articles, busqueda]);
+  // Los que coinciden exacto (varios artículos con el mismo número de
+  // fábrica, por ejemplo) van primero; después, los parecidos.
+  const filtered = React.useMemo(() => {
+    const parecidos = filtrarArticulos(articles, busqueda);
+    const exactos = articulosExactos(articles, busqueda);
+    if (exactos.length === 0) return parecidos;
+    const ids = new Set(exactos.map((a) => a.id));
+    return [...exactos, ...parecidos.filter((a) => !ids.has(a.id))];
+  }, [articles, busqueda]);
 
   function buscar(valor: string) {
     setSearch(valor);
@@ -297,13 +373,21 @@ function ArticlePicker({
   // memorizados, no se vuelven a dibujar cuando cambia la factura de atrás.
   const onPickRef = React.useRef(onPick);
   onPickRef.current = onPick;
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   const handlePick = React.useCallback((article: Article) => {
     onPickRef.current(article);
+    // Abierto desde el campo código, se elige uno y se vuelve al campo para
+    // seguir cargando, como en Tango.
+    if (cerrarAlElegir) {
+      onCloseRef.current();
+      return;
+    }
     setJustAdded(article.description);
     setSearch('');
     setBusqueda('');
     searchRef.current?.focus();
-  }, []);
+  }, [cerrarAlElegir]);
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
@@ -324,6 +408,7 @@ function ArticlePicker({
                 autoFocus
                 value={search}
                 onChange={(e) => buscar(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
                 placeholder="Buscar por código o descripción..."
                 className="w-full h-9 pl-9 pr-3 border border-line text-sm"
               />

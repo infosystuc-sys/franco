@@ -343,3 +343,56 @@ export async function fetchSupplierCodeMap(supplierId: string): Promise<Map<stri
     (data ?? []).map((row: any) => [String(row.supplier_code).trim().toUpperCase(), row.article_id as string])
   );
 }
+
+/**
+ * Los artículos cuyo número de fábrica, código nuestro o descripción es
+ * exactamente lo escrito (sin importar mayúsculas, acentos ni separadores en
+ * el número de fábrica). Es lo que usa el campo código de los renglones: si
+ * hay uno solo, se agrega directo; si no, se abre el buscador.
+ *
+ * El índice se arma una vez por catálogo y queda guardado mientras ese
+ * arreglo exista: buscar en él es inmediato aunque haya 20.000 artículos.
+ */
+const indicesExactos = new WeakMap<Article[], Map<string, Article[]>>();
+
+function indiceExacto(articles: Article[]): Map<string, Article[]> {
+  let indice = indicesExactos.get(articles);
+  if (!indice) {
+    const nuevo = new Map<string, Article[]>();
+    const sumar = (clave: string, a: Article) => {
+      const lista = nuevo.get(clave);
+      if (lista) lista.push(a);
+      else nuevo.set(clave, [a]);
+    };
+    for (const a of articles) {
+      sumar('c:' + a.code.trim().toUpperCase(), a);
+      if (a.factoryCode) {
+        const f = normalizar(a.factoryCode);
+        if (f) sumar('f:' + f, a);
+      }
+      const d = normalizarBusqueda(a.description);
+      if (d) sumar('d:' + d, a);
+    }
+    indicesExactos.set(articles, nuevo);
+    indice = nuevo;
+  }
+  return indice;
+}
+
+export function articulosExactos(articles: Article[], termino: string): Article[] {
+  const t = termino.trim();
+  if (t === '') return [];
+  const indice = indiceExacto(articles);
+  const vistos = new Set<string>();
+  const resultado: Article[] = [];
+  for (const clave of ['c:' + t.toUpperCase(), 'f:' + normalizar(t), 'd:' + normalizarBusqueda(t)]) {
+    if (clave.length <= 2) continue;
+    for (const a of indice.get(clave) ?? []) {
+      if (!vistos.has(a.id)) {
+        vistos.add(a.id);
+        resultado.push(a);
+      }
+    }
+  }
+  return resultado;
+}
