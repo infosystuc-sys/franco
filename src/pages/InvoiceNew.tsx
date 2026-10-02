@@ -189,7 +189,10 @@ export function InvoiceNew() {
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
-  const [invoiceType, setInvoiceType] = React.useState<InvoiceType>('X');
+  // Sin valor inicial: elegir el talonario es parte de emitir. Un X puesto de
+  // entrada se confirma sin mirarlo, y es la diferencia entre un comprobante
+  // interno y uno fiscal.
+  const [invoiceType, setInvoiceType] = React.useState<InvoiceType | ''>('');
   // Sin valor inicial: elegirla es parte de emitir, y un default se confirma
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
@@ -218,6 +221,7 @@ export function InvoiceNew() {
   // vuelve a pedir con cada cambio de letra porque cada una tiene su propia
   // numeración y su propio punto de venta.
   React.useEffect(() => {
+    if (!invoiceType) { setProximo(null); return; }
     let cancelado = false;
     fetchProximoNumero(invoiceType)
       .then((p) => !cancelado && setProximo(p?.fullNumber ?? null))
@@ -246,6 +250,20 @@ export function InvoiceNew() {
     if (!cliente || propuestaPara.current === cliente.id) return;
     propuestaPara.current = cliente.id;
     if (cliente.condicionVenta) setCondicion(cliente.condicionVenta);
+  }, [customers, order]);
+
+  /**
+   * El talonario no tiene valor por defecto, pero para un cliente Responsable
+   * Inscripto la A no es una elección real: es la única que corresponde. Se
+   * sugiere una sola vez por cliente, igual que la condición de venta; para
+   * cualquier otra condición, factura quien emite.
+   */
+  const propuestaTipoPara = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const cliente = customers.find((c) => c.id === order?.customer?.id);
+    if (!cliente || propuestaTipoPara.current === cliente.id) return;
+    propuestaTipoPara.current = cliente.id;
+    if (cliente.taxCondition === 'RESPONSABLE_INSCRIPTO') setInvoiceType('A');
   }, [customers, order]);
 
   React.useEffect(() => {
@@ -363,7 +381,9 @@ export function InvoiceNew() {
   // al cliente, también en la X, para que el total dé lo mismo en las dos
   // numeraciones; lo que cambia es que la X no lo discrimina al imprimirse.
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
-  const totals = computeTotals(items, invoiceType === 'X' ? letraFiscal : invoiceType);
+  // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
+  // el total no puede quedar en blanco solo porque falta esa elección.
+  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType);
 
   // Contado es exactamente lo que antes era el check de "factura de contado":
   // se cobra en el mismo acto de emitir.
@@ -375,7 +395,7 @@ export function InvoiceNew() {
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
-    items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' &&
+    items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' &&
     (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
   /**
@@ -568,15 +588,18 @@ export function InvoiceNew() {
             <select
               value={invoiceType}
               onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-              className={cn(selectCabecera, 'w-auto shrink-0')}
+              className={cn(selectCabecera, 'w-auto shrink-0', invoiceType === '' && 'border-danger text-danger')}
             >
+              <option value="">Elegí un talonario…</option>
               {LETRAS_EMISIBLES.map((l) => (
                 <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
               ))}
             </select>
-            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
-              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-            </span>
+            {invoiceType !== '' && (
+              <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+                {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
+              </span>
+            )}
           </div>
         </FieldBox>
 
@@ -631,7 +654,7 @@ export function InvoiceNew() {
           onChange={setItems}
           articles={articles}
           editable
-          totals={<InvoiceTotals type={invoiceType} totals={totals} />}
+          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} />}
         />
 
         {emptyLines > 0 && (

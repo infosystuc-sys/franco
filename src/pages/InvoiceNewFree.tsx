@@ -75,7 +75,9 @@ export function InvoiceNewFree() {
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
-  const [invoiceType, setInvoiceType] = React.useState<InvoiceType>('X');
+  // Sin valor inicial: elegir el talonario es parte de emitir, y un X puesto
+  // de entrada se confirma sin mirarlo.
+  const [invoiceType, setInvoiceType] = React.useState<InvoiceType | ''>('');
   // Sin valor inicial: elegirla es parte de emitir, y un default se confirma
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
@@ -164,8 +166,23 @@ export function InvoiceNewFree() {
     if (cliente.condicionVenta) setCondicion(cliente.condicionVenta);
   }, [customers, customerId]);
 
+  /**
+   * El talonario no tiene valor por defecto, pero para un cliente Responsable
+   * Inscripto la A no es una elección real: es la única que corresponde. Se
+   * sugiere una sola vez por cliente; para cualquier otra condición, factura
+   * quien emite.
+   */
+  const propuestaTipoPara = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const cliente = customers.find((c) => c.id === customerId);
+    if (!cliente || propuestaTipoPara.current === cliente.id) return;
+    propuestaTipoPara.current = cliente.id;
+    if (cliente.taxCondition === 'RESPONSABLE_INSCRIPTO') setInvoiceType('A');
+  }, [customers, customerId]);
+
   // Cada letra tiene su numeración: se vuelve a pedir al cambiarla.
   React.useEffect(() => {
+    if (!invoiceType) { setProximo(null); return; }
     let cancelado = false;
     fetchProximoNumero(invoiceType)
       .then((p) => !cancelado && setProximo(p?.fullNumber ?? null))
@@ -201,14 +218,16 @@ export function InvoiceNewFree() {
   // La letra la elige quien emite; para el IVA manda la que le correspondería
   // al cliente, también en la X, para que el total dé lo mismo.
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
-  const totals = computeTotals(items, invoiceType === 'X' ? letraFiscal : invoiceType);
+  // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
+  // el total no puede quedar en blanco solo porque falta esa elección.
+  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType);
 
   const isCash = condicion === 'CONTADO';
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
-    condicion !== '' &&
+    condicion !== '' && invoiceType !== '' &&
     (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
 
   const issueDate = new Date();
@@ -373,15 +392,18 @@ export function InvoiceNewFree() {
             <select
               value={invoiceType}
               onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
-              className={cn(selectCabecera, 'w-auto shrink-0')}
+              className={cn(selectCabecera, 'w-auto shrink-0', invoiceType === '' && 'border-danger text-danger')}
             >
+              <option value="">Elegí un talonario…</option>
               {LETRAS_EMISIBLES.map((l) => (
                 <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
               ))}
             </select>
-            <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
-              {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
-            </span>
+            {invoiceType !== '' && (
+              <span className="whitespace-nowrap font-mono text-sm normal-case text-text">
+                {proximo ?? (invoiceType === 'X' ? 'Sin validez fiscal' : 'Numeración fiscal')}
+              </span>
+            )}
           </div>
         </FieldBox>
 
@@ -451,7 +473,7 @@ export function InvoiceNewFree() {
           onChange={setItems}
           articles={articles}
           editable
-          totals={<InvoiceTotals type={invoiceType} totals={totals} />}
+          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} />}
         />
 
         {emptyLines > 0 && (
