@@ -120,7 +120,8 @@ export function ComprobantesListado<T>({
   // filtro por estado sale de la columna "Estado" de cada pantalla, con los
   // estados que realmente aparecen en el listado.
   const [busqueda, setBusqueda] = React.useState('');
-  const [estado, setEstado] = React.useState('');
+  // Los estados elegidos; vacío = todos.
+  const [estados, setEstados] = React.useState<string[]>([]);
   const busquedaDiferida = React.useDeferredValue(busqueda);
   const columnaEstado = columnas.find((c) => c.label === 'Estado');
 
@@ -135,20 +136,20 @@ export function ComprobantesListado<T>({
   }, [filas, columnaEstado]);
 
   const filtradas = React.useMemo(() => {
-    if (busquedaDiferida.trim() === '' && estado === '') return filas;
+    if (busquedaDiferida.trim() === '' && estados.length === 0) return filas;
     return filas.filter((f) => {
-      if (estado && columnaEstado && textoDe(columnaEstado.valor(f)).trim() !== estado) return false;
+      if (estados.length > 0 && columnaEstado && !estados.includes(textoDe(columnaEstado.valor(f)).trim())) return false;
       if (busquedaDiferida.trim() === '') return true;
       return coincideBusqueda(busquedaDiferida, columnas.map((c) => textoDe(c.valor(f))));
     });
-  }, [filas, busquedaDiferida, estado, columnas, columnaEstado]);
+  }, [filas, busquedaDiferida, estados, columnas, columnaEstado]);
 
   // Con otro filtro se vuelve a la primera página.
   React.useEffect(() => {
     setCantidad(PAGINA);
-  }, [busquedaDiferida, estado]);
+  }, [busquedaDiferida, estados]);
 
-  const filtrando = busqueda.trim() !== '' || estado !== '';
+  const filtrando = busqueda.trim() !== '' || estados.length > 0;
 
   const visibles = filtradas.slice(0, cantidad);
 
@@ -334,22 +335,7 @@ export function ComprobantesListado<T>({
           />
         </div>
         {columnaEstado && (
-          <select
-            value={estado}
-            onChange={(e) => setEstado(e.target.value)}
-            aria-label="Filtrar por estado"
-            className={cn(
-              'h-10 rounded-[3px] border bg-panel px-3 text-[15px] text-text focus:border-accent focus:outline-none',
-              estado ? 'border-accent' : 'border-line'
-            )}
-          >
-            <option value="">Todos los estados</option>
-            {estadosPresentes.map(([e, n]) => (
-              <option key={e} value={e}>
-                {e} ({n})
-              </option>
-            ))}
-          </select>
+          <FiltroDeEstados opciones={estadosPresentes} elegidos={estados} onChange={setEstados} />
         )}
         {filtrando && (
           <>
@@ -360,7 +346,7 @@ export function ComprobantesListado<T>({
               type="button"
               onClick={() => {
                 setBusqueda('');
-                setEstado('');
+                setEstados([]);
               }}
               className="inline-flex items-center gap-1 text-[14px] text-text-soft hover:text-text"
             >
@@ -599,6 +585,93 @@ function EtiquetasModal({
           </Button>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+/**
+ * El filtro de estado: un desplegable con una casilla por estado, para
+ * elegir uno o varios a la vez (Ingresado + En reparación, por ejemplo).
+ * Sin ninguno tildado, muestra todos.
+ */
+function FiltroDeEstados({
+  opciones,
+  elegidos,
+  onChange,
+}: {
+  opciones: [string, number][];
+  elegidos: string[];
+  onChange: (elegidos: string[]) => void;
+}) {
+  const [abierto, setAbierto] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!abierto) return;
+    function cerrar(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+    }
+    document.addEventListener('mousedown', cerrar);
+    return () => document.removeEventListener('mousedown', cerrar);
+  }, [abierto]);
+
+  function alternar(estado: string) {
+    onChange(elegidos.includes(estado) ? elegidos.filter((e) => e !== estado) : [...elegidos, estado]);
+  }
+
+  const rotulo =
+    elegidos.length === 0 ? 'Todos los estados' : elegidos.length === 1 ? elegidos[0] : `${elegidos.length} estados`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        onKeyDown={(e) => e.key === 'Escape' && setAbierto(false)}
+        aria-haspopup="listbox"
+        aria-expanded={abierto}
+        aria-label="Filtrar por estado"
+        className={cn(
+          'inline-flex h-10 min-w-[12rem] items-center justify-between gap-2 rounded-[3px] border bg-panel px-3 text-[15px] text-text focus:border-accent focus:outline-none',
+          elegidos.length > 0 ? 'border-accent' : 'border-line'
+        )}
+      >
+        <span className="truncate">{rotulo}</span>
+        <ChevronDown size={16} className="shrink-0 text-text-soft" />
+      </button>
+
+      {abierto && (
+        <div
+          role="listbox"
+          aria-multiselectable
+          className="absolute left-0 top-full z-40 mt-1 min-w-full whitespace-nowrap border border-line bg-panel py-1 shadow-lg"
+        >
+          {opciones.map(([estado, cantidad]) => (
+            <label
+              key={estado}
+              className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[15px] text-text hover:bg-panel-alt"
+            >
+              <input
+                type="checkbox"
+                checked={elegidos.includes(estado)}
+                onChange={() => alternar(estado)}
+                className="h-4 w-4 accent-accent"
+              />
+              <span className="flex-1">{estado}</span>
+              <span className="text-[13px] text-text-soft">{cantidad}</span>
+            </label>
+          ))}
+          {elegidos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="mt-1 w-full border-t border-line px-3 py-1.5 text-left text-[14px] text-text-soft hover:text-text"
+            >
+              Ver todos los estados
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
