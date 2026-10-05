@@ -320,6 +320,7 @@ export function ReceiptDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
+          contactos={receipt.customerContactos}
           defaultDestino={sendModal === 'email' ? receipt.customerEmail : receipt.customerPhone}
           fileName={`Recibo ${receipt.fullNumber}.pdf`}
           documentRef={documentRef}

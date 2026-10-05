@@ -19,7 +19,7 @@ import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
 import { setQuotationSector } from '@/src/lib/quotations';
-import { contactoDeEnvio } from '@/src/lib/customers';
+import { contactoDeEnvio, contactosDeEnvio } from '@/src/lib/customers';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { QuotationDocument } from '@/src/components/QuotationDocument';
@@ -480,6 +480,10 @@ export function QuotationDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
+          contactos={contactosDeEnvio(
+            { email: quotation.customer?.email ?? null, phone: quotation.customer?.phone ?? null },
+            quotation.customer?.sectors
+          )}
           defaultDestino={(() => {
             const contacto = contactoDeEnvio(
               { email: quotation.customer?.email ?? null, phone: quotation.customer?.phone ?? null },

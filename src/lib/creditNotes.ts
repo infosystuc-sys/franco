@@ -1,3 +1,4 @@
+import { contactosDeEnvio, type ContactoDeEnvio } from '@/src/lib/customers';
 import { supabase } from '@/src/lib/supabase';
 import type { TaxCondition } from '@/src/lib/fiscal';
 import type { InvoiceStatus, InvoiceType, InvoiceItem } from '@/src/lib/invoices';
@@ -40,6 +41,8 @@ export interface CreditNoteDetail extends CreditNoteListRow {
   /** Contacto vigente del cliente, para mandarle la nota. */
   customerEmail: string | null;
   customerPhone: string | null;
+  /** General y sectores del cliente, para elegir a quién mandarlo. */
+  customerContactos?: ContactoDeEnvio[];
   salesPoint: number;
   number: number;
   netAmount: number;
@@ -108,7 +111,7 @@ export async function fetchCreditNoteById(id: string): Promise<CreditNoteDetail 
   const { data, error } = await supabase
     .from('credit_notes')
     .select(
-      'id, full_number, invoice_type, status, customer_id, applied_amount, enviado_at, etiquetas, customer:customers(email, phone_e164, phone), customer_name, issue_date, total_amount, cancela_total, devuelve_fondos, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
+      'id, full_number, invoice_type, status, customer_id, applied_amount, enviado_at, etiquetas, customer:customers(email, phone_e164, phone, sectors:customer_sectors(name, responsable, phone, email)), customer_name, issue_date, total_amount, cancela_total, devuelve_fondos, cae_rechazo, invoice_id, sales_point, number, net_amount, vat_amount, motivo, customer_legal_name, customer_tax_id, customer_tax_condition, customer_address, issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address, issuer_gross_income, issuer_activity_start_date, cae, cae_due_date, cae_rechazado_at, invoice:invoices(full_number, issue_date), items:credit_note_items(code, description, quantity, unit_price, subtotal, line_number)'
     )
     .eq('id', id)
     .maybeSingle();
@@ -126,6 +129,10 @@ export async function fetchCreditNoteById(id: string): Promise<CreditNoteDetail 
     motivo: row.motivo,
     customerEmail: row.customer?.email ?? null,
     customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
+    customerContactos: contactosDeEnvio(
+      { email: row.customer?.email ?? null, phone: row.customer?.phone_e164 ?? row.customer?.phone ?? null },
+      row.customer?.sectors
+    ),
     customerLegalName: row.customer_legal_name,
     customerTaxId: row.customer_tax_id,
     customerTaxCondition: row.customer_tax_condition,

@@ -216,6 +216,32 @@ async function guardarSectores(customerId: string, sectores: CustomerSectorInput
   return mapCustomer(data);
 }
 
+/** Un destinatario posible al mandar un comprobante: el general o un sector. */
+export interface ContactoDeEnvio {
+  label: string;
+  email: string | null;
+  phone: string | null;
+}
+
+/**
+ * Los destinatarios que se ofrecen al mandar un comprobante: el contacto
+ * general del cliente y cada uno de sus sectores. Lo que un sector no tenga
+ * cargado (mail o teléfono) se completa con el general.
+ */
+export function contactosDeEnvio(
+  general: { email: string | null; phone: string | null },
+  sectores: { name: string; responsable?: string | null; email: string | null; phone: string | null }[] | null | undefined
+): ContactoDeEnvio[] {
+  return [
+    { label: 'General del cliente', email: general.email, phone: general.phone },
+    ...(sectores ?? []).map((s) => ({
+      label: [s.name, s.responsable].filter(Boolean).join(' — '),
+      email: s.email || general.email,
+      phone: s.phone || general.phone,
+    })),
+  ];
+}
+
 /**
  * El contacto al que se manda un comprobante: el del sector asignado, si lo
  * tiene cargado; si no, el general del cliente.

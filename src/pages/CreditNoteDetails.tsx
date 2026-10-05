@@ -196,6 +196,7 @@ export function CreditNoteDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
+          contactos={nc.customerContactos}
           defaultDestino={(sendModal === 'email' ? nc.customerEmail : nc.customerPhone) ?? null}
           fileName={`NC-${nc.fullNumber}.pdf`}
           documentRef={documentRef}

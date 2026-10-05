@@ -1,3 +1,4 @@
+import { contactosDeEnvio, type ContactoDeEnvio } from '@/src/lib/customers';
 import { supabase } from '@/src/lib/supabase';
 import { letraYNumeroDeSaldoInicial } from '@/src/lib/invoices';
 
@@ -87,6 +88,8 @@ export interface Receipt {
   /** Contacto vigente del cliente, para mandarle el recibo. */
   customerEmail: string | null;
   customerPhone: string | null;
+  /** General y sectores del cliente, para elegir a quién mandarlo. */
+  customerContactos?: ContactoDeEnvio[];
   receiptDate: string;
   totalAmount: number;
   appliedAmount: number;
@@ -108,7 +111,7 @@ const SELECT =
   `id, full_number, status, customer_id, customer_name, receipt_date,
    total_amount, applied_amount, on_account_amount, notes, voided_at, voided_reason,
    enviado_at, etiquetas, saldo_inicial,
-   customer:customers(email, phone_e164, phone),
+   customer:customers(email, phone_e164, phone, sectors:customer_sectors(name, responsable, phone, email)),
    allocations:receipt_allocations(invoice_id, amount, invoice:invoices(full_number, invoice_type)),
    values:receipt_values(kind, amount, check_id, certificate_number,
           method:payment_methods(name), rate:tax_rates(name),
@@ -127,6 +130,10 @@ function mapReceipt(row: any): Receipt {
     // vivo, igual que en la factura. Es a dónde se manda el recibo.
     customerEmail: row.customer?.email ?? null,
     customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
+    customerContactos: contactosDeEnvio(
+      { email: row.customer?.email ?? null, phone: row.customer?.phone_e164 ?? row.customer?.phone ?? null },
+      row.customer?.sectors
+    ),
     receiptDate: row.receipt_date,
     totalAmount: Number(row.total_amount),
     appliedAmount: Number(row.applied_amount),

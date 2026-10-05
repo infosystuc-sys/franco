@@ -1,3 +1,4 @@
+import { contactosDeEnvio, type ContactoDeEnvio } from '@/src/lib/customers';
 import { supabase } from '@/src/lib/supabase';
 
 export type RemitoStatus = 'EMITIDO' | 'ANULADO';
@@ -25,6 +26,8 @@ export interface Remito {
   /** Contacto vigente del cliente, para mandarle el remito. */
   customerEmail?: string | null;
   customerPhone?: string | null;
+  /** General y sectores del cliente, para elegir a quién mandarlo. */
+  customerContactos?: ContactoDeEnvio[];
   items: RemitoItem[];
 }
 
@@ -49,6 +52,10 @@ function mapRemito(row: any): Remito {
     voidedReason: row.voided_reason,
     customerEmail: row.customer?.email ?? null,
     customerPhone: row.customer?.phone_e164 ?? row.customer?.phone ?? null,
+    customerContactos: contactosDeEnvio(
+      { email: row.customer?.email ?? null, phone: row.customer?.phone_e164 ?? row.customer?.phone ?? null },
+      row.customer?.sectors
+    ),
     items: (row.items ?? [])
       .slice()
       .sort((a: any, b: any) => a.line_number - b.line_number)
@@ -64,7 +71,7 @@ function mapRemito(row: any): Remito {
 const SELECT =
   `id, full_number, status, invoice_id, customer_id, customer_name, customer_legal_name, customer_tax_id,
    customer_address, issue_date, notes, voided_reason,
-   customer:customers(email, phone_e164, phone),
+   customer:customers(email, phone_e164, phone, sectors:customer_sectors(name, responsable, phone, email)),
    items:remito_items(article_id, code, description, quantity, line_number)`;
 
 export async function fetchRemitoByInvoice(invoiceId: string): Promise<Remito | null> {

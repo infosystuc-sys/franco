@@ -2,6 +2,7 @@ import React from 'react';
 import { Button, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { sendInvoiceByEmail, sendInvoiceByWhatsapp } from '@/src/lib/invoiceSending';
+import type { ContactoDeEnvio } from '@/src/lib/customers';
 
 /**
  * Modal de envío por mail o WhatsApp, compartido por facturas, cotizaciones y
@@ -19,9 +20,15 @@ export function SendDocumentModal({
   text,
   onClose,
   onSent,
+  contactos,
 }: {
   channel: 'email' | 'whatsapp';
   defaultDestino: string | null;
+  /**
+   * El contacto general del cliente y sus sectores. Con más de uno, se elige
+   * a quién mandarlo y el campo se completa con su mail o teléfono.
+   */
+  contactos?: ContactoDeEnvio[];
   fileName: string;
   documentRef: React.RefObject<HTMLDivElement>;
   subject: string;
@@ -80,6 +87,29 @@ export function SendDocumentModal({
           </>
         ) : (
           <>
+            {contactos && contactos.length > 1 && (
+              <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-text-soft">
+                Enviar a
+                <select
+                  value={String(contactos.findIndex((c) => (isEmail ? c.email : c.phone) === destino))}
+                  onChange={(e) => {
+                    const c = contactos[Number(e.target.value)];
+                    if (c) setDestino((isEmail ? c.email : c.phone) ?? '');
+                  }}
+                  className="mt-1 w-full rounded-md border border-line bg-panel px-3 py-2 text-sm font-normal normal-case focus:border-accent-deep focus:outline-none"
+                >
+                  <option value="-1" disabled>Otro destinatario</option>
+                  {contactos.map((c, i) => {
+                    const valor = isEmail ? c.email : c.phone;
+                    return (
+                      <option key={i} value={String(i)} disabled={!valor}>
+                        {c.label} — {valor ?? (isEmail ? 'sin mail' : 'sin teléfono')}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+            )}
             <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-text-soft">
               {isEmail ? 'Mail del destinatario' : 'Teléfono del destinatario'}
               <input

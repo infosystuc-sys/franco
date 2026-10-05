@@ -142,6 +142,7 @@ export function RemitoDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
+          contactos={remito.customerContactos}
           defaultDestino={(sendModal === 'email' ? remito.customerEmail : remito.customerPhone) ?? null}
           fileName={`Remito-${remito.fullNumber}.pdf`}
           documentRef={documentRef}

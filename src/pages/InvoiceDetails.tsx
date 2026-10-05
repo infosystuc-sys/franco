@@ -388,6 +388,7 @@ export function InvoiceDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
+          contactos={invoice.customerContactos}
           defaultDestino={(sendModal === 'email' ? invoice.customerEmail : invoice.customerPhone) ?? null}
           fileName={`${invoice.fullNumber}.pdf`}
           documentRef={documentRef}

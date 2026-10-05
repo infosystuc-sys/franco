@@ -1,3 +1,4 @@
+import { contactosDeEnvio, type ContactoDeEnvio } from '@/src/lib/customers';
 import { supabase } from '@/src/lib/supabase';
 import { formatDate, todayLocal, toDateString } from '@/src/lib/utils';
 import type { TaxCondition } from '@/src/lib/fiscal';
@@ -344,6 +345,8 @@ export interface InvoiceDetail extends InvoiceListRow {
   customerPhone: string | null;
   /** Sector del cliente al que va la factura, si tiene uno asignado. */
   customerSectorName?: string | null;
+  /** General y sectores del cliente, para elegir a quién mandarla. */
+  customerContactos?: ContactoDeEnvio[];
 
   issuerLegalName: string;
   issuerTaxId: string | null;
@@ -419,7 +422,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc, credited_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
-       customer:customers(email, phone),
+       customer:customers(email, phone, sectors:customer_sectors(name, responsable, phone, email)),
        sector:customer_sectors(name, responsable, phone, email),
        items:invoice_items(code, description, quantity, unit_price, subtotal, line_number)`
     )
@@ -454,6 +457,10 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     customerEmail: row.sector?.email || row.customer?.email || null,
     customerPhone: row.sector?.phone || row.customer?.phone || null,
     customerSectorName: row.sector?.name ?? null,
+    customerContactos: contactosDeEnvio(
+      { email: row.customer?.email ?? null, phone: row.customer?.phone ?? null },
+      row.customer?.sectors
+    ),
 
     issuerLegalName: row.issuer_legal_name,
     issuerTaxId: row.issuer_tax_id,
