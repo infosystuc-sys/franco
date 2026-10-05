@@ -86,7 +86,10 @@ export interface QuotationDetail {
     address_zip: string | null;
     email: string | null;
     phone: string | null;
+    sectors: { id: string; name: string; phone: string | null; email: string | null }[];
   } | null;
+  /** Sector del cliente al que se manda el presupuesto. Null = general. */
+  customerSectorId: string | null;
   vehicle: { brand: string | null; model: string; license_plate: string | null } | null;
   workOrderId: string | null;
   workOrderNumber: string | null;
@@ -172,8 +175,9 @@ export async function fetchUnlinkedQuotations(customerId: string): Promise<Quota
 
 const DETAIL_SELECT = `
   id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
-  decided_at, rejection_reason,
-  customer:customers(name, legal_name, tax_id, tax_condition, address_street, address_city, address_state, address_zip, email, phone),
+  decided_at, rejection_reason, customer_sector_id,
+  customer:customers(name, legal_name, tax_id, tax_condition, address_street, address_city, address_state, address_zip, email, phone,
+                     sectors:customer_sectors(id, name, phone, email)),
   vehicle:vehicles(brand, model, license_plate),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
   items:quotation_items(id, article_id, code, description, quantity, unit_price)
@@ -198,7 +202,8 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
     validUntil: row.valid_until,
     customerId: row.customer_id,
     vehicleId: row.vehicle_id,
-    customer: row.customer,
+    customer: row.customer ? { ...row.customer, sectors: row.customer.sectors ?? [] } : null,
+    customerSectorId: row.customer_sector_id ?? null,
     vehicle: row.vehicle,
     workOrderId: row.work_order?.id ?? null,
     workOrderNumber: row.work_order?.number ?? null,
@@ -269,6 +274,15 @@ export function describirEnvioCotizacion(resultado: EnvioCotizacionResultado): s
     default:
       return 'No se encontró el presupuesto.';
   }
+}
+
+/** A qué sector del cliente se manda el presupuesto. Null = general. */
+export async function setQuotationSector(quotationId: string, sectorId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('quotations')
+    .update({ customer_sector_id: sectorId })
+    .eq('id', quotationId);
+  if (error) throw error;
 }
 
 export async function updateQuotationStatus(id: string, status: QuotationStatus) {

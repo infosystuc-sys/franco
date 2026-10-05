@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Truck } from 'lucide-react';
+import { X, Truck, Plus, Trash2, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { getErrorMessage } from '@/src/lib/workOrders';
@@ -16,6 +16,7 @@ import {
   updateCustomer,
   type Customer,
   type CustomerInput,
+  type CustomerSectorInput,
 } from '@/src/lib/customers';
 
 /**
@@ -34,8 +35,12 @@ export function CustomerModal({
 }) {
   const [form, setForm] = React.useState<CustomerInput>(
     customer
-      ? { ...fiscalEntityToForm(customer), condicionVenta: customer.condicionVenta ?? '' }
-      : { ...EMPTY_FISCAL_FORM, condicionVenta: '' }
+      ? {
+          ...fiscalEntityToForm(customer),
+          condicionVenta: customer.condicionVenta ?? '',
+          sectors: customer.sectors.map((s) => ({ id: s.id, name: s.name, phone: s.phone ?? '', email: s.email ?? '' })),
+        }
+      : { ...EMPTY_FISCAL_FORM, condicionVenta: '', sectors: [] }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -52,6 +57,11 @@ export function CustomerModal({
     }
     if (form.taxId.trim() !== '' && !isValidCuit(form.taxId)) {
       setError('El CUIT/CUIL ingresado no es válido.');
+      return;
+    }
+    const sectores = form.sectors ?? [];
+    if (sectores.some((s) => s.name.trim() === '' && (s.phone.trim() !== '' || s.email.trim() !== ''))) {
+      setError('Cada sector necesita un nombre (Compras, Administración…).');
       return;
     }
     setSaving(true);
@@ -119,6 +129,11 @@ export function CustomerModal({
                     Se propone al facturar y se puede cambiar ahí mismo.
                   </span>
                 </label>
+
+                <SectoresSection
+                  sectores={form.sectors ?? []}
+                  onChange={(sectors) => patch({ sectors })}
+                />
               </div>
 
               {/* Vehículos: solo al editar, porque necesitan un cliente ya existente */}
@@ -186,6 +201,91 @@ function VehiclesSection({ customer }: { customer: Customer }) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Los sectores del cliente, cada uno con su teléfono y mail. Si el cliente
+ * tiene sectores, al asignarlo a una OT, cotización o factura se puede elegir
+ * a cuál va, y los envíos salen a ese contacto.
+ */
+function SectoresSection({
+  sectores,
+  onChange,
+}: {
+  sectores: CustomerSectorInput[];
+  onChange: (sectores: CustomerSectorInput[]) => void;
+}) {
+  function cambiar(i: number, cambios: Partial<CustomerSectorInput>) {
+    onChange(sectores.map((s, j) => (j === i ? { ...s, ...cambios } : s)));
+  }
+
+  return (
+    <div className="mt-6 space-y-3 border-t border-line pt-4">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-accent-deep">
+          <Users size={14} /> Sectores
+        </h3>
+        <button
+          type="button"
+          onClick={() => onChange([...sectores, { name: '', phone: '', email: '' }])}
+          className="inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
+        >
+          <Plus size={14} /> Agregar sector
+        </button>
+      </div>
+
+      {sectores.length === 0 ? (
+        <p className="text-xs text-text-soft">
+          Sin sectores: los comprobantes se mandan al teléfono y mail generales del cliente.
+          Agregá uno (Compras, Administración, Taller…) si cada área tiene su propio contacto.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {sectores.map((s, i) => (
+            <div key={s.id ?? `nuevo-${i}`} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+              <label className={labelClass}>
+                Sector
+                <input
+                  value={s.name}
+                  onChange={(e) => cambiar(i, { name: e.target.value })}
+                  placeholder="Compras"
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Teléfono
+                <input
+                  value={s.phone}
+                  onChange={(e) => cambiar(i, { phone: e.target.value })}
+                  placeholder="381 4123456"
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Mail
+                <input
+                  type="email"
+                  value={s.email}
+                  onChange={(e) => cambiar(i, { email: e.target.value })}
+                  placeholder="compras@empresa.com"
+                  className={inputClass}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => onChange(sectores.filter((_, j) => j !== i))}
+                title="Quitar el sector"
+                aria-label="Quitar el sector"
+                className="mb-1 flex h-9 w-9 items-center justify-center text-text-soft hover:text-danger"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

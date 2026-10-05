@@ -54,6 +54,7 @@ import {
 import { VehiclePhotos } from '@/src/components/VehiclePhotos';
 import { fetchVehiclePhotos, uploadVehiclePhoto, type VehiclePhoto } from '@/src/lib/vehiclePhotos';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
@@ -153,6 +154,11 @@ export function VehicleNew() {
 
   const esPieza = form.kind === 'PIEZA';
   const clienteElegido = customers.find((c) => c.id === form.customerId) ?? null;
+  // Sector del cliente para la OT que abre este ingreso (solo con destino OT).
+  const [sectorId, setSectorId] = React.useState('');
+  React.useEffect(() => {
+    setSectorId(sectorPorDefecto(clienteElegido?.sectors));
+  }, [clienteElegido?.id]);
 
   const cargarClientes = React.useCallback(async () => {
     setCustomers(await fetchCustomers(true));
@@ -367,6 +373,7 @@ export function VehicleNew() {
         try {
           await createWorkOrder({
             customerId: form.customerId,
+            customerSectorId: sectorId || null,
             vehicleId: guardado.id,
             component,
             receptionKind: form.kind,
@@ -464,6 +471,21 @@ export function VehicleNew() {
               />
             </div>
           </label>
+
+          {vieneDeOT && clienteElegido && clienteElegido.sectors.length > 0 && (
+            <label className={cn(labelClass, 'mt-4 block sm:max-w-2xl')}>
+              Sector del cliente
+              <SelectorDeSector
+                sectores={clienteElegido.sectors}
+                value={sectorId}
+                onChange={setSectorId}
+                className="mt-1"
+              />
+              <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                Los avisos de la orden van al teléfono de este sector.
+              </span>
+            </label>
+          )}
 
           {/* Los datos del elegido, a la vista y sin poder tocarse: sirven
               para confirmar que es ese cliente y no su homónimo, que es

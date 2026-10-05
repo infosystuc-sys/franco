@@ -23,6 +23,7 @@ import {
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueInvoice,
+  asignarSectorAFactura,
   fetchProximoNumero,
   LETRAS_EMISIBLES,
   PAYMENT_TERMS_DAYS,
@@ -45,6 +46,7 @@ import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
@@ -196,6 +198,8 @@ export function InvoiceNew() {
   // Sin valor inicial: elegirla es parte de emitir, y un default se confirma
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
+  // Sector del cliente al que va la factura: arranca en el de la OT.
+  const [sectorId, setSectorId] = React.useState('');
   const [proximo, setProximo] = React.useState<string | null>(null);
   // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
   // = alta, { customer } = modificación del que ya está elegido.
@@ -258,6 +262,15 @@ export function InvoiceNew() {
    * sugiere una sola vez por cliente, igual que la condición de venta; para
    * cualquier otra condición, factura quien emite.
    */
+  // El sector arranca en el de la orden; si se cambia el cliente, en el
+  // único sector del nuevo (o en el contacto general).
+  const sectoresDelCliente = order?.customer?.sectors ?? [];
+  React.useEffect(() => {
+    const sectores = order?.customer?.sectors ?? [];
+    const delaOrden = order?.customerSectorId ?? '';
+    setSectorId(sectores.some((s) => s.id === delaOrden) ? delaOrden : sectorPorDefecto(sectores));
+  }, [order?.id, order?.customer?.id, order?.customerSectorId]);
+
   const propuestaTipoPara = React.useRef<string | null>(null);
   React.useEffect(() => {
     const cliente = customers.find((c) => c.id === order?.customer?.id);
@@ -453,6 +466,9 @@ export function InvoiceNew() {
         order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
         isCash ? null : (vencimiento || null)
       );
+      if ((sectorId || null) !== (order.customerSectorId ?? null)) {
+        await asignarSectorAFactura(issued.id, sectorId || null);
+      }
 
       // El CAE va en el mismo acto, no en un paso posterior. La X no pasa por
       // acá: no es fiscal y nace emitida.
@@ -555,6 +571,14 @@ export function InvoiceNew() {
           <span className="mt-1 block text-[11px] normal-case text-text-soft">
             {cambiandoCliente ? 'Cambiando…' : 'Cambiar acá reasigna también la orden y su presupuesto.'}
           </span>
+          {sectoresDelCliente.length > 0 && (
+            <div className="mt-2">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                Sector — a quién se le manda la factura
+              </span>
+              <SelectorDeSector sectores={sectoresDelCliente} value={sectorId} onChange={setSectorId} className="normal-case" />
+            </div>
+          )}
         </FieldBox>
 
         <FieldBox label="Emisión">
@@ -730,6 +754,7 @@ export function InvoiceNew() {
                       address_city: guardado.addressCity,
                       address_state: guardado.addressState,
                       address_zip: guardado.addressZip,
+                      sectors: guardado.sectors,
                     },
                   }
                 : actual
@@ -763,6 +788,7 @@ export function InvoiceNew() {
                       address_city: guardado.addressCity,
                       address_state: guardado.addressState,
                       address_zip: guardado.addressZip,
+                      sectors: guardado.sectors,
                     },
                   }
                 : actual

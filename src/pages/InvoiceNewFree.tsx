@@ -20,6 +20,7 @@ import {
   INVOICE_TYPE_LABELS,
   invoiceTypeFor,
   issueFreeInvoice,
+  asignarSectorAFactura,
   fetchInvoiceById,
   fetchProximoNumero,
   LETRAS_EMISIBLES,
@@ -46,6 +47,7 @@ import { fetchBanks, type Bank } from '@/src/lib/banks';
 import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftModal';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
@@ -81,6 +83,8 @@ export function InvoiceNewFree() {
   // Sin valor inicial: elegirla es parte de emitir, y un default se confirma
   // sin mirarlo. La base también la exige.
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
+  // Sector del cliente al que va la factura. Con un solo sector, ese.
+  const [sectorId, setSectorId] = React.useState('');
   const [proximo, setProximo] = React.useState<string | null>(null);
   // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
   // = alta, { customer } = modificación del que ya está elegido.
@@ -182,6 +186,11 @@ export function InvoiceNewFree() {
    * sugiere una sola vez por cliente; para cualquier otra condición, factura
    * quien emite.
    */
+  const sectoresDelCliente = customers.find((c) => c.id === customerId)?.sectors ?? [];
+  React.useEffect(() => {
+    setSectorId(sectorPorDefecto(customers.find((c) => c.id === customerId)?.sectors));
+  }, [customerId, customers]);
+
   const propuestaTipoPara = React.useRef<string | null>(null);
   React.useEffect(() => {
     const cliente = customers.find((c) => c.id === customerId);
@@ -274,6 +283,7 @@ export function InvoiceNewFree() {
         customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
         isCash ? null : (vencimiento || null), remitoId
       );
+      if (sectorId) await asignarSectorAFactura(issued.id, sectorId);
 
       // El CAE va en el mismo acto, no en un paso posterior. La X no pasa por
       // acá: no es fiscal y nace emitida.
@@ -372,6 +382,14 @@ export function InvoiceNewFree() {
             <span className="mt-1 block text-[11px] normal-case text-text-soft">
               Lo fija el remito — no se cambia acá.
             </span>
+          )}
+          {sectoresDelCliente.length > 0 && (
+            <div className="mt-2">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+                Sector — a quién se le manda la factura
+              </span>
+              <SelectorDeSector sectores={sectoresDelCliente} value={sectorId} onChange={setSectorId} className="normal-case" />
+            </div>
           )}
         </FieldBox>
 

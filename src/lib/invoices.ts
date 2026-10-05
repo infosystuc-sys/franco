@@ -342,6 +342,8 @@ export interface InvoiceDetail extends InvoiceListRow {
   /** Contacto vigente del cliente (no es un dato fiscal impreso, se lee en vivo). */
   customerEmail: string | null;
   customerPhone: string | null;
+  /** Sector del cliente al que va la factura, si tiene uno asignado. */
+  customerSectorName?: string | null;
 
   issuerLegalName: string;
   issuerTaxId: string | null;
@@ -418,6 +420,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
+       sector:customer_sectors(name, phone, email),
        items:invoice_items(code, description, quantity, unit_price, subtotal, line_number)`
     )
     .eq('id', id)
@@ -446,8 +449,11 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     customerTaxId: row.customer_tax_id,
     customerTaxCondition: row.customer_tax_condition,
     customerAddress: row.customer_address,
-    customerEmail: row.customer?.email ?? null,
-    customerPhone: row.customer?.phone ?? null,
+    // Con un sector asignado, la factura se manda a su contacto; lo que el
+    // sector no tenga cargado sale del general del cliente.
+    customerEmail: row.sector?.email || row.customer?.email || null,
+    customerPhone: row.sector?.phone || row.customer?.phone || null,
+    customerSectorName: row.sector?.name ?? null,
 
     issuerLegalName: row.issuer_legal_name,
     issuerTaxId: row.issuer_tax_id,
@@ -586,6 +592,19 @@ export interface IssuedInvoice {
  * La base lo rechaza si la orden ya tiene factura emitida: mover una factura
  * entregada arrastra saldos y recibos ya aplicados.
  */
+/**
+ * El sector del cliente al que se manda la factura. Se asigna después de
+ * emitirla: el alta la hacen las funciones de la base, que heredan el sector
+ * de la OT; esto deja el que se eligió en pantalla.
+ */
+export async function asignarSectorAFactura(invoiceId: string, sectorId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('invoices')
+    .update({ customer_sector_id: sectorId })
+    .eq('id', invoiceId);
+  if (error) throw error;
+}
+
 export async function reasignarClienteDeOrden(
   workOrderId: string,
   customerId: string

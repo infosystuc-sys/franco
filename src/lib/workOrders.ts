@@ -553,6 +553,8 @@ export interface NewWorkOrderInput {
    * cuándo se libera su celda. Null para una pieza suelta, que no ocupa lugar.
    */
   estimatedDeliveryDate: string | null;
+  /** Sector del cliente al que van los avisos de la orden. Null = general. */
+  customerSectorId?: string | null;
 }
 
 /**
@@ -583,6 +585,7 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
       observations: input.observations.trim() || null,
       employee_id: input.employeeId,
       estimated_delivery_date: input.estimatedDeliveryDate,
+      customer_sector_id: input.customerSectorId || null,
     })
     .select()
     .single();
@@ -608,8 +611,11 @@ export interface WorkOrderDetail {
         address_city: string | null;
         address_state: string | null;
         address_zip: string | null;
+        sectors: { id: string; name: string; phone: string | null; email: string | null }[];
       }
     | null;
+  /** Sector del cliente al que van los avisos. Null = contacto general. */
+  customerSectorId: string | null;
   vehicle:
     | {
         // Se necesita para cotizar desde la OT: sin este id habría que
@@ -669,10 +675,11 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     .select(
       `id, number, component, public_token, estimated_delivery_date,
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
-       reception_kind, observations,
+       reception_kind, observations, customer_sector_id,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
-                          address_street, address_city, address_state, address_zip),
+                          address_street, address_city, address_state, address_zip,
+                          sectors:customer_sectors(id, name, phone, email)),
        vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees!work_orders_employee_id_fkey(id, name),
        mechanic:employees!work_orders_mechanic_id_fkey(id, name),
@@ -695,7 +702,10 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     number: (data as any).number,
     status: mapWorkOrderStatusRef((data as any).status),
     component: (data as any).component,
-    customer: (data as any).customer,
+    customer: (data as any).customer
+      ? { ...(data as any).customer, sectors: (data as any).customer.sectors ?? [] }
+      : null,
+    customerSectorId: (data as any).customer_sector_id ?? null,
     vehicle: (data as any).vehicle,
     employee: (data as any).employee,
     mechanic: (data as any).mechanic ?? null,
@@ -750,6 +760,15 @@ export interface WorkOrderItemInput {
  * Cambia el estado de la OT (a cuál de work_order_statuses). El historial lo
  * escribe un trigger en la base, así que no hace falta registrarlo desde acá.
  */
+/** A qué sector del cliente van los avisos de la orden. Null = general. */
+export async function setWorkOrderSector(workOrderId: string, sectorId: string | null) {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({ customer_sector_id: sectorId })
+    .eq('id', workOrderId);
+  if (error) throw error;
+}
+
 export async function setWorkOrderStatus(workOrderId: string, statusId: string) {
   const { error } = await supabase.from('work_orders').update({ status_id: statusId }).eq('id', workOrderId);
   if (error) throw error;

@@ -4,6 +4,8 @@ import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
+import { SelectorDeSector } from '@/src/components/SelectorDeSector';
+import { setWorkOrderSector } from '@/src/lib/workOrders';
 import { Button, inputClass, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
@@ -817,6 +819,36 @@ export function WorkOrderDetails() {
               )}
               {TAX_CONDITION_LABELS[order.customer.tax_condition]}
             </span>
+          )}
+          {/* El sector decide a qué teléfono van los avisos de la orden (y
+              lo heredan su cotización y su factura). */}
+          {order.customer && order.customer.sectors.length > 0 && (
+            <div className="mt-2">
+              <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+                Sector
+              </span>
+              {isAdmin && !locked ? (
+                <SelectorDeSector
+                  sectores={order.customer.sectors}
+                  value={order.customerSectorId ?? ''}
+                  onChange={async (sectorId) => {
+                    const anterior = order.customerSectorId;
+                    setOrder((o) => (o ? { ...o, customerSectorId: sectorId || null } : o));
+                    try {
+                      await setWorkOrderSector(order.id, sectorId || null);
+                    } catch (err) {
+                      setOrder((o) => (o ? { ...o, customerSectorId: anterior } : o));
+                      setError(getErrorMessage(err));
+                    }
+                  }}
+                  className="h-9 text-sm"
+                />
+              ) : (
+                <span className="block text-sm text-text">
+                  {order.customer.sectors.find((s) => s.id === order.customerSectorId)?.name ?? 'General del cliente'}
+                </span>
+              )}
+            </div>
           )}
         </Panel>
 

@@ -18,6 +18,7 @@ import {
   type ReceptionKind,
 } from '@/src/lib/workOrders';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
@@ -42,6 +43,7 @@ export function NewWorkOrderModal({
   const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [loadingCustomers, setLoadingCustomers] = React.useState(true);
   const [customerId, setCustomerId] = React.useState('');
+  const [sectorId, setSectorId] = React.useState('');
   // Quién la toma. Opcional: en la recepción puede no estar decidido todavía.
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = React.useState('');
@@ -144,6 +146,7 @@ export function NewWorkOrderModal({
   function handleCustomerChange(id: string) {
     setCustomerId(id);
     const customer = customers.find((c) => c.id === id);
+    setSectorId(sectorPorDefecto(customer?.sectors));
     const disponibles = (customer?.vehicles ?? []).filter(
       (v) => v.active && v.kind === receptionKind
     );
@@ -188,6 +191,7 @@ export function NewWorkOrderModal({
     try {
       workOrder = await createWorkOrder({
         customerId,
+        customerSectorId: sectorId || null,
         vehicleId: vehicleId || null,
         component,
         receptionKind,
@@ -297,6 +301,21 @@ export function NewWorkOrderModal({
                 </span>
               )}
             </Label>
+
+            {selectedCustomer && selectedCustomer.sectors.length > 0 && (
+              <Label>
+                Sector del cliente
+                <SelectorDeSector
+                  sectores={selectedCustomer.sectors}
+                  value={sectorId}
+                  onChange={setSectorId}
+                  className="mt-1"
+                />
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                  Los avisos de la orden van al teléfono de este sector.
+                </span>
+              </Label>
+            )}
 
             <Label>
               Vehículo / Equipo

@@ -17,6 +17,9 @@ import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
+import { SelectorDeSector } from '@/src/components/SelectorDeSector';
+import { setQuotationSector } from '@/src/lib/quotations';
+import { contactoDeEnvio } from '@/src/lib/customers';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { QuotationDocument } from '@/src/components/QuotationDocument';
@@ -342,6 +345,34 @@ export function QuotationDetails() {
           {quotation.customer?.tax_id && (
             <span className="text-[13px] text-text-soft block mt-1 font-mono">{formatCuit(quotation.customer.tax_id)}</span>
           )}
+          {/* A qué sector se manda el presupuesto (mail, WhatsApp y el pedido
+              de autorización). Arranca en el de la orden. */}
+          {quotation.customer && quotation.customer.sectors.length > 0 && (
+            <div className="mt-2">
+              <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-text-soft">Sector</span>
+              {isAdmin ? (
+                <SelectorDeSector
+                  sectores={quotation.customer.sectors}
+                  value={quotation.customerSectorId ?? ''}
+                  onChange={async (sectorId) => {
+                    const anterior = quotation.customerSectorId;
+                    setQuotation((q) => (q ? { ...q, customerSectorId: sectorId || null } : q));
+                    try {
+                      await setQuotationSector(quotation.id, sectorId || null);
+                    } catch (err) {
+                      setQuotation((q) => (q ? { ...q, customerSectorId: anterior } : q));
+                      setError(getErrorMessage(err));
+                    }
+                  }}
+                  className="h-9 text-sm"
+                />
+              ) : (
+                <span className="block text-sm text-text">
+                  {quotation.customer.sectors.find((s) => s.id === quotation.customerSectorId)?.name ?? 'General del cliente'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="bg-panel border border-line p-4">
           <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo / Equipo</span>
@@ -449,7 +480,13 @@ export function QuotationDetails() {
       {sendModal && (
         <SendDocumentModal
           channel={sendModal}
-          defaultDestino={(sendModal === 'email' ? quotation.customer?.email : quotation.customer?.phone) ?? null}
+          defaultDestino={(() => {
+            const contacto = contactoDeEnvio(
+              { email: quotation.customer?.email ?? null, phone: quotation.customer?.phone ?? null },
+              quotation.customer?.sectors.find((s) => s.id === quotation.customerSectorId)
+            );
+            return (sendModal === 'email' ? contacto.email : contacto.phone) ?? null;
+          })()}
           fileName={`Presupuesto-${quotation.number}.pdf`}
           documentRef={documentRef}
           subject={mensaje?.asunto || `Presupuesto ${quotation.number}`}

@@ -35,8 +35,29 @@ export interface CustomerVehicle {
   active: boolean;
 }
 
+/**
+ * Un sector del cliente (Compras, Administración, Taller…) con su propio
+ * contacto. Una OT, cotización o factura asignada a un sector manda los
+ * comprobantes y avisos a este teléfono y mail en vez de a los generales.
+ */
+export interface CustomerSector {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+}
+
+/** Un sector en la ficha: sin id todavía si es nuevo. */
+export interface CustomerSectorInput {
+  id?: string;
+  name: string;
+  phone: string;
+  email: string;
+}
+
 export interface Customer extends FiscalEntity {
   vehicles: CustomerVehicle[];
+  sectors: CustomerSector[];
   /**
    * Condición de venta habitual. Se propone al facturar y se puede cambiar
    * ahí mismo. Null = sin definir: la factura obliga a elegirla, que es lo que
@@ -48,12 +69,17 @@ export interface Customer extends FiscalEntity {
 export interface CustomerInput extends FiscalEntityInput {
   /** Vacío = sin definir. */
   condicionVenta: CondicionVenta | '';
+  /** Los sectores tal como quedan en la ficha. Sin el campo, no se tocan. */
+  sectors?: CustomerSectorInput[];
 }
 
 function mapCustomer(row: any): Customer {
   return {
     ...mapFiscalEntity(row),
     condicionVenta: (row.condicion_venta ?? null) as CondicionVenta | null,
+    sectors: ((row.sectors ?? []) as any[])
+      .map((s) => ({ id: s.id, name: s.name, phone: s.phone ?? null, email: s.email ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
     vehicles: (row.vehicles ?? []).map((v: any) => ({
       id: v.id,
       kind: v.kind ?? 'VEHICULO',
@@ -71,7 +97,8 @@ function mapCustomer(row: any): Customer {
 // El alta/baja de vehículos vive en src/lib/vehicles.ts, que maneja la ficha
 // técnica completa. Acá solo se leen los vehículos asociados a cada cliente.
 const SELECT_WITH_VEHICLES =
-  '*, vehicles(id, kind, brand, model, license_plate, reference_number, year, active, size_class)';
+  '*, vehicles(id, kind, brand, model, license_plate, reference_number, year, active, size_class), ' +
+  'sectors:customer_sectors(id, name, phone, email)';
 
 /**
  * La base entrega como máximo 1000 filas por consulta: con más clientes que
@@ -130,6 +157,7 @@ export async function createCustomer(input: CustomerInput): Promise<Customer> {
     .select(SELECT_WITH_VEHICLES)
     .single();
   if (error) throw error;
+  if (input.sectors) return guardarSectores((data as any).id, input.sectors);
   return mapCustomer(data);
 }
 
@@ -141,7 +169,62 @@ export async function updateCustomer(id: string, input: CustomerInput): Promise<
     .select(SELECT_WITH_VEHICLES)
     .single();
   if (error) throw error;
+  if (input.sectors) return guardarSectores(id, input.sectors);
   return mapCustomer(data);
+}
+
+/**
+ * Deja los sectores del cliente como quedaron en la ficha: borra los que se
+ * sacaron, actualiza los que estaban y da de alta los nuevos. Un comprobante
+ * asignado a un sector borrado queda con el contacto general del cliente.
+ */
+async function guardarSectores(customerId: string, sectores: CustomerSectorInput[]): Promise<Customer> {
+  const limpios = sectores
+    .map((s) => ({ ...s, name: s.name.trim(), phone: s.phone.trim(), email: s.email.trim() }))
+    .filter((s) => s.name !== '');
+
+  const { data: actuales, error: e1 } = await supabase
+    .from('customer_sectors')
+    .select('id')
+    .eq('customer_id', customerId);
+  if (e1) throw e1;
+
+  const quedan = new Set(limpios.filter((s) => s.id).map((s) => s.id));
+  const borrar = (actuales ?? []).map((s: any) => s.id as string).filter((id) => !quedan.has(id));
+  if (borrar.length > 0) {
+    const { error } = await supabase.from('customer_sectors').delete().in('id', borrar);
+    if (error) throw error;
+  }
+
+  for (const s of limpios) {
+    const fila = { name: s.name, phone: s.phone || null, email: s.email || null };
+    const { error } = s.id
+      ? await supabase.from('customer_sectors').update(fila).eq('id', s.id)
+      : await supabase.from('customer_sectors').insert({ ...fila, customer_id: customerId });
+    if (error) throw error;
+  }
+
+  const { data, error } = await supabase
+    .from('customers')
+    .select(SELECT_WITH_VEHICLES)
+    .eq('id', customerId)
+    .single();
+  if (error) throw error;
+  return mapCustomer(data);
+}
+
+/**
+ * El contacto al que se manda un comprobante: el del sector asignado, si lo
+ * tiene cargado; si no, el general del cliente.
+ */
+export function contactoDeEnvio(
+  general: { email: string | null; phone: string | null },
+  sector: { email: string | null; phone: string | null } | null | undefined
+): { email: string | null; phone: string | null } {
+  return {
+    email: sector?.email || general.email,
+    phone: sector?.phone || general.phone,
+  };
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
