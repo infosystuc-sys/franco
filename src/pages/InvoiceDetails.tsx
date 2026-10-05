@@ -814,6 +814,25 @@ export function InvoiceDocument({
         {invoice.workOrderNumber && (
           <Field label="Orden de trabajo" value={invoice.workOrderNumber} mono />
         )}
+        {/* Qué se reparó: el vehículo o la pieza de la orden, con lo que la
+            identifica (patente o número de referencia) y el componente. */}
+        {invoice.vehiculo && (
+          <Field
+            label={invoice.vehiculo.kind === 'PIEZA' ? 'Pieza' : 'Vehículo'}
+            value={[
+              [invoice.vehiculo.brand, invoice.vehiculo.model].filter(Boolean).join(' ') +
+                (invoice.vehiculo.year ? ` (${invoice.vehiculo.year})` : ''),
+              invoice.vehiculo.licensePlate ? `Patente ${invoice.vehiculo.licensePlate}` : null,
+              invoice.vehiculo.referenceNumber ? `N° ${invoice.vehiculo.referenceNumber}` : null,
+              invoice.vehiculo.engineBrand || invoice.vehiculo.engineModel
+                ? `Motor ${[invoice.vehiculo.engineBrand, invoice.vehiculo.engineModel].filter(Boolean).join(' ')}`
+                : null,
+            ].filter(Boolean).join(' · ')}
+          />
+        )}
+        {invoice.workOrderComponent && (
+          <Field label="Componente" value={invoice.workOrderComponent} />
+        )}
       </div>
 
       {/* Renglones */}

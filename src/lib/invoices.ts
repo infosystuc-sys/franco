@@ -335,6 +335,20 @@ export interface InvoiceDetail extends InvoiceListRow {
   /** Null en una factura libre, sin OT ni cotización. */
   workOrderId: string | null;
   workOrderComponent: string | null;
+  /**
+   * El vehículo o la pieza de la orden que se factura, para imprimirlo en la
+   * factura. Null en una factura libre (sin orden).
+   */
+  vehiculo?: {
+    kind: 'VEHICULO' | 'PIEZA';
+    brand: string | null;
+    model: string;
+    licensePlate: string | null;
+    referenceNumber: string | null;
+    year: number | null;
+    engineBrand: string | null;
+    engineModel: string | null;
+  } | null;
 
   customerLegalName: string | null;
   customerTaxId: string | null;
@@ -421,7 +435,8 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        net_amount, vat_amount, total_amount, paid_amount,
        cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc, credited_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
-       work_order:work_orders(number, component),
+       work_order:work_orders(number, component,
+         vehicle:vehicles(kind, brand, model, license_plate, reference_number, year, engine_brand, engine_model)),
        customer:customers(email, phone, sectors:customer_sectors(name, responsable, phone, email)),
        sector:customer_sectors(name, responsable, phone, email),
        items:invoice_items(code, description, quantity, unit_price, subtotal, line_number)`
@@ -447,6 +462,18 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
 
     workOrderId: row.work_order_id,
     workOrderComponent: row.work_order?.component ?? null,
+    vehiculo: row.work_order?.vehicle
+      ? {
+          kind: row.work_order.vehicle.kind ?? 'VEHICULO',
+          brand: row.work_order.vehicle.brand ?? null,
+          model: row.work_order.vehicle.model,
+          licensePlate: row.work_order.vehicle.license_plate ?? null,
+          referenceNumber: row.work_order.vehicle.reference_number ?? null,
+          year: row.work_order.vehicle.year ?? null,
+          engineBrand: row.work_order.vehicle.engine_brand ?? null,
+          engineModel: row.work_order.vehicle.engine_model ?? null,
+        }
+      : null,
 
     customerLegalName: row.customer_legal_name,
     customerTaxId: row.customer_tax_id,
