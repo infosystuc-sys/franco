@@ -420,7 +420,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component),
        customer:customers(email, phone),
-       sector:customer_sectors(name, phone, email),
+       sector:customer_sectors(name, responsable, phone, email),
        items:invoice_items(code, description, quantity, unit_price, subtotal, line_number)`
     )
     .eq('id', id)

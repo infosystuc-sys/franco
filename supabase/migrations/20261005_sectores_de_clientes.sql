@@ -170,3 +170,6 @@ drop trigger if exists invoices_soltar_sector on public.invoices;
 create trigger invoices_soltar_sector
   before update of customer_sector_id on public.invoices
   for each row execute function public.soltar_sector_de_otro_cliente();
+
+-- El responsable del sector: con quién se habla en Compras, Administración…
+alter table public.customer_sectors add column if not exists responsable text;

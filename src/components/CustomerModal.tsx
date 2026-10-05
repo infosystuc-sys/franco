@@ -38,7 +38,13 @@ export function CustomerModal({
       ? {
           ...fiscalEntityToForm(customer),
           condicionVenta: customer.condicionVenta ?? '',
-          sectors: customer.sectors.map((s) => ({ id: s.id, name: s.name, phone: s.phone ?? '', email: s.email ?? '' })),
+          sectors: customer.sectors.map((s) => ({
+            id: s.id,
+            name: s.name,
+            responsable: s.responsable ?? '',
+            phone: s.phone ?? '',
+            email: s.email ?? '',
+          })),
         }
       : { ...EMPTY_FISCAL_FORM, condicionVenta: '', sectors: [] }
   );
@@ -60,7 +66,7 @@ export function CustomerModal({
       return;
     }
     const sectores = form.sectors ?? [];
-    if (sectores.some((s) => s.name.trim() === '' && (s.phone.trim() !== '' || s.email.trim() !== ''))) {
+    if (sectores.some((s) => s.name.trim() === '' && (s.responsable.trim() !== '' || s.phone.trim() !== '' || s.email.trim() !== ''))) {
       setError('Cada sector necesita un nombre (Compras, Administración…).');
       return;
     }
@@ -230,7 +236,7 @@ function SectoresSection({
         </h3>
         <button
           type="button"
-          onClick={() => onChange([...sectores, { name: '', phone: '', email: '' }])}
+          onClick={() => onChange([...sectores, { name: '', responsable: '', phone: '', email: '' }])}
           className="inline-flex items-center gap-1 text-[13px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
         >
           <Plus size={14} /> Agregar sector
@@ -245,13 +251,22 @@ function SectoresSection({
       ) : (
         <div className="space-y-2">
           {sectores.map((s, i) => (
-            <div key={s.id ?? `nuevo-${i}`} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+            <div key={s.id ?? `nuevo-${i}`} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.2fr_1fr_1.4fr_auto] sm:items-end">
               <label className={labelClass}>
                 Sector
                 <input
                   value={s.name}
                   onChange={(e) => cambiar(i, { name: e.target.value })}
                   placeholder="Compras"
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Responsable
+                <input
+                  value={s.responsable}
+                  onChange={(e) => cambiar(i, { responsable: e.target.value })}
+                  placeholder="Juan Pérez"
                   className={inputClass}
                 />
               </label>

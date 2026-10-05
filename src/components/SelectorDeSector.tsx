@@ -37,7 +37,7 @@ export function SelectorDeSector({
       <option value="">General del cliente</option>
       {sectores.map((s) => (
         <option key={s.id} value={s.id}>
-          {[s.name, s.phone, s.email].filter(Boolean).join(' · ')}
+          {[s.name, s.responsable, s.phone, s.email].filter(Boolean).join(' · ')}
         </option>
       ))}
     </select>

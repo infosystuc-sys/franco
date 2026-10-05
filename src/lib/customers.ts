@@ -43,6 +43,8 @@ export interface CustomerVehicle {
 export interface CustomerSector {
   id: string;
   name: string;
+  /** Con quién se habla en ese sector. */
+  responsable: string | null;
   phone: string | null;
   email: string | null;
 }
@@ -51,6 +53,7 @@ export interface CustomerSector {
 export interface CustomerSectorInput {
   id?: string;
   name: string;
+  responsable: string;
   phone: string;
   email: string;
 }
@@ -78,7 +81,7 @@ function mapCustomer(row: any): Customer {
     ...mapFiscalEntity(row),
     condicionVenta: (row.condicion_venta ?? null) as CondicionVenta | null,
     sectors: ((row.sectors ?? []) as any[])
-      .map((s) => ({ id: s.id, name: s.name, phone: s.phone ?? null, email: s.email ?? null }))
+      .map((s) => ({ id: s.id, name: s.name, responsable: s.responsable ?? null, phone: s.phone ?? null, email: s.email ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     vehicles: (row.vehicles ?? []).map((v: any) => ({
       id: v.id,
@@ -98,7 +101,7 @@ function mapCustomer(row: any): Customer {
 // técnica completa. Acá solo se leen los vehículos asociados a cada cliente.
 const SELECT_WITH_VEHICLES =
   '*, vehicles(id, kind, brand, model, license_plate, reference_number, year, active, size_class), ' +
-  'sectors:customer_sectors(id, name, phone, email)';
+  'sectors:customer_sectors(id, name, responsable, phone, email)';
 
 /**
  * La base entrega como máximo 1000 filas por consulta: con más clientes que
@@ -180,7 +183,7 @@ export async function updateCustomer(id: string, input: CustomerInput): Promise<
  */
 async function guardarSectores(customerId: string, sectores: CustomerSectorInput[]): Promise<Customer> {
   const limpios = sectores
-    .map((s) => ({ ...s, name: s.name.trim(), phone: s.phone.trim(), email: s.email.trim() }))
+    .map((s) => ({ ...s, name: s.name.trim(), responsable: s.responsable.trim(), phone: s.phone.trim(), email: s.email.trim() }))
     .filter((s) => s.name !== '');
 
   const { data: actuales, error: e1 } = await supabase
@@ -197,7 +200,7 @@ async function guardarSectores(customerId: string, sectores: CustomerSectorInput
   }
 
   for (const s of limpios) {
-    const fila = { name: s.name, phone: s.phone || null, email: s.email || null };
+    const fila = { name: s.name, responsable: s.responsable || null, phone: s.phone || null, email: s.email || null };
     const { error } = s.id
       ? await supabase.from('customer_sectors').update(fila).eq('id', s.id)
       : await supabase.from('customer_sectors').insert({ ...fila, customer_id: customerId });
