@@ -196,6 +196,11 @@ export function ItemsEditor({
                         min="1"
                         value={item.quantity}
                         onChange={(e) => updateItem(idx, { quantity: enteroDeCantidad(e.target.value) })}
+                        // Al entrar queda todo seleccionado: se escribe la
+                        // cantidad nueva encima del 1, sin borrarlo antes.
+                        // El mouseup no deja que el click deshaga la selección.
+                        onFocus={(e) => e.target.select()}
+                        onMouseUp={(e) => e.preventDefault()}
                         className="w-full bg-transparent px-2 py-1 text-right"
                       />
                     </td>
@@ -590,6 +595,7 @@ function CampoImporte({
         editando.current = true;
         e.target.select();
       }}
+      onMouseUp={(e) => e.preventDefault()}
       onBlur={() => {
         editando.current = false;
         setTexto(mostrarImporte(value));
