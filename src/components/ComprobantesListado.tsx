@@ -1,7 +1,7 @@
 import React from 'react';
-import { ChevronDown, LayoutGrid, List, X } from 'lucide-react';
+import { ChevronDown, LayoutGrid, List, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/src/lib/utils';
+import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { Button, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { guardarEtiquetas, type TipoComprobante } from '@/src/lib/comprobantes';
@@ -41,6 +41,18 @@ export const ETIQUETAR = 'ETIQUETAR' as const;
 type ItemMasAcciones<T> = AccionListado<T> | typeof ETIQUETAR;
 
 const PAGINA = 20;
+
+/**
+ * El texto que muestra una celda, aunque venga armada (un estado con su
+ * cuadradito de color, por ejemplo): es lo que se busca y lo que se filtra.
+ */
+function textoDe(nodo: React.ReactNode): string {
+  if (nodo === null || nodo === undefined || typeof nodo === 'boolean') return '';
+  if (typeof nodo === 'string' || typeof nodo === 'number') return String(nodo);
+  if (Array.isArray(nodo)) return nodo.map(textoDe).join(' ');
+  if (React.isValidElement(nodo)) return textoDe((nodo.props as { children?: React.ReactNode }).children);
+  return '';
+}
 
 const botonBase =
   'inline-flex h-10 items-center justify-center gap-1.5 rounded-[3px] px-4 text-[15px] text-white ' +
@@ -102,7 +114,43 @@ export function ComprobantesListado<T>({
   });
   const menuRef = React.useRef<HTMLDivElement>(null);
 
-  const visibles = filas.slice(0, cantidad);
+  // ── Búsqueda y filtro por estado ─────────────────────────────────────
+  // La búsqueda mira todo lo que se ve en la fila (número, cliente,
+  // vehículo, importes…), con la misma regla que el resto de la app. El
+  // filtro por estado sale de la columna "Estado" de cada pantalla, con los
+  // estados que realmente aparecen en el listado.
+  const [busqueda, setBusqueda] = React.useState('');
+  const [estado, setEstado] = React.useState('');
+  const busquedaDiferida = React.useDeferredValue(busqueda);
+  const columnaEstado = columnas.find((c) => c.label === 'Estado');
+
+  const estadosPresentes = React.useMemo(() => {
+    if (!columnaEstado) return [];
+    const cuenta = new Map<string, number>();
+    for (const f of filas) {
+      const e = textoDe(columnaEstado.valor(f)).trim();
+      if (e) cuenta.set(e, (cuenta.get(e) ?? 0) + 1);
+    }
+    return [...cuenta.entries()];
+  }, [filas, columnaEstado]);
+
+  const filtradas = React.useMemo(() => {
+    if (busquedaDiferida.trim() === '' && estado === '') return filas;
+    return filas.filter((f) => {
+      if (estado && columnaEstado && textoDe(columnaEstado.valor(f)).trim() !== estado) return false;
+      if (busquedaDiferida.trim() === '') return true;
+      return coincideBusqueda(busquedaDiferida, columnas.map((c) => textoDe(c.valor(f))));
+    });
+  }, [filas, busquedaDiferida, estado, columnas, columnaEstado]);
+
+  // Con otro filtro se vuelve a la primera página.
+  React.useEffect(() => {
+    setCantidad(PAGINA);
+  }, [busquedaDiferida, estado]);
+
+  const filtrando = busqueda.trim() !== '' || estado !== '';
+
+  const visibles = filtradas.slice(0, cantidad);
 
   // Siempre hay una fila elegida, como en Tango: la primera, hasta que se
   // toque otra. Si la elegida deja de estar (se recargó el listado), vuelve
@@ -273,10 +321,61 @@ export function ComprobantesListado<T>({
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[16rem] flex-1 sm:max-w-md">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por número, cliente, vehículo, importe…"
+            aria-label="Buscar en el listado"
+            className="h-10 w-full rounded-[3px] border border-line bg-panel pl-9 pr-3 text-[15px] text-text focus:border-accent focus:outline-none"
+          />
+        </div>
+        {columnaEstado && (
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            aria-label="Filtrar por estado"
+            className={cn(
+              'h-10 rounded-[3px] border bg-panel px-3 text-[15px] text-text focus:border-accent focus:outline-none',
+              estado ? 'border-accent' : 'border-line'
+            )}
+          >
+            <option value="">Todos los estados</option>
+            {estadosPresentes.map(([e, n]) => (
+              <option key={e} value={e}>
+                {e} ({n})
+              </option>
+            ))}
+          </select>
+        )}
+        {filtrando && (
+          <>
+            <span className="text-[14px] text-text-soft">
+              {filtradas.length} de {filas.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setBusqueda('');
+                setEstado('');
+              }}
+              className="inline-flex items-center gap-1 text-[14px] text-text-soft hover:text-text"
+            >
+              <X size={14} /> Limpiar
+            </button>
+          </>
+        )}
+      </div>
+
       {loading ? (
         <p className="py-10 text-center text-text-soft">Cargando…</p>
       ) : filas.length === 0 ? (
         <p className="py-10 text-center text-text-soft">{vacio}</p>
+      ) : filtradas.length === 0 ? (
+        <p className="py-10 text-center text-text-soft">Ningún comprobante coincide con la búsqueda o el estado elegido.</p>
       ) : (
         <>
           {vista === 'lista' ? (
@@ -368,7 +467,7 @@ export function ComprobantesListado<T>({
             </div>
           )}
 
-          {filas.length > cantidad && (
+          {filtradas.length > cantidad && (
             <button
               type="button"
               onClick={() => setCantidad((n) => n + PAGINA)}
