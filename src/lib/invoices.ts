@@ -271,6 +271,8 @@ export function daysUntilDue(dueDate: string): number {
 // ===========================================================================
 
 export interface InvoiceListRow {
+  /** Marca, modelo, patente y número de pieza del equipo de la OT. Para buscar. */
+  equipo?: string | null;
   id: string;
   fullNumber: string;
   invoiceType: InvoiceType;
@@ -387,10 +389,12 @@ const LIST_SELECT =
   'id, full_number, invoice_type, status, customer_id, customer_name, issue_date, due_date, ' +
   'total_amount, paid_amount, credited_amount, cae, cae_simulated, cae_rechazo, enviado_at, etiquetas, ' +
   'saldo_inicial, referencia_anterior, ' +
-  'work_order:work_orders(number)';
+  'work_order:work_orders(number, vehicle:vehicles(brand, model, license_plate, reference_number))';
 
 function mapListRow(row: any): InvoiceListRow {
+  const v = row.work_order?.vehicle;
   return {
+    equipo: v ? [v.brand, v.model, v.license_plate, v.reference_number].filter(Boolean).join(' ') : null,
     id: row.id,
     fullNumber: row.full_number,
     invoiceType: row.invoice_type,

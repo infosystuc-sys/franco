@@ -64,7 +64,7 @@ export function Vehicles() {
     return vehicles.filter((v) => {
       if (customerFilter && v.customerId !== customerFilter) return false;
       if (!term) return true;
-      return coincideBusqueda(term, [v.brand, v.model, v.licensePlate, v.vin, v.engineNumber, v.engineModel, v.customerName]);
+      return coincideBusqueda(term, [v.brand, v.model, v.licensePlate, v.referenceNumber, v.vin, v.engineNumber, v.engineModel, v.customerName]);
     });
   }, [vehicles, search, customerFilter]);
 

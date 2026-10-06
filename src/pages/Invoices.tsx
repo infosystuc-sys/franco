@@ -68,6 +68,9 @@ const COLUMNAS: ColumnaListado<InvoiceListRow>[] = [
  * sobre un comprobante abre su ficha y le pide la acción por la URL: la ficha
  * es la que sabe dibujar la factura, imprimirla y mandarla.
  */
+/** Además de las columnas, se busca por el equipo de la OT (patente, N° de pieza). */
+const textoBusquedaFactura = (f: InvoiceListRow) => [f.equipo];
+
 export function Invoices() {
   const { role } = useAuth();
   const navigate = useNavigate();
@@ -179,6 +182,7 @@ export function Invoices() {
 
   return (
     <ComprobantesListado
+      textoBusqueda={textoBusquedaFactura}
       titulo="Facturas de venta"
       tipo="factura"
       filas={invoices}

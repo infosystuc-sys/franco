@@ -77,6 +77,7 @@ export function ComprobantesListado<T>({
   vacio = 'Todavía no hay comprobantes emitidos.',
   aviso,
   onCerrarAviso,
+  textoBusqueda,
 }: {
   titulo: string;
   tipo: TipoComprobante;
@@ -99,6 +100,11 @@ export function ComprobantesListado<T>({
   /** Un resultado para contar (no un error): "Se eliminó la orden…". */
   aviso?: string | null;
   onCerrarAviso?: () => void;
+  /**
+   * Datos que no están en las columnas pero por los que se busca (el número
+   * de pieza o la patente del equipo de una factura, por ejemplo).
+   */
+  textoBusqueda?: (fila: T) => unknown[];
 }) {
   const navigate = useNavigate();
   const [cantidad, setCantidad] = React.useState(PAGINA);
@@ -140,9 +146,12 @@ export function ComprobantesListado<T>({
     return filas.filter((f) => {
       if (estados.length > 0 && columnaEstado && !estados.includes(textoDe(columnaEstado.valor(f)).trim())) return false;
       if (busquedaDiferida.trim() === '') return true;
-      return coincideBusqueda(busquedaDiferida, columnas.map((c) => textoDe(c.valor(f))));
+      return coincideBusqueda(busquedaDiferida, [
+        ...columnas.map((c) => textoDe(c.valor(f))),
+        ...(textoBusqueda?.(f) ?? []),
+      ]);
     });
-  }, [filas, busquedaDiferida, estados, columnas, columnaEstado]);
+  }, [filas, busquedaDiferida, estados, columnas, columnaEstado, textoBusqueda]);
 
   // Con otro filtro se vuelve a la primera página.
   React.useEffect(() => {

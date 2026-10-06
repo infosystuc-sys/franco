@@ -106,17 +106,21 @@ export interface QuotationDetail {
   rejectionReason: string | null;
 }
 
-function vehicleLabelOf(vehicle: { brand: string | null; model: string; license_plate: string | null } | null): string {
+function vehicleLabelOf(
+  vehicle: { brand: string | null; model: string; license_plate: string | null; reference_number?: string | null } | null
+): string {
   if (!vehicle) return '—';
   const name = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
-  return vehicle.license_plate ? `${name} - ${vehicle.license_plate}` : name;
+  if (vehicle.license_plate) return `${name} - ${vehicle.license_plate}`;
+  if (vehicle.reference_number) return `${name} - N° ${vehicle.reference_number}`;
+  return name;
 }
 
 const LIST_SELECT = `
   id, number, status, component, valid_until, created_at, public_token,
   customer_id, enviado_at, etiquetas,
   customer:customers(name),
-  vehicle:vehicles(brand, model, license_plate),
+  vehicle:vehicles(brand, model, license_plate, reference_number),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
   items:quotation_items(quantity, unit_price)
 `;
@@ -178,7 +182,7 @@ const DETAIL_SELECT = `
   decided_at, rejection_reason, customer_sector_id,
   customer:customers(name, legal_name, tax_id, tax_condition, address_street, address_city, address_state, address_zip, email, phone,
                      sectors:customer_sectors(id, name, responsable, phone, email)),
-  vehicle:vehicles(brand, model, license_plate),
+  vehicle:vehicles(brand, model, license_plate, reference_number),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
   items:quotation_items(id, article_id, code, description, quantity, unit_price)
 `;
