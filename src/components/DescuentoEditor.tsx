@@ -76,13 +76,14 @@ export function DescuentoEditor({
           invalido ? 'border-danger text-danger' : 'border-line'
         )}
       />
-      {value && (
-        <span className={cn('text-[13px]', invalido ? 'text-danger' : 'text-text-soft')}>
-          {invalido
-            ? 'El descuento no puede ser igual o mayor que los renglones.'
-            : `− $ ${formatMoney(monto)}`}
-        </span>
-      )}
+      {/* Siempre ocupa el mismo lugar, haya o no descuento: si apareciera al
+          escribir, empujaría hacia la izquierda los botones y el campo. */}
+      <span
+        className={cn('w-40 shrink-0 truncate text-[13px]', invalido ? 'text-danger' : 'text-text-soft')}
+        title={invalido ? 'El descuento no puede ser igual o mayor que los renglones.' : undefined}
+      >
+        {!value ? '' : invalido ? 'Mayor que los renglones' : `− $ ${formatMoney(monto)}`}
+      </span>
     </div>
   );
 }
