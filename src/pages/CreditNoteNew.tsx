@@ -100,15 +100,29 @@ export function CreditNoteNew() {
     setPaymentMethodId('');
   }
 
-  /** Los renglones de la factura, tal cual, como punto de partida. */
+  /**
+   * Los renglones de la factura como punto de partida. Si la factura tuvo
+   * descuento, los precios se bajan en la misma proporción: la nota no puede
+   * acreditar más de lo que la factura cobró. Se redondea hacia abajo y la
+   * diferencia de centavos va a un renglón de cantidad 1, si hay uno.
+   */
   function renglonesDeLaFactura(f: InvoiceDetail): WorkOrderItemInput[] {
-    return f.items.map((i) => ({
+    const descuento = f.discountAmount ?? 0;
+    const factor = descuento > 0 ? f.netAmount / (f.netAmount + descuento) : 1;
+    const renglones = f.items.map((i) => ({
       articleId: null,
       code: i.code ?? '',
       description: i.description,
       quantity: i.quantity,
-      unitPrice: i.unitPrice,
+      unitPrice: descuento > 0 ? Math.floor(i.unitPrice * factor * 100) / 100 : i.unitPrice,
     }));
+    if (descuento > 0) {
+      const suma = renglones.reduce((s, r) => s + Math.round(r.quantity * r.unitPrice * 100) / 100, 0);
+      const falta = Math.round((f.netAmount - suma) * 100) / 100;
+      const unitario = renglones.find((r) => r.quantity === 1);
+      if (falta > 0 && unitario) unitario.unitPrice = Math.round((unitario.unitPrice + falta) * 100) / 100;
+    }
+    return renglones;
   }
 
   function responder(total: boolean) {
@@ -122,7 +136,7 @@ export function CreditNoteNew() {
 
   const totals = factura
     ? computeTotals(items, factura.invoiceType)
-    : { net: 0, vat: 0, total: 0 };
+    : { gross: 0, discount: 0, net: 0, vat: 0, total: 0 };
 
   // La factura ya estaba cobrada: hay plata que decidir qué hacer con ella.
   const cobrada = !!factura && factura.paidAmount > 0;

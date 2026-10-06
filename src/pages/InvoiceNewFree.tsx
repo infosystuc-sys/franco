@@ -1,3 +1,4 @@
+import { CobroContado, ajustarUnicoMedio, cobroCompleto, valoresDelCobro, type PagoContado } from '@/src/components/CobroContado';
 import React from 'react';
 import { Receipt, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -21,6 +22,7 @@ import {
   invoiceTypeFor,
   issueFreeInvoice,
   asignarSectorAFactura,
+  type Descuento,
   fetchInvoiceById,
   fetchProximoNumero,
   LETRAS_EMISIBLES,
@@ -34,7 +36,6 @@ import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethod
 import { describeReceiptError, saveReceipt } from '@/src/lib/receipts';
 import {
   Blocked,
-  CashCheckoutFields,
   FieldBox,
   InvoiceTopBar,
   InvoiceTotals,
@@ -85,12 +86,14 @@ export function InvoiceNewFree() {
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   // Sector del cliente al que va la factura. Con un solo sector, ese.
   const [sectorId, setSectorId] = React.useState('');
+  const [descuento, setDescuento] = React.useState<Descuento | null>(null);
   const [proximo, setProximo] = React.useState<string | null>(null);
   // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
   // = alta, { customer } = modificación del que ya está elegido.
   const [fichaCliente, setFichaCliente] = React.useState<{ customer: Customer | null } | null>(null);
   const [vencimiento, setVencimiento] = React.useState('');
-  const [paymentMethodId, setPaymentMethodId] = React.useState('');
+  // El cobro de contado: uno o varios medios, más los cheques de checkDrafts.
+  const [pagos, setPagos] = React.useState<PagoContado[]>([{ paymentMethodId: '', amount: 0 }]);
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
@@ -250,7 +253,15 @@ export function InvoiceNewFree() {
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
   // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
   // el total no puede quedar en blanco solo porque falta esa elección.
-  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType);
+  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType, descuento);
+  // Con un solo medio, ese medio cubre lo que falte (el total menos los
+  // cheques): el caso de siempre no pide escribir el importe.
+  const pagosEfectivos = ajustarUnicoMedio(pagos, checkDrafts, totals.total);
+  // Lo ya asignado, para proponer el importe del próximo cheque. El medio
+  // único no cuenta: es el que absorbe lo que el cheque no cubra.
+  const totalCobradoSinUnico =
+    (checkDrafts ?? []).reduce((s, c) => s + c.amount, 0) +
+    (pagos.length > 1 ? pagos.reduce((s, p) => s + (p.amount > 0 ? p.amount : 0), 0) : 0);
 
   const isCash = condicion === 'CONTADO';
 
@@ -258,7 +269,7 @@ export function InvoiceNewFree() {
   const canIssue =
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
     condicion !== '' && invoiceType !== '' &&
-    (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
+    (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
 
   const issueDate = new Date();
   const dueDate = new Date();
@@ -281,7 +292,7 @@ export function InvoiceNewFree() {
     try {
       const issued = await issueFreeInvoice(
         customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
-        isCash ? null : (vencimiento || null), remitoId
+        isCash ? null : (vencimiento || null), remitoId, descuento
       );
       if (sectorId) await asignarSectorAFactura(issued.id, sectorId);
 
@@ -296,16 +307,7 @@ export function InvoiceNewFree() {
 
       if (isCash) {
         try {
-          const values = checkDrafts?.length
-            ? checkDrafts.map((c) => ({
-                kind: 'CHEQUE' as const,
-                amount: c.amount,
-                checkNumber: c.checkNumber,
-                checkBank: c.checkBank,
-                checkDueDate: c.checkDueDate,
-                checkElectronico: c.electronico ?? false,
-              }))
-            : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
+          const values = valoresDelCobro(pagosEfectivos, checkDrafts);
           await saveReceipt(
             { customerId: customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
             [{ invoiceId: issued.id, amount: totals.total }],
@@ -490,17 +492,24 @@ export function InvoiceNewFree() {
         </FieldBox>
 
         {isCash && (
-          <FieldBox label="Cobrado con">
-            <CashCheckoutFields
+          <FieldBox label="Cobrado con" className="col-span-2">
+            {/* Uno o varios medios (y cheques): la suma tiene que dar el total. */}
+            <CobroContado
+              total={totals.total}
               paymentMethods={paymentMethods}
-              paymentMethodId={paymentMethodId}
-              onPaymentMethodIdChange={setPaymentMethodId}
-              checkDrafts={checkDrafts}
-              onOpenCheckModal={(electronico) => {
+              pagos={pagosEfectivos}
+              onPagosChange={setPagos}
+              cheques={checkDrafts}
+              onAgregarCheque={(electronico) => {
                 setChequeElectronico(electronico);
                 setCheckModalOpen(true);
               }}
-              onClearChecks={() => setCheckDrafts(null)}
+              onQuitarCheque={(i) =>
+                setCheckDrafts((actuales) => {
+                  const quedan = (actuales ?? []).filter((_, j) => j !== i);
+                  return quedan.length ? quedan : null;
+                })
+              }
             />
           </FieldBox>
         )}
@@ -513,7 +522,9 @@ export function InvoiceNewFree() {
           onChange={setItems}
           articles={articles}
           editable
-          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} />}
+          descuento={descuento}
+          onDescuentoChange={setDescuento}
+          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} descuento={descuento} />}
         />
 
         {emptyLines > 0 && (
@@ -572,11 +583,11 @@ export function InvoiceNewFree() {
       {checkModalOpen && (
         <CheckDraftModal
           electronico={chequeElectronico}
-          remainingBase={totals.total}
+          remainingBase={Math.max(0, Math.round((totals.total - totalCobradoSinUnico) * 100) / 100)}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
           onConfirm={(checks) => {
-            setCheckDrafts(checks);
+            setCheckDrafts((actuales) => [...(actuales ?? []), ...checks]);
             setCheckModalOpen(false);
           }}
           onClose={() => setCheckModalOpen(false)}

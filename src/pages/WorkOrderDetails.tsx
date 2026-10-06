@@ -5,7 +5,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
-import { setWorkOrderSector } from '@/src/lib/workOrders';
+import { setWorkOrderSector, setWorkOrderDescuento } from '@/src/lib/workOrders';
+import { descuentoDe } from '@/src/components/DescuentoEditor';
+import type { Descuento } from '@/src/lib/invoices';
 import { Button, inputClass, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
 import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
@@ -66,6 +68,34 @@ export function WorkOrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
+  // El descuento de la orden. Se guarda solo, un momento después de dejar de
+  // escribir: no depende del "Guardar" de los renglones.
+  const [descuento, setDescuento] = useState<Descuento | null>(null);
+  const guardadoDescuento = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    setDescuento(descuentoDe(order?.discountPercent, order?.discountFixed));
+  }, [order?.id, order?.discountPercent, order?.discountFixed]);
+  function cambiarDescuento(nuevo: Descuento | null) {
+    setDescuento(nuevo);
+    if (!order) return;
+    const id = order.id;
+    if (guardadoDescuento.current) clearTimeout(guardadoDescuento.current);
+    guardadoDescuento.current = setTimeout(() => {
+      setWorkOrderDescuento(id, nuevo)
+        .then(() =>
+          setOrder((o) =>
+            o && o.id === id
+              ? {
+                  ...o,
+                  discountPercent: nuevo?.tipo === 'PORCENTAJE' ? nuevo.valor : null,
+                  discountFixed: nuevo?.tipo === 'MONTO' ? nuevo.valor : null,
+                }
+              : o
+          )
+        )
+        .catch((err) => setError(getErrorMessage(err)));
+    }, 700);
+  }
   const [items, setItems] = useState<WorkOrderItemInput[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1100,6 +1130,8 @@ export function WorkOrderDetails() {
           onChange={setItems}
           articles={articles}
           editable={isAdmin && !locked}
+          descuento={descuento}
+          onDescuentoChange={isAdmin && !locked ? cambiarDescuento : undefined}
         />
       </Panel>
 

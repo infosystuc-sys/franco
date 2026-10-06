@@ -864,6 +864,15 @@ export function InvoiceDocument({
       {/* Totales */}
       <div className="flex justify-end border-t-2 border-ink pt-4">
         <div className="w-full space-y-1.5 sm:w-72">
+          {!!invoice.discountAmount && invoice.discountAmount > 0 && (
+            <>
+              <Total label="Renglones" value={invoice.netAmount + invoice.discountAmount} />
+              <Total
+                label={invoice.discountPercent ? `Descuento ${invoice.discountPercent}%` : 'Descuento'}
+                value={-invoice.discountAmount}
+              />
+            </>
+          )}
           {discriminates ? (
             <>
               <Total label="Neto gravado" value={invoice.netAmount} />
@@ -940,7 +949,7 @@ function Total({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between text-[14px] text-text-soft">
       <span>{label}</span>
-      <span className="text-text">$ {formatMoney(value)}</span>
+      <span className="text-text">{value < 0 ? `− $ ${formatMoney(-value)}` : `$ ${formatMoney(value)}`}</span>
     </div>
   );
 }

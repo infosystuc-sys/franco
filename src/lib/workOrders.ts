@@ -619,6 +619,9 @@ export interface WorkOrderDetail {
     | null;
   /** Sector del cliente al que van los avisos. Null = contacto general. */
   customerSectorId: string | null;
+  /** Descuento pactado en la orden: un porcentaje o un monto fijo. */
+  discountPercent: number | null;
+  discountFixed: number | null;
   vehicle:
     | {
         // Se necesita para cotizar desde la OT: sin este id habría que
@@ -681,7 +684,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     .select(
       `id, number, component, public_token, estimated_delivery_date,
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
-       reception_kind, observations, customer_sector_id,
+       reception_kind, observations, customer_sector_id, discount_percent, discount_fixed,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip,
@@ -712,6 +715,8 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
       ? { ...(data as any).customer, sectors: (data as any).customer.sectors ?? [] }
       : null,
     customerSectorId: (data as any).customer_sector_id ?? null,
+    discountPercent: (data as any).discount_percent === null ? null : Number((data as any).discount_percent),
+    discountFixed: (data as any).discount_fixed === null ? null : Number((data as any).discount_fixed),
     vehicle: (data as any).vehicle,
     employee: (data as any).employee,
     mechanic: (data as any).mechanic ?? null,
@@ -766,6 +771,21 @@ export interface WorkOrderItemInput {
  * Cambia el estado de la OT (a cuál de work_order_statuses). El historial lo
  * escribe un trigger en la base, así que no hace falta registrarlo desde acá.
  */
+/** El descuento de la orden: porcentaje o monto fijo (uno u otro), o ninguno. */
+export async function setWorkOrderDescuento(
+  workOrderId: string,
+  descuento: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null
+) {
+  const { error } = await supabase
+    .from('work_orders')
+    .update({
+      discount_percent: descuento?.tipo === 'PORCENTAJE' ? descuento.valor : null,
+      discount_fixed: descuento?.tipo === 'MONTO' ? descuento.valor : null,
+    })
+    .eq('id', workOrderId);
+  if (error) throw error;
+}
+
 /** A qué sector del cliente van los avisos de la orden. Null = general. */
 export async function setWorkOrderSector(workOrderId: string, sectorId: string | null) {
   const { error } = await supabase

@@ -1,3 +1,4 @@
+import { CobroContado, ajustarUnicoMedio, cobroCompleto, valoresDelCobro, type PagoContado } from '@/src/components/CobroContado';
 import React from 'react';
 import { XCircle, Receipt, AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
@@ -24,6 +25,7 @@ import {
   invoiceTypeFor,
   issueInvoice,
   asignarSectorAFactura,
+  type Descuento,
   fetchProximoNumero,
   LETRAS_EMISIBLES,
   PAYMENT_TERMS_DAYS,
@@ -47,6 +49,7 @@ import { CheckDraftModal, type CheckDraft } from '@/src/components/CheckDraftMod
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
+import { descuentoDe } from '@/src/components/DescuentoEditor';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
 
 /**
@@ -200,6 +203,8 @@ export function InvoiceNew() {
   const [condicion, setCondicion] = React.useState<CondicionVenta | ''>('');
   // Sector del cliente al que va la factura: arranca en el de la OT.
   const [sectorId, setSectorId] = React.useState('');
+  // Descuento de la factura: arranca en el pactado en la OT.
+  const [descuento, setDescuento] = React.useState<Descuento | null>(null);
   const [proximo, setProximo] = React.useState<string | null>(null);
   // La ficha del cliente abierta en el modal: null = cerrado, { customer: null }
   // = alta, { customer } = modificación del que ya está elegido.
@@ -207,7 +212,8 @@ export function InvoiceNew() {
   // Vacío = el plazo por defecto. Solo se usa en cuenta corriente.
   const [vencimiento, setVencimiento] = React.useState('');
   const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethod[]>([]);
-  const [paymentMethodId, setPaymentMethodId] = React.useState('');
+  // El cobro de contado: uno o varios medios, más los cheques de checkDrafts.
+  const [pagos, setPagos] = React.useState<PagoContado[]>([{ paymentMethodId: '', amount: 0 }]);
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [checkDrafts, setCheckDrafts] = React.useState<CheckDraft[] | null>(null);
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
@@ -290,6 +296,7 @@ export function InvoiceNew() {
         const workOrder = await fetchWorkOrderByNumber(otNumber!);
         if (cancelled) return;
         setOrder(workOrder);
+        setDescuento(workOrder ? descuentoDe(workOrder.discountPercent, workOrder.discountFixed) : null);
 
         if (workOrder) {
           setItems(
@@ -407,7 +414,15 @@ export function InvoiceNew() {
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
   // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
   // el total no puede quedar en blanco solo porque falta esa elección.
-  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType);
+  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType, descuento);
+  // Con un solo medio, ese medio cubre lo que falte (el total menos los
+  // cheques): el caso de siempre no pide escribir el importe.
+  const pagosEfectivos = ajustarUnicoMedio(pagos, checkDrafts, totals.total);
+  // Lo ya asignado, para proponer el importe del próximo cheque. El medio
+  // único no cuenta: es el que absorbe lo que el cheque no cubra.
+  const totalCobradoSinUnico =
+    (checkDrafts ?? []).reduce((s, c) => s + c.amount, 0) +
+    (pagos.length > 1 ? pagos.reduce((s, p) => s + (p.amount > 0 ? p.amount : 0), 0) : 0);
 
   // Contado es exactamente lo que antes era el check de "factura de contado":
   // se cobra en el mismo acto de emitir.
@@ -420,7 +435,7 @@ export function InvoiceNew() {
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   const canIssue =
     items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' &&
-    (!isCash || !!paymentMethodId || !!checkDrafts?.length) && !issuing;
+    (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
 
   /**
    * Cambiar el cliente antes de emitir. Se recarga la orden después: el tipo
@@ -464,7 +479,8 @@ export function InvoiceNew() {
     try {
       const issued = await issueInvoice(
         order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
-        isCash ? null : (vencimiento || null)
+        isCash ? null : (vencimiento || null),
+        descuento
       );
       if ((sectorId || null) !== (order.customerSectorId ?? null)) {
         await asignarSectorAFactura(issued.id, sectorId || null);
@@ -481,16 +497,7 @@ export function InvoiceNew() {
 
       if (isCash) {
         try {
-          const values = checkDrafts?.length
-            ? checkDrafts.map((c) => ({
-                kind: 'CHEQUE' as const,
-                amount: c.amount,
-                checkNumber: c.checkNumber,
-                checkBank: c.checkBank,
-                checkDueDate: c.checkDueDate,
-                checkElectronico: c.electronico ?? false,
-              }))
-            : [{ kind: 'MEDIO_PAGO' as const, amount: totals.total, paymentMethodId }];
+          const values = valoresDelCobro(pagosEfectivos, checkDrafts);
           await saveReceipt(
             { customerId: order.customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
             [{ invoiceId: issued.id, amount: totals.total }],
@@ -667,17 +674,24 @@ export function InvoiceNew() {
         </FieldBox>
 
         {isCash && (
-          <FieldBox label="Cobrado con">
-            <CashCheckoutFields
+          <FieldBox label="Cobrado con" className="col-span-2">
+            {/* Uno o varios medios (y cheques): la suma tiene que dar el total. */}
+            <CobroContado
+              total={totals.total}
               paymentMethods={paymentMethods}
-              paymentMethodId={paymentMethodId}
-              onPaymentMethodIdChange={setPaymentMethodId}
-              checkDrafts={checkDrafts}
-              onOpenCheckModal={(electronico) => {
+              pagos={pagosEfectivos}
+              onPagosChange={setPagos}
+              cheques={checkDrafts}
+              onAgregarCheque={(electronico) => {
                 setChequeElectronico(electronico);
                 setCheckModalOpen(true);
               }}
-              onClearChecks={() => setCheckDrafts(null)}
+              onQuitarCheque={(i) =>
+                setCheckDrafts((actuales) => {
+                  const quedan = (actuales ?? []).filter((_, j) => j !== i);
+                  return quedan.length ? quedan : null;
+                })
+              }
             />
           </FieldBox>
         )}
@@ -690,7 +704,9 @@ export function InvoiceNew() {
           onChange={setItems}
           articles={articles}
           editable
-          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} />}
+          descuento={descuento}
+          onDescuentoChange={setDescuento}
+          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} descuento={descuento} />}
         />
 
         {emptyLines > 0 && (
@@ -800,11 +816,11 @@ export function InvoiceNew() {
       {checkModalOpen && (
         <CheckDraftModal
           electronico={chequeElectronico}
-          remainingBase={totals.total}
+          remainingBase={Math.max(0, Math.round((totals.total - totalCobradoSinUnico) * 100) / 100)}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
           onConfirm={(checks) => {
-            setCheckDrafts(checks);
+            setCheckDrafts((actuales) => [...(actuales ?? []), ...checks]);
             setCheckModalOpen(false);
           }}
           onClose={() => setCheckModalOpen(false)}
@@ -821,9 +837,12 @@ export function InvoiceNew() {
 export function InvoiceTotals({
   type,
   totals,
+  descuento,
 }: {
   type: InvoiceType;
-  totals: { net: number; vat: number; total: number };
+  totals: { gross?: number; discount?: number; net: number; vat: number; total: number };
+  /** Para rotular el descuento ("Descuento 10%"). */
+  descuento?: Descuento | null;
 }) {
   // Solo los totales: la explicación de por qué salió esa letra se fue con el
   // resto del texto estático — la letra se elige a mano y está a la vista en
@@ -831,6 +850,18 @@ export function InvoiceTotals({
   return (
     <div className="flex justify-end">
       <div className="w-full space-y-2 rounded-lg border border-line bg-panel-alt p-4 md:w-1/3">
+        {!!totals.discount && totals.discount > 0 && (
+          <>
+            <div className="flex justify-between text-xs text-text-soft">
+              <span>Renglones</span>
+              <span className="text-text">$ {formatMoney(totals.gross ?? 0)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-text-soft">
+              <span>Descuento{descuento?.tipo === 'PORCENTAJE' ? ` ${descuento.valor}%` : ''}</span>
+              <span className="text-text">− $ {formatMoney(totals.discount)}</span>
+            </div>
+          </>
+        )}
         {discriminatesVat(type) ? (
           <>
             <div className="flex justify-between text-xs text-text-soft">
@@ -856,97 +887,6 @@ export function InvoiceTotals({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Con qué se cobra una factura de contado: genera y aplica el recibo en el
- * mismo paso que la emisión, para no tener que ir después a Cobranzas a buscar
- * la factura recién hecha y cobrarla a mano. Comparte esta pieza InvoiceNew e
- * InvoiceNewFree — mismo comportamiento, con o sin OT de por medio.
- *
- * Vive como un dato más del encabezado, debajo de la condición de venta que lo
- * hace aparecer: con qué se cobra es parte de emitir, no un paso posterior, y
- * tenerlo abajo en un panel aparte lo dejaba fuera de la vista. Quien lo llama
- * decide si va —solo cuando la condición es contado—, así que acá ya no se
- * pregunta.
- */
-/** Valor centinela del select: elegirlo abre el modal de carga en vez de fijar un medio. */
-const CHEQUE_OPTION_VALUE = '__cheque__';
-const ECHEQ_OPTION_VALUE = '__echeq__';
-
-export function CashCheckoutFields({
-  paymentMethods,
-  paymentMethodId,
-  onPaymentMethodIdChange,
-  checkDrafts,
-  onOpenCheckModal,
-  onClearChecks,
-}: {
-  paymentMethods: PaymentMethod[];
-  paymentMethodId: string;
-  onPaymentMethodIdChange: (value: string) => void;
-  checkDrafts: CheckDraft[] | null;
-  /** electronico: si se eligió eCheq en vez de cheque físico. */
-  onOpenCheckModal: (electronico: boolean) => void;
-  onClearChecks: () => void;
-}) {
-  // La cartera de cheques no es un medio de pago elegible acá: se mueve
-  // desde la pantalla de Cheques, no cobrando una factura con ella. Pagar
-  // con un cheque NUEVO (que el cliente entrega en el momento) es distinto:
-  // esa opción abre el modal de carga en vez de salir de esta lista.
-  const selectableMethods = paymentMethods.filter((m) => m.kind !== 'CARTERA_CHEQUES');
-
-  if (checkDrafts !== null) {
-    return (
-      <div className="rounded-md border border-line bg-panel-alt px-2 py-1.5 text-[12px]">
-        <span className="block font-semibold uppercase tracking-wider text-text-soft">
-          {checkDrafts[0]?.electronico
-            ? checkDrafts.length === 1 ? 'eCheq cargado' : `${checkDrafts.length} eCheqs cargados`
-            : checkDrafts.length === 1 ? 'Cheque cargado' : `${checkDrafts.length} cheques cargados`}
-        </span>
-        {checkDrafts.map((c, i) => (
-          <span key={i} className="mt-0.5 block truncate normal-case text-text">
-            {c.checkNumber} — {c.checkBank} — $ {formatMoney(c.amount)}
-          </span>
-        ))}
-        <button
-          type="button"
-          onClick={onClearChecks}
-          className="mt-1 text-[11px] font-bold uppercase tracking-wider text-accent-deep hover:underline"
-        >
-          Cambiar
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <select
-        value={paymentMethodId}
-        onChange={(e) => {
-          if (e.target.value === CHEQUE_OPTION_VALUE) onOpenCheckModal(false);
-          else if (e.target.value === ECHEQ_OPTION_VALUE) onOpenCheckModal(true);
-          else onPaymentMethodIdChange(e.target.value);
-        }}
-        className={cn(selectCabecera, 'w-full', !paymentMethodId && 'border-danger text-danger')}
-      >
-        <option value="">Elegí un medio…</option>
-        {selectableMethods.map((m) => (
-          <option key={m.id} value={m.id}>{m.name}</option>
-        ))}
-        <option value={CHEQUE_OPTION_VALUE}>Cheque físico</option>
-        <option value={ECHEQ_OPTION_VALUE}>Cheque electrónico (eCheq)</option>
-      </select>
-      <span className="mt-1 block text-[11px] normal-case text-text-soft">
-        {selectableMethods.length === 0
-          ? 'No hay medios activos. Cargá uno desde Medios de pago.'
-          : paymentMethodId
-            ? 'Se cobra al emitir'
-            : 'Obligatorio para emitir de contado'}
-      </span>
-    </>
   );
 }
 

@@ -196,9 +196,39 @@ export function afipQrUrl(
 }
 
 export interface InvoiceTotals {
+  /** Suma de los renglones, antes del descuento. */
+  gross: number;
+  /** Lo que se descuenta (0 si no hay descuento). */
+  discount: number;
+  /** Neto gravado: los renglones menos el descuento. */
   net: number;
   vat: number;
   total: number;
+}
+
+/**
+ * Descuento de una OT o una factura: un porcentaje sobre los renglones o un
+ * monto fijo. Baja el neto gravado, y con él el IVA.
+ */
+export interface Descuento {
+  tipo: 'PORCENTAJE' | 'MONTO';
+  valor: number;
+}
+
+/** Cuánto descuenta, sobre una suma de renglones. */
+export function montoDeDescuento(gross: number, descuento: Descuento | null | undefined): number {
+  if (!descuento || !(descuento.valor > 0)) return 0;
+  return descuento.tipo === 'PORCENTAJE'
+    ? round2((gross * descuento.valor) / 100)
+    : round2(descuento.valor);
+}
+
+/** Los parámetros de la RPC: uno u otro, nunca los dos. */
+function parametrosDeDescuento(descuento: Descuento | null | undefined) {
+  if (!descuento || !(descuento.valor > 0)) return { p_discount_percent: null, p_discount_fixed: null };
+  return descuento.tipo === 'PORCENTAJE'
+    ? { p_discount_percent: descuento.valor, p_discount_fixed: null }
+    : { p_discount_percent: null, p_discount_fixed: descuento.valor };
 }
 
 /**
@@ -207,11 +237,14 @@ export interface InvoiceTotals {
  */
 export function computeTotals(
   items: { quantity: number; unitPrice: number }[],
-  type: InvoiceType
+  type: InvoiceType,
+  descuento?: Descuento | null
 ): InvoiceTotals {
-  const net = round2(items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
+  const gross = round2(items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
+  const discount = montoDeDescuento(gross, descuento);
+  const net = round2(gross - discount);
   const vat = type === 'C' ? 0 : round2(net * VAT_RATE);
-  return { net, vat, total: round2(net + vat) };
+  return { gross, discount, net, vat, total: round2(net + vat) };
 }
 
 // ===========================================================================
@@ -328,6 +361,10 @@ export interface InvoiceDetail extends InvoiceListRow {
   number: number;
   paymentTermsDays: number;
   netAmount: number;
+  /** Porcentaje de descuento, si se hizo por porcentaje. */
+  discountPercent?: number | null;
+  /** Lo que se descontó del neto. 0 = sin descuento. */
+  discountAmount?: number;
   vatAmount: number;
   notes: string | null;
   voidedAt: string | null;
@@ -436,7 +473,7 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
        issuer_legal_name, issuer_tax_id, issuer_tax_condition, issuer_address,
        issuer_gross_income, issuer_activity_start_date,
        issue_date, due_date, payment_terms_days,
-       net_amount, vat_amount, total_amount, paid_amount,
+       net_amount, vat_amount, total_amount, paid_amount, discount_percent, discount_amount,
        cae, cae_due_date, cae_simulated, cae_rechazo, cae_rechazado_at, revertida_por_nc, credited_amount,
        notes, voided_at, voided_reason, created_at, work_order_id,
        work_order:work_orders(number, component,
@@ -458,6 +495,8 @@ export async function fetchInvoiceById(id: string): Promise<InvoiceDetail | null
     number: Number(row.number),
     paymentTermsDays: Number(row.payment_terms_days),
     netAmount: Number(row.net_amount),
+    discountPercent: row.discount_percent === null || row.discount_percent === undefined ? null : Number(row.discount_percent),
+    discountAmount: Number(row.discount_amount ?? 0),
     vatAmount: Number(row.vat_amount),
     notes: row.notes,
     voidedAt: row.voided_at,
@@ -662,9 +701,11 @@ export async function issueInvoice(
   invoiceType: InvoiceType,
   condicion: CondicionVenta,
   /** Solo se usa en cuenta corriente; en contado vence el mismo día. */
-  dueDate: string | null
+  dueDate: string | null,
+  descuento: Descuento | null = null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_invoice', {
+    ...parametrosDeDescuento(descuento),
     p_work_order_id: workOrderId,
     p_items: items.map((item) => ({
       article_id: item.articleId,
@@ -708,9 +749,11 @@ export async function issueFreeInvoice(
   invoiceType: InvoiceType,
   condicion: CondicionVenta,
   dueDate: string | null,
-  remitoId: string | null = null
+  remitoId: string | null = null,
+  descuento: Descuento | null = null
 ): Promise<IssuedInvoice> {
   const { data, error } = await supabase.rpc('issue_free_invoice', {
+    ...parametrosDeDescuento(descuento),
     p_customer_id: customerId,
     p_items: items.map((item) => ({
       article_id: item.articleId,

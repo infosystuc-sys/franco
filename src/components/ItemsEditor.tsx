@@ -8,6 +8,8 @@ import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, SectionHeader } from '@/src/components/ui';
 import { articulosExactos, buscarArticulos, ARTICULOS_A_MOSTRAR, type Article } from '@/src/lib/articles';
 import type { WorkOrderItemInput } from '@/src/lib/workOrders';
+import { montoDeDescuento, type Descuento } from '@/src/lib/invoices';
+import { DescuentoEditor } from '@/src/components/DescuentoEditor';
 
 /**
  * Las cantidades de una orden son piezas: tres toberas, un filtro. No hay
@@ -34,6 +36,8 @@ export function ItemsEditor({
   title = 'Renglones',
   totals,
   descripcionEditable = false,
+  descuento,
+  onDescuentoChange,
 }: {
   items: WorkOrderItemInput[];
   onChange: (items: WorkOrderItemInput[]) => void;
@@ -52,6 +56,9 @@ export function ItemsEditor({
    * como estaba.
    */
   descripcionEditable?: boolean;
+  /** Descuento por porcentaje o monto fijo. Con onDescuentoChange, se edita acá. */
+  descuento?: Descuento | null;
+  onDescuentoChange?: (descuento: Descuento | null) => void;
 }) {
   // El buscador abierto: null = cerrado. Con texto, lo abrió el campo código
   // porque no encontró un artículo exacto; vacío, la lupa con el campo vacío.
@@ -63,7 +70,9 @@ export function ItemsEditor({
   const [extraArticles, setExtraArticles] = React.useState<Article[]>([]);
   const allArticles = React.useMemo(() => [...articles, ...extraArticles], [articles, extraArticles]);
 
-  const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const bruto = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const descontado = montoDeDescuento(bruto, descuento);
+  const total = bruto - descontado;
   const iva = total * IVA_RATE;
 
   function updateItem(index: number, patch: Partial<WorkOrderItemInput>) {
@@ -233,7 +242,7 @@ export function ItemsEditor({
                 Total neto
               </td>
               <td className="px-3 py-2 text-right font-display text-lg font-medium text-text">
-                $ {formatMoney(total)}
+                $ {formatMoney(bruto)}
               </td>
               {editable && <td></td>}
             </tr>
@@ -241,9 +250,27 @@ export function ItemsEditor({
         </table>
       </div>
 
+      {editable && onDescuentoChange && (
+        <div className="flex justify-end">
+          <DescuentoEditor value={descuento ?? null} onChange={onDescuentoChange} bruto={bruto} />
+        </div>
+      )}
+
       {totals ?? (
         <div className="flex justify-end">
           <div className="w-full space-y-2 border border-line bg-panel-alt p-4 md:w-1/3">
+            {descontado > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-text-soft">
+                  <span>Renglones</span>
+                  <span className="text-text">$ {formatMoney(bruto)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-text-soft">
+                  <span>Descuento{descuento?.tipo === 'PORCENTAJE' ? ` ${descuento.valor}%` : ''}</span>
+                  <span className="text-text">− $ {formatMoney(descontado)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-xs text-text-soft">
               <span>Subtotal</span>
               <span className="text-text">$ {formatMoney(total)}</span>
