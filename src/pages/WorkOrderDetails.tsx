@@ -864,6 +864,14 @@ export function WorkOrderDetails() {
               {order.vehicle.license_plate}
             </span>
           )}
+          {order.vehicle?.reference_number && (
+            <span className="mt-1 block text-xs text-text-soft">
+              {order.vehicle.kind === 'PIEZA' ? 'N° de pieza' : 'N° de referencia'}{' '}
+              <span className="inline-block border border-line bg-panel-alt px-2 py-0.5 font-mono text-xs font-semibold text-text">
+                {order.vehicle.reference_number}
+              </span>
+            </span>
+          )}
           {order.vehicle && (
             <span className="mt-1.5 block text-xs text-text-soft">
               {[

@@ -289,11 +289,14 @@ export interface WorkOrderListRow {
  * donde mirar qué hay en el taller.
  */
 function vehicleLabel(
-  vehicle: { brand: string | null; model: string; license_plate: string | null } | null
+  vehicle: { brand: string | null; model: string; license_plate: string | null; reference_number?: string | null } | null
 ): string {
   if (!vehicle) return 'Pieza suelta';
   const name = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
-  return vehicle.license_plate ? `${name} - Placa ${vehicle.license_plate}` : name;
+  // La patente identifica al vehículo; el número de pieza, a la pieza.
+  if (vehicle.license_plate) return `${name} - Placa ${vehicle.license_plate}`;
+  if (vehicle.reference_number) return `${name} - N° ${vehicle.reference_number}`;
+  return name;
 }
 
 function mapWorkOrderListRow(row: any): WorkOrderListRow {
@@ -327,7 +330,7 @@ export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount
           `id, number, component, public_token,
            status:work_order_statuses(id, label, color, is_terminal, frees_yard),
            customer:customers(name),
-           vehicle:vehicles(brand, model, license_plate)`
+           vehicle:vehicles(brand, model, license_plate, reference_number)`
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -393,7 +396,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        price_auth_status, price_auth_requested_total,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
-       vehicle:vehicles(brand, model, license_plate),
+       vehicle:vehicles(brand, model, license_plate, reference_number),
        employee:employees!work_orders_employee_id_fkey(name),
        quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
@@ -624,6 +627,9 @@ export interface WorkOrderDetail {
         brand: string | null;
         model: string;
         license_plate: string | null;
+        /** El número que identifica a una pieza (como la patente al vehículo). */
+        reference_number: string | null;
+        kind: 'VEHICULO' | 'PIEZA';
         vehicle_type: VehicleType;
         year: number | null;
         engine_brand: string | null;
@@ -680,7 +686,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip,
                           sectors:customer_sectors(id, name, responsable, phone, email)),
-       vehicle:vehicles(id, brand, model, license_plate, vehicle_type, year, engine_brand, engine_model, injection_system),
+       vehicle:vehicles(id, brand, model, license_plate, reference_number, kind, vehicle_type, year, engine_brand, engine_model, injection_system),
        employee:employees!work_orders_employee_id_fkey(id, name),
        mechanic:employees!work_orders_mechanic_id_fkey(id, name),
        overbill_amount,

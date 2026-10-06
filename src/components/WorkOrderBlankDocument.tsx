@@ -14,6 +14,8 @@ export interface WorkOrderBlankData {
   vehicleBrand: string | null;
   vehicleModel: string | null;
   licensePlate: string | null;
+  /** Número de la pieza, si lo que entró es una pieza. */
+  referenceNumber?: string | null;
   year: number | null;
   engineBrand: string | null;
   engineModel: string | null;
@@ -105,7 +107,7 @@ export function WorkOrderBlankDocument({
         <Campo
           label="Vehículo / Equipo"
           value={
-            [vehiculo || null, order.licensePlate, order.year ? String(order.year) : null]
+            [vehiculo || null, order.licensePlate, order.referenceNumber ? `N° de pieza ${order.referenceNumber}` : null, order.year ? String(order.year) : null]
               .filter(Boolean)
               .join(' · ') || '________________________'
           }

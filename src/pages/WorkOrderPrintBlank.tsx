@@ -115,6 +115,7 @@ export function WorkOrderPrintBlank() {
           vehicleBrand: order.vehicle?.brand ?? null,
           vehicleModel: order.vehicle?.model ?? null,
           licensePlate: order.vehicle?.license_plate ?? null,
+          referenceNumber: order.vehicle?.reference_number ?? null,
           year: order.vehicle?.year ?? null,
           engineBrand: order.vehicle?.engine_brand ?? null,
           engineModel: order.vehicle?.engine_model ?? null,
