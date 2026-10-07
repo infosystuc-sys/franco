@@ -74,8 +74,12 @@ export function SupplierModal({
       setError('El nombre del proveedor es obligatorio.');
       return;
     }
-    if (form.taxId.trim() !== '' && !isValidCuit(form.taxId)) {
-      setError('El CUIT/CUIL ingresado no es válido.');
+    // Igual que en clientes: un CUIT que no valida se avisa, pero no frena el alta.
+    if (
+      form.taxId.trim() !== '' &&
+      !isValidCuit(form.taxId) &&
+      !window.confirm(`El CUIT/CUIL "${form.taxId}" no es válido (o es un DNI).\n\n¿Guardar el proveedor así?`)
+    ) {
       return;
     }
     setSaving(true);

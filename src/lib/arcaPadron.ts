@@ -82,16 +82,16 @@ export function volcarEnFicha(
   form: FiscalEntityInput,
   datos: DatosDePadron
 ): Partial<FiscalEntityInput> {
-  const cambios: Partial<FiscalEntityInput> = {
-    taxId: datos.taxId,
-    legalName: datos.legalName,
-    taxCondition: datos.taxCondition,
-    addressStreet: datos.addressStreet,
-    addressCity: datos.addressCity,
-    addressState: datos.addressState,
-    addressZip: datos.addressZip,
-  };
-  if (form.name.trim() === '') cambios.name = datos.name;
+  // Lo que ARCA no trajo (un CUIL sin domicilio, por ejemplo) no borra lo
+  // que ya estaba escrito.
+  const cambios: Partial<FiscalEntityInput> = { taxCondition: datos.taxCondition };
+  if (datos.taxId) cambios.taxId = datos.taxId;
+  if (datos.legalName) cambios.legalName = datos.legalName;
+  if (datos.addressStreet) cambios.addressStreet = datos.addressStreet;
+  if (datos.addressCity) cambios.addressCity = datos.addressCity;
+  if (datos.addressState) cambios.addressState = datos.addressState;
+  if (datos.addressZip) cambios.addressZip = datos.addressZip;
+  if (form.name.trim() === '' && datos.name) cambios.name = datos.name;
   return cambios;
 }
 

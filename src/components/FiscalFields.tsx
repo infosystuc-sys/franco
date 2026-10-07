@@ -124,7 +124,9 @@ export function FiscalFields({
             </div>
             {cuitInvalid && (
               <span className="block mt-1 text-[12px] font-normal normal-case text-danger">
-                CUIT/CUIL inválido (dígito verificador incorrecto).
+                {form.taxId.replace(/\D/g, '').length <= 8
+                  ? 'Es un DNI: tocá ARCA para buscar su CUIT/CUIL. Si no está, se puede guardar igual.'
+                  : 'CUIT/CUIL inválido (dígito verificador incorrecto). Se puede guardar igual.'}
               </span>
             )}
             {errorPadron && (

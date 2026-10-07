@@ -281,6 +281,56 @@ async function cuitDeDocumento(documento: string, cred: Credencial): Promise<str
   return (Array.isArray(ids) ? ids : [ids]).map((v: unknown) => String(v));
 }
 
+/**
+ * Los datos de una persona en el padrón A13. Es el respaldo de la constancia
+ * (A5): quien tiene solo CUIL —un empleado, un jubilado, cualquier consumidor
+ * final— no tiene constancia de inscripción, y el A5 contesta "la clave no
+ * registra apellido y nombre". El A13 sí lo tiene: nombre y domicilio.
+ */
+async function personaA13(cuit: string, cred: Credencial): Promise<Record<string, any> | null> {
+  const ticket = await ticketDeArca(SERVICIO_A13, cred);
+  const sobre = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:a13="http://a13.soap.ws.server.puc.sr/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <a13:getPersona>
+      <token>${ticket.token}</token>
+      <sign>${ticket.sign}</sign>
+      <cuitRepresentada>${cred.cuit}</cuitRepresentada>
+      <idPersona>${cuit}</idPersona>
+    </a13:getPersona>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+  const xml = await pedirSoap(PADRON_A13_URL, sobre);
+  if (fallaSoap(xml)) return null;
+  const respuesta = parser.parse(xml);
+  return respuesta?.Envelope?.Body?.getPersonaResponse?.personaReturn?.persona ?? null;
+}
+
+/** La persona del A13 llevada a la ficha. Sin constancia, es consumidor final. */
+function traducirA13(persona: Record<string, any>, cuit: string) {
+  const razonSocial = texto(persona.razonSocial);
+  const denominacion = razonSocial || [texto(persona.apellido), texto(persona.nombre)].filter(Boolean).join(' ');
+  const domicilios = comoLista(persona.domicilio);
+  const domicilio =
+    domicilios.find((d) => texto(d.tipoDomicilio).toUpperCase() === 'FISCAL') ?? domicilios[0] ?? {};
+  return {
+    taxId: texto(persona.idPersona) || cuit,
+    legalName: denominacion,
+    name: denominacion,
+    taxCondition: 'CONSUMIDOR_FINAL',
+    addressStreet: texto(domicilio.direccion),
+    addressCity: texto(domicilio.localidad) || texto(domicilio.descripcionProvincia),
+    addressState: texto(domicilio.descripcionProvincia),
+    addressZip: texto(domicilio.codPostal),
+    tipoPersona: texto(persona.tipoPersona),
+    estadoClave: texto(persona.estadoClave),
+    detalleImpuestos: [] as string[],
+    categoriaMonotributo: '',
+  };
+}
+
 // ── Traducción a la ficha del sistema ───────────────────────────────────────
 
 function comoLista(valor: unknown): Record<string, any>[] {
@@ -416,6 +466,22 @@ Deno.serve(async (req) => {
 
     if (persona.errorConstancia) {
       const detalle = texto(persona.errorConstancia?.error ?? persona.errorConstancia);
+      // Sin constancia (pasa con los CUIL): se buscan nombre y domicilio en el
+      // A13. Si tampoco está, se devuelve al menos el CUIT, que ya se sabe.
+      const a13 = await personaA13(cuit, cred).catch(() => null);
+      if (a13) {
+        const aviso = [
+          avisoDni,
+          'Sin constancia de inscripción en ARCA (CUIL): se trajo nombre y domicilio del padrón y queda como Consumidor Final.',
+        ].filter(Boolean).join(' ');
+        return json({ datos: traducirA13(a13, cuit), aviso });
+      }
+      if (documento.length !== 11) {
+        return json({
+          datos: { ...traducirA13({}, cuit), taxId: cuit },
+          aviso: `ARCA no da constancia de ${cuit} (${detalle}). Se completó el CUIT/CUIL; cargá el nombre a mano.`,
+        });
+      }
       return json({ error: `ARCA no da constancia de ${cuit}: ${detalle}` }, 404);
     }
 

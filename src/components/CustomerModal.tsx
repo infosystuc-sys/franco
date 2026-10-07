@@ -61,8 +61,19 @@ export function CustomerModal({
       setError('El nombre del cliente es obligatorio.');
       return;
     }
-    if (form.taxId.trim() !== '' && !isValidCuit(form.taxId)) {
-      setError('El CUIT/CUIL ingresado no es válido.');
+    // Un CUIT que no valida (o un DNI, o alguien que ARCA no tiene) no frena
+    // el alta: el cliente igual existe y hay que poder atenderlo. Se avisa y se
+    // pide confirmar, porque con ese dato no se le puede hacer Factura A.
+    if (
+      form.taxId.trim() !== '' &&
+      !isValidCuit(form.taxId) &&
+      !window.confirm(
+        `El CUIT/CUIL "${form.taxId}" no es válido (o es un DNI).
+
+` +
+          'Se puede guardar igual, pero no sirve para Factura A ni para consultar ARCA. ¿Guardar el cliente así?'
+      )
+    ) {
       return;
     }
     const sectores = form.sectors ?? [];
