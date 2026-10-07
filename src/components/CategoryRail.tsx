@@ -46,7 +46,7 @@ export function CategoryRail({
     return (
       <nav
         className={cn(
-          'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
+          'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-nav py-5',
           'transition-transform duration-200',
           open ? 'translate-x-0' : '-translate-x-full',
           collapsed ? 'md:-translate-x-full' : 'md:translate-x-0'
@@ -66,8 +66,8 @@ export function CategoryRail({
               className={cn(
                 'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                 location.pathname.startsWith('/informe')
-                  ? 'border-accent bg-ink-hover text-accent'
-                  : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
+                  ? 'border-accent bg-nav-hover text-white'
+                  : 'border-transparent text-white hover:bg-nav-hover'
               )}
             >
               <BarChart3 size={17} strokeWidth={2} />
@@ -91,7 +91,7 @@ export function CategoryRail({
       )}
       <nav
         className={cn(
-          'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-ink py-5',
+          'no-print fixed left-0 z-40 flex w-60 flex-col overflow-y-auto bg-nav py-5',
           'transition-transform duration-200',
           open ? 'translate-x-0' : '-translate-x-full',
           collapsed ? 'md:-translate-x-full' : 'md:translate-x-0'
@@ -111,8 +111,8 @@ export function CategoryRail({
               className={cn(
                 'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                 activeKey === 'favoritos'
-                  ? 'border-accent bg-ink-hover text-accent'
-                  : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
+                  ? 'border-accent bg-nav-hover text-white'
+                  : 'border-transparent text-white hover:bg-nav-hover'
               )}
             >
               <Star size={17} strokeWidth={2} />
@@ -121,7 +121,7 @@ export function CategoryRail({
           </li>
         </ul>
 
-        <ul className="mb-3 border-t border-ink-line pt-3">
+        <ul className="mb-3 border-t border-accent pt-3">
           {categories.map((category) => {
             const isActive = activeKey === category.key;
             return (
@@ -133,8 +133,8 @@ export function CategoryRail({
                   className={cn(
                     'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                     isActive
-                      ? 'border-accent bg-ink-hover text-accent'
-                      : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
+                      ? 'border-accent bg-nav-hover text-white'
+                      : 'border-transparent text-white hover:bg-nav-hover'
                   )}
                 >
                   <category.icon size={17} strokeWidth={2} />
@@ -146,7 +146,7 @@ export function CategoryRail({
         </ul>
 
         {directLinks.length > 0 && (
-          <ul className="border-t border-ink-line pt-3">
+          <ul className="border-t border-accent pt-3">
             {directLinks.map((link) => {
               const isActive = location.pathname.startsWith(link.path);
               return (
@@ -158,8 +158,8 @@ export function CategoryRail({
                     className={cn(
                       'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
                       isActive
-                        ? 'border-accent bg-ink-hover text-accent'
-                        : 'border-transparent text-white/70 hover:bg-ink-hover hover:text-white'
+                        ? 'border-accent bg-nav-hover text-white'
+                        : 'border-transparent text-white hover:bg-nav-hover'
                     )}
                   >
                     <link.icon size={17} strokeWidth={2} />
