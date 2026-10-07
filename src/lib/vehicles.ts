@@ -266,6 +266,17 @@ export async function fetchVehicles(): Promise<Vehicle[]> {
   return (data ?? []).map(mapVehicle);
 }
 
+/** Un equipo (vehículo o pieza) por su id: para editarlo desde la OT. */
+export async function fetchVehicleById(id: string): Promise<Vehicle | null> {
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select(SELECT_WITH_CUSTOMER)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapVehicle(data) : null;
+}
+
 export async function createVehicle(input: VehicleInput): Promise<Vehicle> {
   const { data, error } = await supabase
     .from('vehicles')

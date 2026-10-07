@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer, Undo2 } from 'lucide-react';
+import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer, Undo2, Pencil } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -31,7 +31,8 @@ import {
   describirEnvioCotizacion,
   enviarCotizacionParaAutorizar,
 } from '@/src/lib/quotations';
-import { VEHICLE_TYPE_LABELS } from '@/src/lib/vehicles';
+import { VEHICLE_TYPE_LABELS, fetchVehicleById, type Vehicle } from '@/src/lib/vehicles';
+import { VehicleModal } from '@/src/components/VehicleModal';
 import { SobrefacturacionModal } from '@/src/components/SobrefacturacionModal';
 import { type Sobrefacturacion } from '@/src/lib/mechanics';
 import {
@@ -68,6 +69,21 @@ export function WorkOrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
+  // La ficha del equipo recibido (vehículo o pieza) abierta para corregirla.
+  const [equipoEnEdicion, setEquipoEnEdicion] = useState<Vehicle | null>(null);
+  const [abriendoEquipo, setAbriendoEquipo] = useState(false);
+  async function editarEquipo() {
+    if (!order?.vehicle) return;
+    setAbriendoEquipo(true);
+    try {
+      const v = await fetchVehicleById(order.vehicle.id);
+      if (v) setEquipoEnEdicion(v);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setAbriendoEquipo(false);
+    }
+  }
   // El descuento de la orden. Se guarda solo, un momento después de dejar de
   // escribir: no depende del "Guardar" de los renglones.
   const [descuento, setDescuento] = useState<Descuento | null>(null);
@@ -882,10 +898,24 @@ export function WorkOrderDetails() {
           )}
         </Panel>
 
-        <Panel className="p-4">
+        <Panel className="relative p-4">
           <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
             Vehículo / Equipo
           </span>
+          {/* Corregir lo que se cargó al recibir (marca, modelo, N° de pieza…)
+              sin salir de la orden. Cambia la ficha del equipo. */}
+          {isAdmin && order.vehicle && (
+            <button
+              type="button"
+              onClick={editarEquipo}
+              disabled={abriendoEquipo}
+              title={order.vehicle.kind === 'PIEZA' ? 'Modificar los datos de la pieza' : 'Modificar los datos del vehículo'}
+              aria-label="Modificar el equipo"
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-[3px] text-text-soft hover:bg-panel-alt hover:text-text disabled:opacity-50"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
           <span className="block text-sm font-semibold text-text">
             {[order.vehicle?.brand, order.vehicle?.model].filter(Boolean).join(' ') || '—'}
           </span>
@@ -1134,6 +1164,38 @@ export function WorkOrderDetails() {
           onDescuentoChange={isAdmin && !locked ? cambiarDescuento : undefined}
         />
       </Panel>
+
+      {equipoEnEdicion && (
+        <VehicleModal
+          vehicle={equipoEnEdicion}
+          customers={[]}
+          fixedCustomerId={equipoEnEdicion.customerId}
+          onClose={() => setEquipoEnEdicion(null)}
+          onSaved={(v) => {
+            setEquipoEnEdicion(null);
+            setOrder((o) =>
+              o && o.vehicle
+                ? {
+                    ...o,
+                    vehicle: {
+                      ...o.vehicle,
+                      brand: v.brand,
+                      model: v.model,
+                      license_plate: v.licensePlate,
+                      reference_number: v.referenceNumber,
+                      kind: v.kind,
+                      vehicle_type: v.vehicleType,
+                      year: v.year,
+                      engine_brand: v.engineBrand,
+                      engine_model: v.engineModel,
+                      injection_system: v.injectionSystem,
+                    },
+                  }
+                : o
+            );
+          }}
+        />
+      )}
 
       {/* Lo que se dejó asentado al recibir: piezas sueltas y cualquier
           observación del cliente o de quien recibió. */}
