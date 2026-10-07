@@ -293,7 +293,9 @@ export function ReceiptNew() {
       return;
     }
     setSelectedMedioKey(optionKey);
-    setDraftAmount(suggestedRemaining);
+    // Una retención no se propone ni se calcula: su importe es el del
+    // certificado del cliente, y se escribe a mano.
+    setDraftAmount(optionKey.startsWith('retencion:') ? 0 : suggestedRemaining);
   }
 
   function handleAddMedio() {
@@ -636,7 +638,13 @@ export function ReceiptNew() {
                 type="number" step="0.01" min="0"
                 value={draftAmount || ''}
                 onChange={(e) => setDraftAmount(Number(e.target.value))}
-                className={cn(inputClass, 'font-mono')}
+                autoFocus={selectedMedioKey.startsWith('retencion:')}
+                placeholder={selectedMedioKey.startsWith('retencion:') ? 'Del certificado' : undefined}
+                className={cn(
+                  inputClass,
+                  'font-mono',
+                  selectedMedioKey.startsWith('retencion:') && !(draftAmount > 0) && 'field-required'
+                )}
               />
             </label>
           )}
@@ -644,7 +652,7 @@ export function ReceiptNew() {
           <Button
             type="button"
             onClick={handleAddMedio}
-            disabled={!selectedMedioKey}
+            disabled={!selectedMedioKey || (selectedMedioKey.startsWith('retencion:') && !(draftAmount > 0))}
             className="px-3 sm:mb-0"
           >
             <Plus size={15} /> {selectedMedioKey === 'cheque' || selectedMedioKey === 'echeq' ? 'Cargar cheques' : 'Agregar'}
@@ -973,7 +981,7 @@ export function ReceiptNew() {
             if (!r) return;
             setRetentions((actuales) => [...actuales, r].sort((a, b) => a.name.localeCompare(b.name)));
             setSelectedMedioKey(`retencion:${r.id}`);
-            setDraftAmount(suggestedRemaining);
+            setDraftAmount(0);
           }}
         />
       )}

@@ -246,8 +246,12 @@ export function TaxRateModal({
   }
 
   const isVat = form.kind === 'IVA';
+  // Desde Cobranzas, la retención no se calcula: el importe se escribe en el
+  // recibo, tal como viene en el certificado. No se pide alícuota ni base.
+  const sinCalculo = soloTipo === 'RETENCION';
   const rateNumber = Number(form.rate);
-  const rateInvalid = form.rate.trim() === '' || !Number.isFinite(rateNumber) || rateNumber < 0 || rateNumber > 100;
+  const rateInvalid =
+    !sinCalculo && (form.rate.trim() === '' || !Number.isFinite(rateNumber) || rateNumber < 0 || rateNumber > 100);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -262,7 +266,8 @@ export function TaxRateModal({
     setSaving(true);
     setError(null);
     try {
-      const guardada = rate ? await updateTaxRate(rate.id, form) : await createTaxRate(form);
+      const datos = sinCalculo ? { ...form, rate: '0' } : form;
+      const guardada = rate ? await updateTaxRate(rate.id, datos) : await createTaxRate(datos);
       onSaved(guardada);
     } catch (err) {
       setError(describeTaxRateError(getErrorMessage(err)));
@@ -306,17 +311,23 @@ export function TaxRateModal({
           </label>
           )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className={cn(labelClass, 'sm:col-span-2')}>
+          <div className={cn('grid grid-cols-1 gap-3', !sinCalculo && 'sm:grid-cols-3')}>
+            <label className={cn(labelClass, !sinCalculo && 'sm:col-span-2')}>
               Nombre *
               <input
                 value={form.name}
                 onChange={(e) => patch({ name: e.target.value })}
                 className={cn(inputClass, form.name.trim() === '' && 'field-required')}
-                placeholder={isVat ? 'IVA 21%' : 'Percepción IIBB Tucumán'}
+                placeholder={isVat ? 'IVA 21%' : sinCalculo ? 'Retención IIBB Tucumán' : 'Percepción IIBB Tucumán'}
               />
+              {sinCalculo && (
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                  El importe no se calcula: se carga en el recibo, como figura en el certificado del cliente.
+                </span>
+              )}
             </label>
 
+            {!sinCalculo && (
             <label className={labelClass}>
               Alícuota %
               <div className="relative">
@@ -333,9 +344,10 @@ export function TaxRateModal({
                 <Percent size={13} className="absolute right-2 top-1/2 mt-0.5 -translate-y-1/2 text-text-faint" />
               </div>
             </label>
+            )}
           </div>
 
-          {isVat ? (
+          {sinCalculo ? null : isVat ? (
             <label className={labelClass}>
               Tratamiento
               <select
