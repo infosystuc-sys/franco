@@ -13,9 +13,13 @@
   --color-ink: #2b2b2b;          /* barra superior y menú */
   --color-ink-hover: #3a3a3a;
   --color-ink-line: #4a4a4a;
-  /* Menú lateral: gris medio con texto blanco y separadores amarillos. */
-  --color-nav: #808080;
-  --color-nav-hover: #6e6e6e;
+  /* Barra superior, menú lateral y tarjetas: los grises de Tango. */
+  --color-topbar: #606060;
+  --color-topbar-hover: #707070;
+  --color-topbar-line: #777777;
+  --color-nav: #7e7e7e;
+  --color-nav-hover: #6a6a6a;
+  --color-card: #bdbdbd;
   --color-surface: #efefef;      /* fondo de página */
   --color-panel: #ffffff;        /* paneles y tablas */
   --color-panel-alt: #f7f7f7;    /* filas alternas */
@@ -50,8 +54,9 @@
   --color-state-open: #2b6cb0;
 
   /* Tipografía */
-  --font-display: "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Arial, como Tango: títulos y texto de la misma familia. */
+  --font-display: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, "Cascadia Mono", monospace;
 
   /*
@@ -90,7 +95,7 @@
     */
     /* Base más grande: se carga de pie, con la pantalla lejos y a veces con
        las manos sucias. 14px era cómodo de diseñar y incómodo de leer. */
-    font-size: 17px;
+    font-size: 16px;
   }
 
   /* Foco visible en todo lo operable: el taller se maneja mucho con teclado. */

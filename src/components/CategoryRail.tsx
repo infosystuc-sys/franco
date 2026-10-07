@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, BarChart3 } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -64,9 +64,9 @@ export function CategoryRail({
               onClick={onClose}
               aria-current={location.pathname.startsWith('/informe') ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
+                'flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-[16px] font-normal transition-colors',
                 location.pathname.startsWith('/informe')
-                  ? 'border-accent bg-nav-hover text-white'
+                  ? 'border-accent bg-nav-hover font-medium text-accent'
                   : 'border-transparent text-white hover:bg-nav-hover'
               )}
             >
@@ -109,13 +109,12 @@ export function CategoryRail({
               onClick={onClose}
               aria-current={activeKey === 'favoritos' ? 'page' : undefined}
               className={cn(
-                'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
+                'flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-[16px] font-normal transition-colors',
                 activeKey === 'favoritos'
-                  ? 'border-accent bg-nav-hover text-white'
+                  ? 'border-accent bg-nav-hover font-medium text-accent'
                   : 'border-transparent text-white hover:bg-nav-hover'
               )}
             >
-              <Star size={17} strokeWidth={2} />
               Favoritos
             </Link>
           </li>
@@ -131,13 +130,12 @@ export function CategoryRail({
                   onClick={onClose}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
+                    'flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-[16px] font-normal transition-colors',
                     isActive
-                      ? 'border-accent bg-nav-hover text-white'
+                      ? 'border-accent bg-nav-hover font-medium text-accent'
                       : 'border-transparent text-white hover:bg-nav-hover'
                   )}
                 >
-                  <category.icon size={17} strokeWidth={2} />
                   {category.label}
                 </Link>
               </li>
@@ -156,13 +154,13 @@ export function CategoryRail({
                     onClick={onClose}
                     aria-current={isActive ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-3 border-l-[3px] px-5 py-2.5 text-[14px] font-medium uppercase tracking-[0.04em] transition-colors',
+                      'flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-[16px] font-normal transition-colors',
                       isActive
-                        ? 'border-accent bg-nav-hover text-white'
+                        ? 'border-accent bg-nav-hover font-medium text-accent'
                         : 'border-transparent text-white hover:bg-nav-hover'
                     )}
                   >
-                    <link.icon size={17} strokeWidth={2} />
+                    <link.icon size={17} strokeWidth={2} className="text-accent" />
                     {link.label}
                   </Link>
                 </li>

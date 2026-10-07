@@ -58,6 +58,11 @@ export interface ReportDefinition {
    * composición de saldos— en vez de todos los comprobantes.
    */
   agruparPor?: string;
+  /**
+   * El informe lleva una columna "tipo" ("FACTURA A", "NOTA DE CREDITO B") y
+   * se puede acotar a ciertas letras y a facturas o notas de crédito.
+   */
+  filtraPorTipo?: boolean;
   run: (params: ReportParams) => Promise<Record<string, unknown>[]>;
 }
 
@@ -232,6 +237,7 @@ export const REPORTS: ReportDefinition[] = [
     name: 'Libro IVA Ventas',
     description: 'Comprobantes emitidos en el período, con neto e IVA discriminados por comprobante.',
     usesPeriod: true,
+    filtraPorTipo: true,
     columns: [
       { key: 'issue_date', label: 'Fecha', format: 'date', width: 12 },
       { key: 'tipo', label: 'Tipo', width: 14 },

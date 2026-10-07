@@ -23,6 +23,55 @@ function firstOfMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
+/** "FACTURA A" → { clase: 'FACTURA', letra: 'A' }; "NOTA DE CREDITO B" → { 'NOTA DE CREDITO', 'B' }. */
+function partirTipo(tipo: unknown): { clase: string; letra: string } {
+  const t = String(tipo ?? '').trim();
+  const m = t.match(/^(.*?)\s+([A-Z])$/);
+  return m ? { clase: m[1], letra: m[2] } : { clase: t, letra: '' };
+}
+
+function nombreDeClase(clase: string): string {
+  return clase === 'FACTURA' ? 'Facturas' : clase === 'NOTA DE CREDITO' ? 'Notas de crédito' : clase === 'NOTA DE DEBITO' ? 'Notas de débito' : clase;
+}
+
+/** Botones de a uno, que se prenden y apagan: para elegir uno o varios. */
+function ChipsDeFiltro({
+  titulo,
+  opciones,
+  elegidos,
+  onChange,
+}: {
+  titulo: string;
+  opciones: { valor: string; etiqueta: string }[];
+  elegidos: string[];
+  onChange: (v: string[]) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-soft">{titulo}</span>
+      <div className="flex gap-1">
+        {opciones.map((o) => {
+          const prendido = elegidos.includes(o.valor);
+          return (
+            <button
+              key={o.valor}
+              type="button"
+              aria-pressed={prendido}
+              onClick={() => onChange(prendido ? elegidos.filter((x) => x !== o.valor) : [...elegidos, o.valor])}
+              className={cn(
+                'h-9 min-w-9 rounded-[3px] border px-3 text-[15px] font-semibold transition-colors',
+                prendido ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-panel text-text-soft hover:text-text'
+              )}
+            >
+              {o.etiqueta}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Visor genérico de informes.
  *
@@ -45,15 +94,39 @@ export function ReportView() {
   const [ranWith, setRanWith] = React.useState<ReportParams | null>(null);
   /** Grupos desplegados. Arrancan todos cerrados: la primera vista es un renglón por grupo. */
   const [abiertos, setAbiertos] = React.useState<Set<string>>(new Set());
+  // Tipos de comprobante elegidos (letra y clase). Vacío = todos.
+  const [letras, setLetras] = React.useState<string[]>([]);
+  const [clases, setClases] = React.useState<string[]>([]);
+
+  // Qué letras y clases hay en lo consultado: "FACTURA A" → clase FACTURA, letra A.
+  const tiposPresentes = React.useMemo(() => {
+    const ls = new Set<string>();
+    const cs = new Set<string>();
+    for (const r of rows ?? []) {
+      const { clase, letra } = partirTipo(r.tipo);
+      if (letra) ls.add(letra);
+      if (clase) cs.add(clase);
+    }
+    return { letras: [...ls].sort(), clases: [...cs].sort() };
+  }, [rows]);
+
+  React.useEffect(() => {
+    setLetras([]);
+    setClases([]);
+  }, [rows]);
 
   const filtered = React.useMemo(() => {
     if (!rows) return [];
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((row) =>
-      coincideBusqueda(term, Object.values(row))
-    );
-  }, [rows, search]);
+    return rows.filter((row) => {
+      if (report?.filtraPorTipo && (letras.length > 0 || clases.length > 0)) {
+        const { clase, letra } = partirTipo(row.tipo);
+        if (letras.length > 0 && !letras.includes(letra)) return false;
+        if (clases.length > 0 && !clases.includes(clase)) return false;
+      }
+      return !term || coincideBusqueda(term, Object.values(row));
+    });
+  }, [rows, search, letras, clases, report]);
 
   // Los totales se calculan sobre lo FILTRADO, no sobre todo: si alguien
   // busca un cliente, el total tiene que ser el de ese cliente. Un total que
@@ -172,6 +245,27 @@ export function ReportView() {
             <Button onClick={handleRun} disabled={running || periodInvalid}>
               <Play size={16} /> {running ? 'Consultando…' : 'Consultar'}
             </Button>
+
+            {report.filtraPorTipo && rows && rows.length > 0 && (
+              <>
+                {tiposPresentes.letras.length > 1 && (
+                  <ChipsDeFiltro
+                    titulo="Letra"
+                    opciones={tiposPresentes.letras.map((l) => ({ valor: l, etiqueta: l }))}
+                    elegidos={letras}
+                    onChange={setLetras}
+                  />
+                )}
+                {tiposPresentes.clases.length > 1 && (
+                  <ChipsDeFiltro
+                    titulo="Comprobante"
+                    opciones={tiposPresentes.clases.map((c) => ({ valor: c, etiqueta: nombreDeClase(c) }))}
+                    elegidos={clases}
+                    onChange={setClases}
+                  />
+                )}
+              </>
+            )}
 
             {rows && rows.length > 0 && (
               <div className="relative ml-auto w-full sm:w-64">

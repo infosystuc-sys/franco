@@ -55,7 +55,7 @@ export function SectionHeader({
   return (
     <div className={cn('mb-4', className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg uppercase tracking-[0.08em] text-text-faint leading-none">
+        <h2 className="font-display text-[20px] font-bold uppercase text-text-soft leading-none">
           {title}
         </h2>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -69,7 +69,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-ink hover:bg-accent-hover',
-  secondary: 'bg-ink text-white hover:bg-ink-hover',
+  secondary: 'bg-[#808080] text-white hover:bg-[#6a6a6a]',
   ghost: 'border border-line-strong bg-panel text-text-soft hover:bg-panel-alt',
   danger: 'bg-danger text-white hover:bg-danger-hover',
 };

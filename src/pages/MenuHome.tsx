@@ -75,7 +75,7 @@ export function MenuHome() {
       <div className="space-y-8">
         {category.sections.map((section) => (
           <section key={section.color}>
-            <h2 className="mb-3 text-[13px] font-bold uppercase tracking-[0.14em] text-text-faint">
+            <h2 className="mb-5 border-b-2 border-accent pb-3 text-[20px] font-bold uppercase text-text-soft">
               {SECTION_TITLES[section.color]}
             </h2>
             <CardGrid
@@ -94,7 +94,7 @@ function CategoryTitle({ icon: Icon, label }: { icon: React.ComponentType<{ size
   return (
     <div className="mb-6 flex items-center gap-2 border-b-2 border-accent pb-3">
       <Icon size={20} />
-      <h1 className="font-display text-2xl font-medium uppercase tracking-wide text-text">{label}</h1>
+      <h1 className="font-display text-[26px] font-normal uppercase text-text-soft">{label}</h1>
     </div>
   );
 }
@@ -136,12 +136,11 @@ function MenuCardTile({
 }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border-l-4 bg-panel-alt py-3 pl-4 pr-2 transition-colors hover:bg-panel-head"
+      className="flex min-h-[70px] items-center gap-2 overflow-hidden rounded-[10px] border-l-[22px] bg-card py-3 pl-4 pr-3 transition-colors hover:bg-[#b0b0b0]"
       style={{ borderLeftColor: SECTION_COLORS[color] }}
     >
-      <Link to={card.path} className="flex flex-1 items-center gap-3 text-text">
-        <card.icon size={18} className="shrink-0 text-text-soft" />
-        <span className="text-sm font-semibold">{card.label}</span>
+      <Link to={card.path} className="flex flex-1 items-center gap-3 text-[17px] text-[#262626]">
+        <span className="leading-snug">{card.label}</span>
       </Link>
 
       <div className="flex shrink-0 items-center gap-1">
@@ -149,24 +148,24 @@ function MenuCardTile({
           type="button"
           onClick={() => onToggleFavorite(card.path)}
           aria-label={favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
-          className="rounded-full p-1.5 text-text-soft transition-colors hover:bg-panel-head hover:text-accent-deep"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ececec] text-[#3a3a3a] transition-colors hover:bg-white"
         >
-          <Star size={15} className={cn(favorite && 'fill-accent text-accent-deep')} />
+          <Star size={16} className={cn('fill-[#3a3a3a]', favorite && 'fill-accent text-accent-deep')} />
         </button>
         <Link
           to={card.path}
           aria-label={`Ver listado de ${card.label}`}
-          className="rounded-full p-1.5 text-text-soft transition-colors hover:bg-panel-head hover:text-accent-deep"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ececec] text-[#3a3a3a] transition-colors hover:bg-white"
         >
-          <List size={15} />
+          <List size={16} />
         </Link>
         {card.newPath && (
           <Link
             to={card.newPath}
             aria-label={`Nuevo en ${card.label}`}
-            className="rounded-full p-1.5 text-text-soft transition-colors hover:bg-panel-head hover:text-accent-deep"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ececec] text-[#3a3a3a] transition-colors hover:bg-white"
           >
-            <Plus size={15} />
+            <Plus size={16} />
           </Link>
         )}
       </div>

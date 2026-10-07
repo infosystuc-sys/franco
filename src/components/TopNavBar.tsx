@@ -19,7 +19,7 @@ export function TopNavBar({
 
   return (
     <header
-      className="no-print fixed top-0 z-50 flex w-full items-center justify-between gap-3 border-b border-ink-line bg-ink px-4"
+      className="no-print fixed top-0 z-50 flex w-full items-center justify-between gap-3 border-b border-topbar-line bg-topbar px-4"
       /* En Android la barra de estado se superpone: se agrega su alto arriba. */
       style={{ height: 'calc(3.5rem + var(--safe-top))', paddingTop: 'var(--safe-top)' }}
     >
@@ -29,7 +29,7 @@ export function TopNavBar({
           onClick={onMenuClick}
           aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
           aria-expanded={menuOpen}
-          className="p-1.5 text-accent transition-colors hover:bg-ink-hover md:hidden"
+          className="p-1.5 text-accent transition-colors hover:bg-topbar-hover md:hidden"
         >
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
@@ -38,7 +38,7 @@ export function TopNavBar({
           onClick={onToggleRail}
           aria-label={railCollapsed ? 'Mostrar menú' : 'Ocultar menú'}
           aria-expanded={!railCollapsed}
-          className="hidden p-1.5 text-accent transition-colors hover:bg-ink-hover md:inline-flex"
+          className="hidden p-1.5 text-accent transition-colors hover:bg-topbar-hover md:inline-flex"
         >
           {railCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
@@ -51,7 +51,7 @@ export function TopNavBar({
         <div className="relative w-full">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
           <input
-            className="h-8 w-full border border-ink-line bg-ink-hover pl-9 pr-3 text-xs text-white placeholder:text-white/50 focus:border-accent focus:outline-none"
+            className="h-8 w-full border border-topbar-line bg-topbar-hover pl-9 pr-3 text-xs text-white placeholder:text-white/50 focus:border-accent focus:outline-none"
             placeholder="Buscar..."
             type="text"
           />
@@ -61,7 +61,7 @@ export function TopNavBar({
       <div className="flex items-center gap-2">
         <button
           aria-label="Notificaciones"
-          className="p-1.5 text-accent transition-colors hover:bg-ink-hover"
+          className="p-1.5 text-accent transition-colors hover:bg-topbar-hover"
         >
           <Bell size={18} />
         </button>
@@ -75,7 +75,7 @@ export function TopNavBar({
           onClick={() => signOut()}
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
-          className="p-1.5 text-accent transition-colors hover:bg-ink-hover"
+          className="p-1.5 text-accent transition-colors hover:bg-topbar-hover"
         >
           <LogOut size={18} />
         </button>

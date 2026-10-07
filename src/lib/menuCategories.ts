@@ -46,9 +46,9 @@ export type SectionColor = 'comprobantes' | 'padrones' | 'operaciones' | 'inform
 
 /** Color de la barra de cada sección, tomado de la paleta ya usada en la app. */
 export const SECTION_COLORS: Record<SectionColor, string> = {
-  comprobantes: '#e07b1a', // --color-state-wait
-  padrones: '#f5c518', // --color-accent
-  operaciones: '#7b3fa0', // --color-state-work
+  comprobantes: '#ff5a36',
+  padrones: '#ffc107',
+  operaciones: '#8b3a6f',
   informes: '#c9576b',
 };
 
