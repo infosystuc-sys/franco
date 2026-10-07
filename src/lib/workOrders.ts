@@ -187,6 +187,9 @@ export interface PublicWorkOrder {
   licensePlate: string | null;
   vehicleType: string | null;
   vehicleYear: number | null;
+  /** Si lo que entró es un vehículo o una pieza suelta. */
+  vehicleKind: 'VEHICULO' | 'PIEZA' | null;
+  referenceNumber: string | null;
   engineBrand: string | null;
   engineModel: string | null;
   injectionSystem: string | null;
@@ -216,6 +219,8 @@ export async function fetchPublicWorkOrder(token: string): Promise<PublicWorkOrd
     licensePlate: row.license_plate,
     vehicleType: row.vehicle_type,
     vehicleYear: row.vehicle_year,
+    vehicleKind: row.vehicle_kind ?? null,
+    referenceNumber: row.reference_number ?? null,
     engineBrand: row.engine_brand,
     engineModel: row.engine_model,
     injectionSystem: row.injection_system,
@@ -289,10 +294,13 @@ export interface WorkOrderListRow {
  * donde mirar qué hay en el taller.
  */
 function vehicleLabel(
-  vehicle: { brand: string | null; model: string; license_plate: string | null; reference_number?: string | null } | null
+  vehicle: { brand: string | null; model: string; license_plate: string | null; reference_number?: string | null; kind?: string } | null
 ): string {
   if (!vehicle) return 'Pieza suelta';
   const name = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
+  if (vehicle.kind === 'PIEZA') {
+    return `Pieza: ${name}${vehicle.reference_number ? ` - N° ${vehicle.reference_number}` : ''}`;
+  }
   // La patente identifica al vehículo; el número de pieza, a la pieza.
   if (vehicle.license_plate) return `${name} - Placa ${vehicle.license_plate}`;
   if (vehicle.reference_number) return `${name} - N° ${vehicle.reference_number}`;
@@ -330,7 +338,7 @@ export async function fetchDashboardData(): Promise<{ kpis: WorkOrderStatusCount
           `id, number, component, public_token,
            status:work_order_statuses(id, label, color, is_terminal, frees_yard),
            customer:customers(name),
-           vehicle:vehicles(brand, model, license_plate, reference_number)`
+           vehicle:vehicles(brand, model, license_plate, reference_number, kind)`
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -396,7 +404,7 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        price_auth_status, price_auth_requested_total,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
-       vehicle:vehicles(brand, model, license_plate, reference_number),
+       vehicle:vehicles(brand, model, license_plate, reference_number, kind),
        employee:employees!work_orders_employee_id_fkey(name),
        quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(subtotal),

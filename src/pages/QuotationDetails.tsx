@@ -375,10 +375,15 @@ export function QuotationDetails() {
           )}
         </div>
         <div className="bg-panel border border-line p-4">
-          <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo / Equipo</span>
+          <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">
+            {quotation.vehicle?.kind === 'PIEZA' ? 'Pieza' : 'Vehículo / Equipo'}
+          </span>
           <span className="text-sm font-bold text-text">
             {[quotation.vehicle?.brand, quotation.vehicle?.model].filter(Boolean).join(' ') || '—'}
             {quotation.vehicle?.license_plate ? ` - ${quotation.vehicle.license_plate}` : ''}
+            {quotation.vehicle?.kind === 'PIEZA' && quotation.vehicle.reference_number
+              ? ` - N° ${quotation.vehicle.reference_number}`
+              : ''}
           </span>
         </div>
         <div className="bg-panel border border-line p-4">
@@ -466,6 +471,8 @@ export function QuotationDetails() {
             vehicleBrand: quotation.vehicle?.brand ?? null,
             vehicleModel: quotation.vehicle?.model ?? null,
             licensePlate: quotation.vehicle?.license_plate ?? null,
+            vehicleKind: quotation.vehicle?.kind ?? null,
+            referenceNumber: quotation.vehicle?.reference_number ?? null,
             workOrderNumber: quotation.workOrderNumber,
             items: items.map((item) => ({
               code: item.code || null,

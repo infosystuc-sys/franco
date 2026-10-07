@@ -144,13 +144,16 @@ export function VehicleModal({
   const labelClass = 'text-xs font-bold uppercase tracking-wider text-text-soft';
   const inputClass = 'mt-1 w-full border border-line px-3 py-2 text-sm font-normal normal-case';
   const sectionTitle = 'text-[13px] font-bold uppercase tracking-wider text-accent-deep flex items-center gap-1.5';
+  // Una pieza suelta (una bomba, un juego de inyectores) no tiene patente,
+  // tipo, tamaño en playa ni kilometraje: se identifica por su número.
+  const esPieza = form.kind === 'PIEZA';
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
       <div className="bg-panel w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center px-5 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
-            {vehicle ? 'Editar vehículo' : 'Nuevo vehículo'}
+            {vehicle ? (esPieza ? 'Editar pieza' : 'Editar vehículo') : esPieza ? 'Nueva pieza' : 'Nuevo vehículo'}
           </h2>
           <button onClick={onClose} className="text-text-soft hover:text-text">
             <X size={18} />
@@ -163,6 +166,23 @@ export function VehicleModal({
           {/* Identificación */}
           <div className="space-y-3">
             <h3 className={sectionTitle}><Truck size={14} /> Identificación</h3>
+            {!vehicle && !fixedKind && (
+              <div className="flex gap-2">
+                {(['VEHICULO', 'PIEZA'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => patch({ kind: k })}
+                    className={cn(
+                      'rounded-[3px] border px-3 py-1.5 text-[13px] font-semibold uppercase tracking-wider',
+                      form.kind === k ? 'border-accent bg-accent text-accent-ink' : 'border-line text-text-soft hover:text-text'
+                    )}
+                  >
+                    {k === 'VEHICULO' ? 'Vehículo' : 'Pieza suelta'}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
               {!fixedCustomerId && (
                 <label className={cn(labelClass, 'col-span-6')}>
@@ -192,6 +212,41 @@ export function VehicleModal({
                 </datalist>
               </label>
 
+              {esPieza ? (
+                <>
+                  <label className={cn(labelClass, 'col-span-3')}>
+                    N° de pieza / referencia
+                    <input
+                      value={form.referenceNumber}
+                      onChange={(e) => patch({ referenceNumber: e.target.value.toUpperCase() })}
+                      className={cn(inputClass, 'font-mono uppercase')}
+                      placeholder="E020528"
+                    />
+                  </label>
+                  <label className={cn(labelClass, 'col-span-3 flex items-end gap-3')}>
+                    <span className="flex items-center gap-2 pb-2 normal-case">
+                      <input
+                        type="checkbox"
+                        checked={form.hasInjectors}
+                        onChange={(e) => patch({ hasInjectors: e.target.checked })}
+                        className="h-4 w-4 accent-accent-deep"
+                      />
+                      Trae inyectores
+                    </span>
+                    {form.hasInjectors && (
+                      <input
+                        type="number"
+                        min="1"
+                        value={form.injectorCount}
+                        onChange={(e) => patch({ injectorCount: e.target.value })}
+                        className={cn(inputClass, 'w-24 text-right')}
+                        placeholder="Cant."
+                      />
+                    )}
+                  </label>
+                </>
+              ) : (
+                <>
               <label className={cn(labelClass, 'col-span-3')}>
                 Tipo
                 <select
@@ -252,13 +307,17 @@ export function VehicleModal({
                   placeholder="YV2RT40A8FB123456"
                 />
               </label>
+                </>
+              )}
             </div>
           </div>
 
           {/* Motor e inyección */}
           <div className="border-t border-line pt-4 space-y-3">
-            <h3 className={sectionTitle}><Cog size={14} /> Motor e inyección</h3>
+            <h3 className={sectionTitle}><Cog size={14} /> {esPieza ? 'Inyección' : 'Motor e inyección'}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+              {!esPieza && (
+              <>
               <label className={cn(labelClass, 'col-span-2')}>
                 Marca motor
                 <input value={form.engineBrand} onChange={(e) => patch({ engineBrand: e.target.value })} className={inputClass} placeholder="Volvo" />
@@ -271,6 +330,8 @@ export function VehicleModal({
                 N° de motor
                 <input value={form.engineNumber} onChange={(e) => patch({ engineNumber: e.target.value })} className={cn(inputClass, 'font-mono')} placeholder="D16G123456" />
               </label>
+              </>
+              )}
               <label className={cn(labelClass, 'col-span-6')}>
                 Sistema de inyección
                 <input
@@ -289,8 +350,10 @@ export function VehicleModal({
 
           {/* Uso y estado */}
           <div className="border-t border-line pt-4 space-y-3">
-            <h3 className={sectionTitle}><Gauge size={14} /> Uso y estado</h3>
+            <h3 className={sectionTitle}><Gauge size={14} /> {esPieza ? 'Estado' : 'Uso y estado'}</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+              {!esPieza && (
+              <>
               <label className={cn(labelClass, 'col-span-3')}>
                 Kilometraje / Horas
                 <input type="number" min="0" value={form.odometer} onChange={(e) => patch({ odometer: e.target.value })} className={cn(inputClass, 'text-right')} placeholder="0" />
@@ -307,6 +370,8 @@ export function VehicleModal({
                   ))}
                 </select>
               </label>
+              </>
+              )}
               <label className={cn(labelClass, 'col-span-6')}>
                 Observaciones
                 <textarea value={form.notes} onChange={(e) => patch({ notes: e.target.value })} rows={2} className={cn(inputClass, 'resize-y')} placeholder="Historial, particularidades del equipo..." />

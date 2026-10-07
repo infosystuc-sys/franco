@@ -294,7 +294,9 @@ export function ClientPortal() {
 
               <div className="space-y-4">
                 <div>
-                  <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Vehículo</span>
+                  <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">
+                    {order.vehicleKind === 'PIEZA' ? 'Pieza' : 'Vehículo'}
+                  </span>
                   <div className="flex items-center gap-2">
                     <Truck size={18} className="text-text-soft" />
                     <span className="text-sm font-bold text-text">
@@ -302,6 +304,14 @@ export function ClientPortal() {
                     </span>
                   </div>
                 </div>
+                {order.vehicleKind === 'PIEZA' && order.referenceNumber && (
+                  <div>
+                    <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">N° de pieza</span>
+                    <div className="bg-panel-head inline-block px-3 py-1 border border-line font-mono font-bold text-text">
+                      {order.referenceNumber}
+                    </div>
+                  </div>
+                )}
                 {order.licensePlate && (
                   <div>
                     <span className="text-[13px] font-bold uppercase tracking-wider text-text-soft block mb-1">Matrícula</span>

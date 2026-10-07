@@ -24,6 +24,9 @@ export interface QuotationDocumentData {
   customerTaxCondition: TaxCondition | null;
   vehicleBrand: string | null;
   vehicleModel: string | null;
+  /** Vehículo o pieza suelta: cambia el rótulo y cómo se identifica. */
+  vehicleKind?: 'VEHICULO' | 'PIEZA' | null;
+  referenceNumber?: string | null;
   licensePlate: string | null;
   workOrderNumber: string | null;
   items: QuotationDocumentItem[];
@@ -125,8 +128,14 @@ export function QuotationDocument({
           />
         )}
         <Campo
-          label="Vehículo / Equipo"
-          value={quotation.licensePlate ? `${vehiculo} · ${quotation.licensePlate}` : vehiculo}
+          label={quotation.vehicleKind === 'PIEZA' ? 'Pieza' : 'Vehículo / Equipo'}
+          value={
+            quotation.licensePlate
+              ? `${vehiculo} · ${quotation.licensePlate}`
+              : quotation.vehicleKind === 'PIEZA' && quotation.referenceNumber
+                ? `${vehiculo} · N° ${quotation.referenceNumber}`
+                : vehiculo
+          }
         />
         {quotation.component && <Campo label="Trabajo a realizar" value={quotation.component} />}
       </div>

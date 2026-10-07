@@ -16,6 +16,8 @@ export interface WorkOrderBlankData {
   licensePlate: string | null;
   /** Número de la pieza, si lo que entró es una pieza. */
   referenceNumber?: string | null;
+  /** Vehículo o pieza: cambia el rótulo. */
+  kind?: 'VEHICULO' | 'PIEZA' | null;
   year: number | null;
   engineBrand: string | null;
   engineModel: string | null;
@@ -105,7 +107,7 @@ export function WorkOrderBlankDocument({
         )}
         {order.customerAddress && <Campo label="Domicilio" value={order.customerAddress} />}
         <Campo
-          label="Vehículo / Equipo"
+          label={order.kind === 'PIEZA' ? 'Pieza' : 'Vehículo / Equipo'}
           value={
             [vehiculo || null, order.licensePlate, order.referenceNumber ? `N° de pieza ${order.referenceNumber}` : null, order.year ? String(order.year) : null]
               .filter(Boolean)

@@ -900,7 +900,11 @@ export function WorkOrderDetails() {
 
         <Panel className="relative p-4">
           <span className="mb-1.5 block text-[13px] font-semibold uppercase tracking-[0.06em] text-text-faint">
-            Vehículo / Equipo
+            {order.vehicle?.kind === 'PIEZA' || (!order.vehicle && order.receptionKind === 'PIEZA')
+              ? 'Pieza'
+              : order.vehicle
+                ? 'Vehículo'
+                : 'Vehículo / Equipo'}
           </span>
           {/* Corregir lo que se cargó al recibir (marca, modelo, N° de pieza…)
               sin salir de la orden. Cambia la ficha del equipo. */}
@@ -935,8 +939,9 @@ export function WorkOrderDetails() {
           {order.vehicle && (
             <span className="mt-1.5 block text-xs text-text-soft">
               {[
-                VEHICLE_TYPE_LABELS[order.vehicle.vehicle_type],
-                order.vehicle.year ? String(order.vehicle.year) : null,
+                // El tipo de vehículo y el año no dicen nada de una pieza.
+                order.vehicle.kind === 'PIEZA' ? null : VEHICLE_TYPE_LABELS[order.vehicle.vehicle_type],
+                order.vehicle.kind === 'PIEZA' ? null : order.vehicle.year ? String(order.vehicle.year) : null,
                 [order.vehicle.engine_brand, order.vehicle.engine_model].filter(Boolean).join(' ') || null,
                 order.vehicle.injection_system,
               ]
