@@ -28,7 +28,8 @@ export const TAX_KIND_HELP: Record<TaxKind, string> = {
   IVA: 'Se elige por renglón del comprobante.',
   PERCEPCION: 'La cobra el proveedor en su factura. Va al pie y suma al total.',
   IMPUESTO_INTERNO: 'Va al pie del comprobante y suma al total.',
-  RETENCION: 'La practica el taller al pagar. La usa el módulo de pagos, no el de compras.',
+  RETENCION:
+    'La practica el taller al pagar a un proveedor (Pagos), o nos la practica un cliente al pagarnos (Cobranzas).',
 };
 
 export const TAX_KINDS = Object.keys(TAX_KIND_LABELS) as TaxKind[];

@@ -220,19 +220,23 @@ export function TaxRates() {
   );
 }
 
-function TaxRateModal({
+export function TaxRateModal({
   rate,
   defaultKind,
+  soloTipo,
   onClose,
   onSaved,
 }: {
   rate: TaxRate | null;
   defaultKind?: TaxKind;
+  /** Alta desde otra pantalla que solo admite un tipo (Cobranzas: retención). */
+  soloTipo?: TaxKind;
   onClose: () => void;
-  onSaved: () => void;
+  /** Recibe la alícuota guardada, para que quien la abrió la use enseguida. */
+  onSaved: (guardada?: TaxRate) => void;
 }) {
   const [form, setForm] = React.useState<TaxRateInput>(
-    rate ? taxRateToForm(rate) : { ...EMPTY_TAX_RATE_FORM, kind: defaultKind ?? EMPTY_TAX_RATE_FORM.kind }
+    rate ? taxRateToForm(rate) : { ...EMPTY_TAX_RATE_FORM, kind: soloTipo ?? defaultKind ?? EMPTY_TAX_RATE_FORM.kind }
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -258,9 +262,8 @@ function TaxRateModal({
     setSaving(true);
     setError(null);
     try {
-      if (rate) await updateTaxRate(rate.id, form);
-      else await createTaxRate(form);
-      onSaved();
+      const guardada = rate ? await updateTaxRate(rate.id, form) : await createTaxRate(form);
+      onSaved(guardada);
     } catch (err) {
       setError(describeTaxRateError(getErrorMessage(err)));
     } finally {
@@ -273,7 +276,7 @@ function TaxRateModal({
       <div className="flex max-h-[90vh] w-full max-w-lg flex-col bg-panel">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-base font-bold text-text">
-            {rate ? 'Editar alícuota' : 'Nueva alícuota'}
+            {rate ? 'Editar alícuota' : soloTipo === 'RETENCION' ? 'Nueva retención' : 'Nueva alícuota'}
           </h2>
           <button onClick={onClose} aria-label="Cerrar" className="text-text-soft hover:text-text">
             <X size={18} />
@@ -285,6 +288,7 @@ function TaxRateModal({
             <div className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>
           )}
 
+          {!soloTipo && (
           <label className={labelClass}>
             Tipo
             <select
@@ -300,6 +304,7 @@ function TaxRateModal({
               {TAX_KIND_HELP[form.kind]}
             </span>
           </label>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <label className={cn(labelClass, 'sm:col-span-2')}>

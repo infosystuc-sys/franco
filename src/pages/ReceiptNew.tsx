@@ -30,6 +30,7 @@ import {
 } from '@/src/lib/receipts';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { PaymentMethodModal } from '@/src/pages/PaymentMethods';
+import { TaxRateModal } from '@/src/pages/TaxRates';
 
 /** Un valor en edición. Los campos que no aplican a su tipo quedan vacíos. */
 interface DraftValue extends ValueInput {
@@ -40,6 +41,9 @@ interface DraftValue extends ValueInput {
 interface DraftChange extends ChangeInput {
   key: number;
 }
+
+/** Opción del desplegable que abre el alta de una retención nueva. */
+const NUEVA_RETENCION = '__nueva_retencion__';
 
 /** Una entrada del desplegable de "Medios de pago": qué kind produce y con qué datos fijos. */
 type MedioOption =
@@ -70,6 +74,8 @@ export function ReceiptNew() {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [methods, setMethods] = React.useState<PaymentMethod[]>([]);
   const [altaMedio, setAltaMedio] = React.useState(false);
+  // Alta de una retención nueva sin salir de Cobranzas.
+  const [altaRetencion, setAltaRetencion] = React.useState(false);
   const [retentions, setRetentions] = React.useState<TaxRate[]>([]);
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -225,8 +231,10 @@ export function ReceiptNew() {
     // quedan juntos, marcados.
     options.push({ optionKey: 'cheque', kind: 'CHEQUE', label: 'Cheque físico', electronico: false });
     options.push({ optionKey: 'echeq', kind: 'CHEQUE', label: 'Cheque electrónico (eCheq)', electronico: true });
+    // Las retenciones que nos practican los clientes (IIBB, Ganancias, IVA,
+    // SUSS…). No es plata que entra a una caja: cancela la factura igual.
     retentions.forEach((r) =>
-      options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: r.name, taxRateId: r.id })
+      options.push({ optionKey: `retencion:${r.id}`, kind: 'RETENCION', label: `Retención: ${r.name}`, taxRateId: r.id })
     );
     if (credit > 0) options.push({ optionKey: 'credito', kind: 'SALDO_A_FAVOR', label: 'Saldo a favor' });
     return options;
@@ -280,6 +288,10 @@ export function ReceiptNew() {
   }
 
   function handleSelectMedio(optionKey: string) {
+    if (optionKey === NUEVA_RETENCION) {
+      setAltaRetencion(true);
+      return;
+    }
     setSelectedMedioKey(optionKey);
     setDraftAmount(suggestedRemaining);
   }
@@ -609,6 +621,7 @@ export function ReceiptNew() {
                 {medioOptions.map((o) => (
                   <option key={o.optionKey} value={o.optionKey}>{o.label}</option>
                 ))}
+                <option value={NUEVA_RETENCION}>+ Nueva retención…</option>
               </select>
               <AccionesDeCampo
                 nuevo={{ titulo: 'Dar de alta un medio de pago', onClick: () => setAltaMedio(true) }}
@@ -686,7 +699,8 @@ export function ReceiptNew() {
                     value={value.certificateNumber ?? ''}
                     onChange={(e) => patchValue(value.key, { certificateNumber: e.target.value })}
                     placeholder="N° certificado"
-                    className={cn(compactFieldClass, 'w-32 font-mono')}
+                    title="Número del certificado de retención que entrega el cliente"
+                    className={cn(compactFieldClass, 'w-36 font-mono')}
                   />
                 </>
               )}
@@ -948,6 +962,21 @@ export function ReceiptNew() {
           </Button>
         </div>
       </Panel>
+
+      {altaRetencion && (
+        <TaxRateModal
+          rate={null}
+          soloTipo="RETENCION"
+          onClose={() => setAltaRetencion(false)}
+          onSaved={(r) => {
+            setAltaRetencion(false);
+            if (!r) return;
+            setRetentions((actuales) => [...actuales, r].sort((a, b) => a.name.localeCompare(b.name)));
+            setSelectedMedioKey(`retencion:${r.id}`);
+            setDraftAmount(suggestedRemaining);
+          }}
+        />
+      )}
 
       {altaMedio && (
         <PaymentMethodModal
