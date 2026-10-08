@@ -285,6 +285,15 @@ export function InvoiceNew() {
     if (cliente.taxCondition === 'RESPONSABLE_INSCRIPTO') setInvoiceType('A');
   }, [customers, order]);
 
+  // La Factura A es solo para Responsables Inscriptos: si se cambia a un
+  // cliente que no lo es, la A que había elegida deja de valer.
+  React.useEffect(() => {
+    const condicion = order?.customer?.tax_condition;
+    if (condicion && condicion !== 'RESPONSABLE_INSCRIPTO') {
+      setInvoiceType((actual) => (actual === 'A' ? '' : actual));
+    }
+  }, [order?.customer?.id, order?.customer?.tax_condition]);
+
   React.useEffect(() => {
     if (!otNumber || role !== 'admin') return;
     let cancelled = false;
@@ -433,8 +442,10 @@ export function InvoiceNew() {
   if (!isCash) dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
+  // Factura A: solo si el cliente es Responsable Inscripto.
+  const puedeFacturaA = customerCondition === 'RESPONSABLE_INSCRIPTO';
   const canIssue =
-    items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' &&
+    items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' && (invoiceType !== 'A' || puedeFacturaA) &&
     (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
 
   /**
@@ -634,7 +645,9 @@ export function InvoiceNew() {
             >
               <option value="">Elegí un talonario…</option>
               {LETRAS_EMISIBLES.map((l) => (
-                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+                <option key={l} value={l} disabled={l === 'A' && !puedeFacturaA}>
+                  {INVOICE_TYPE_LABELS[l]}{l === 'A' && !puedeFacturaA ? ' (solo Resp. Inscripto)' : ''}
+                </option>
               ))}
             </select>
             {invoiceType !== '' && (

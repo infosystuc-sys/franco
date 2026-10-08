@@ -202,6 +202,15 @@ export function InvoiceNewFree() {
     if (cliente.taxCondition === 'RESPONSABLE_INSCRIPTO') setInvoiceType('A');
   }, [customers, customerId]);
 
+  // La Factura A es solo para Responsables Inscriptos: si se cambia a un
+  // cliente que no lo es, la A que había elegida deja de valer.
+  React.useEffect(() => {
+    const cliente = customers.find((c) => c.id === customerId);
+    if (cliente && cliente.taxCondition !== 'RESPONSABLE_INSCRIPTO') {
+      setInvoiceType((actual) => (actual === 'A' ? '' : actual));
+    }
+  }, [customers, customerId]);
+
   // Cada letra tiene su numeración: se vuelve a pedir al cambiarla.
   React.useEffect(() => {
     if (!invoiceType) { setProximo(null); return; }
@@ -266,9 +275,11 @@ export function InvoiceNewFree() {
   const isCash = condicion === 'CONTADO';
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
+  // Factura A: solo si el cliente es Responsable Inscripto.
+  const puedeFacturaA = customer?.taxCondition === 'RESPONSABLE_INSCRIPTO';
   const canIssue =
     !!customerId && items.length > 0 && totals.total > 0 && emptyLines === 0 &&
-    condicion !== '' && invoiceType !== '' &&
+    condicion !== '' && invoiceType !== '' && (invoiceType !== 'A' || puedeFacturaA) &&
     (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
 
   const issueDate = new Date();
@@ -437,7 +448,9 @@ export function InvoiceNewFree() {
             >
               <option value="">Elegí un talonario…</option>
               {LETRAS_EMISIBLES.map((l) => (
-                <option key={l} value={l}>{INVOICE_TYPE_LABELS[l]}</option>
+                <option key={l} value={l} disabled={l === 'A' && !puedeFacturaA}>
+                  {INVOICE_TYPE_LABELS[l]}{l === 'A' && !puedeFacturaA ? ' (solo Resp. Inscripto)' : ''}
+                </option>
               ))}
             </select>
             {invoiceType !== '' && (
