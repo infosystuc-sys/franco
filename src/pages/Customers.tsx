@@ -1,4 +1,5 @@
 import React from 'react';
+import { CabeceraFija } from '@/src/components/CabeceraFija';
 import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -116,6 +117,7 @@ export function Customers() {
 
   return (
     <div className="w-full space-y-6">
+      <CabeceraFija>
       <PageHeader
         title="Clientes"
         subtitle="Datos fiscales y vehículos de cada cliente del taller."
@@ -147,9 +149,11 @@ export function Customers() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="overflow-x-auto">
-          <table className="table-stack w-full text-left text-[15px]">
+      </CabeceraFija>
+
+      <div className="overflow-hidden rounded-lg border border-line bg-panel xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-x-clip">
+          <table className="tabla-fija table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
                 <ThOrdenable columna="Cliente" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Cliente</ThOrdenable>

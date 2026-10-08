@@ -341,3 +341,29 @@ input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/*
+  Listados con la cabecera fija: el título, los botones y los filtros quedan
+  pegados bajo la barra superior, y los títulos de columna (tabla-fija) bajo
+  ellos. En pantallas angostas la tabla scrollea de costado y no se pega:
+  ahí el desborde horizontal convierte a la tabla en su propio contenedor.
+*/
+.cabecera-fija {
+  position: sticky;
+  top: calc(3.5rem + var(--safe-top));
+  z-index: 30;
+  background-color: var(--cabecera-bg, var(--color-surface));
+  padding-top: 0.25rem;
+}
+.tabla-fija thead th {
+  position: sticky;
+  top: calc(3.5rem + var(--safe-top) + var(--cabecera-fija-alto, 0px));
+  z-index: 20;
+  background-color: var(--cabecera-bg, var(--color-panel-head));
+}
+@media print {
+  .cabecera-fija,
+  .tabla-fija thead th {
+    position: static;
+  }
+}

@@ -116,41 +116,41 @@ export function CheckDraftModal({
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-                <label className={labelClass}>
+              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[0.9fr_1.2fr_1.35fr_1fr]">
+                <label className={cn(labelClass, 'flex min-w-0 flex-col whitespace-nowrap')}>
                   Número *
                   <input
                     value={row.checkNumber}
                     onChange={(e) => patchRow(row.rowKey, { checkNumber: e.target.value })}
-                    className={cn(inputClass, 'font-mono', !row.checkNumber.trim() && 'field-required')}
+                    className={cn(inputClass, 'h-10 font-mono', !row.checkNumber.trim() && 'field-required')}
                   />
                 </label>
-                <label className={labelClass}>
+                <label className={cn(labelClass, 'flex min-w-0 flex-col whitespace-nowrap')}>
                   Banco *
                   <BankCombobox
                     value={row.checkBank}
                     onChange={(name) => patchRow(row.rowKey, { checkBank: name })}
                     banks={banks}
                     onBankCreated={onBankCreated}
-                    className={cn(inputClass, !row.checkBank.trim() && 'field-required')}
+                    className={cn(inputClass, 'h-10', !row.checkBank.trim() && 'field-required')}
                   />
                 </label>
-                <label className={labelClass}>
+                <label className={cn(labelClass, 'flex min-w-0 flex-col whitespace-nowrap')}>
                   Fecha de cobro *
                   <input
                     type="date"
                     value={row.checkDueDate}
                     onChange={(e) => patchRow(row.rowKey, { checkDueDate: e.target.value })}
-                    className={cn(inputClass, !row.checkDueDate && 'field-required')}
+                    className={cn(inputClass, 'h-10', !row.checkDueDate && 'field-required')}
                   />
                 </label>
-                <label className={labelClass}>
+                <label className={cn(labelClass, 'flex min-w-0 flex-col whitespace-nowrap')}>
                   Importe *
                   <input
                     type="number" step="0.01" min="0"
                     value={row.amount || ''}
                     onChange={(e) => patchRow(row.rowKey, { amount: Number(e.target.value) })}
-                    className={cn(inputClass, 'font-mono', Number(row.amount) <= 0 && 'field-required')}
+                    className={cn(inputClass, 'h-10 font-mono', Number(row.amount) <= 0 && 'field-required')}
                   />
                 </label>
               </div>

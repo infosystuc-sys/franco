@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn, coincideBusqueda } from '@/src/lib/utils';
 import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
+import { CabeceraFija } from '@/src/components/CabeceraFija';
 import { Button, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { guardarEtiquetas, type TipoComprobante } from '@/src/lib/comprobantes';
@@ -238,6 +239,7 @@ export function ComprobantesListado<T>({
 
   return (
     <div className="w-full">
+      <CabeceraFija>
       {/* ── Encabezado y botonera ───────────────────────────────────── */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b-2 border-accent pb-3">
         <h1 className="text-[26px] font-light uppercase tracking-wide text-text-faint">{titulo}</h1>
@@ -384,6 +386,7 @@ export function ComprobantesListado<T>({
           </>
         )}
       </div>
+      </CabeceraFija>
 
       {loading ? (
         <p className="py-10 text-center text-text-soft">Cargando…</p>
@@ -401,9 +404,9 @@ export function ComprobantesListado<T>({
                 if (e.key === 'ArrowUp') { e.preventDefault(); moverSeleccion(-1); }
                 if (e.key === 'Enter' && elegida) onAbrir(elegida);
               }}
-              className="overflow-x-auto focus:outline-none"
+              className="overflow-x-auto focus:outline-none xl:overflow-x-clip"
             >
-              <table className="w-full min-w-[900px] text-left text-[16px]">
+              <table className="tabla-fija w-full min-w-[900px] text-left text-[16px] [--cabecera-bg:var(--color-surface)] xl:min-w-0">
                 <thead>
                   <tr className="text-[17px] font-semibold text-text">
                     {columnas.map((c) => (
