@@ -414,7 +414,7 @@ export function InvoiceNew() {
   const letraFiscal = invoiceTypeFor(settings.taxCondition, customerCondition);
   // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
   // el total no puede quedar en blanco solo porque falta esa elección.
-  const totals = computeTotals(items, invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType, descuento);
+  const totals = computeTotals(items, invoiceType === '' ? letraFiscal : invoiceType, descuento);
   // Con un solo medio, ese medio cubre lo que falte (el total menos los
   // cheques): el caso de siempre no pide escribir el importe.
   const pagosEfectivos = ajustarUnicoMedio(pagos, checkDrafts, totals.total);
@@ -706,7 +706,7 @@ export function InvoiceNew() {
           editable
           descuento={descuento}
           onDescuentoChange={setDescuento}
-          totals={<InvoiceTotals type={invoiceType === 'X' || invoiceType === '' ? letraFiscal : invoiceType} totals={totals} descuento={descuento} />}
+          totals={<InvoiceTotals type={invoiceType === '' ? letraFiscal : invoiceType} totals={totals} descuento={descuento} />}
         />
 
         {emptyLines > 0 && (

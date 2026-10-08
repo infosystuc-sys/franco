@@ -243,7 +243,8 @@ export function computeTotals(
   const gross = round2(items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
   const discount = montoDeDescuento(gross, descuento);
   const net = round2(gross - discount);
-  const vat = type === 'C' ? 0 : round2(net * VAT_RATE);
+  // La C no discrimina IVA y la X, que es interna y no fiscal, tampoco lo suma.
+  const vat = type === 'C' || type === 'X' ? 0 : round2(net * VAT_RATE);
   return { gross, discount, net, vat, total: round2(net + vat) };
 }
 
@@ -260,10 +261,20 @@ interface Collectable {
   creditedAmount?: number;
 }
 
+/**
+ * Lo cobrado más lo que una nota de crédito imputada le canceló: una factura
+ * acreditada por completo no está impaga, aunque nadie la haya cobrado.
+ */
 export function paymentStateOf(invoice: Collectable): PaymentState {
-  if (invoice.paidAmount <= 0) return 'IMPAGA';
-  if (invoice.paidAmount >= invoice.totalAmount) return 'PAGADA';
+  const cubierto = invoice.paidAmount + (invoice.creditedAmount ?? 0);
+  if (cubierto <= 0) return 'IMPAGA';
+  if (cubierto >= invoice.totalAmount) return 'PAGADA';
   return 'PARCIAL';
+}
+
+/** Cubierta por completo gracias a notas de crédito (no por cobros). */
+export function acreditadaPorNc(invoice: Collectable): boolean {
+  return (invoice.creditedAmount ?? 0) > 0 && invoice.paidAmount < invoice.totalAmount && paymentStateOf(invoice) === 'PAGADA';
 }
 
 /**

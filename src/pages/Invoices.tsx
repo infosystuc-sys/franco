@@ -10,6 +10,7 @@ import {
   formatDate,
   letraYNumeroDeSaldoInicial,
   paymentStateOf,
+  acreditadaPorNc,
   type InvoiceListRow,
 } from '@/src/lib/invoices';
 import { emitirEnArca } from '@/src/lib/arcaFacturacion';
@@ -40,6 +41,7 @@ function estado(f: InvoiceListRow): string {
 function cobrado(f: InvoiceListRow): string {
   if (f.status !== 'EMITIDA') return '—';
   const pago = paymentStateOf(f);
+  if (acreditadaPorNc(f)) return 'Acreditada';
   return pago === 'PAGADA' ? 'Si' : pago === 'PARCIAL' ? 'Parcial' : 'No';
 }
 

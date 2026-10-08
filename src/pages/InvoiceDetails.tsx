@@ -23,6 +23,7 @@ import {
   isOverdue,
   letraYNumeroDeSaldoInicial,
   paymentStateOf,
+  acreditadaPorNc,
   PAYMENT_STATE_LABELS,
   voidInvoice,
   type InvoiceDetail,
@@ -195,7 +196,9 @@ export function InvoiceDetails() {
                 {overdue ? <AlertTriangle size={14} /> : null}
                 {overdue
                   ? `Vencida hace ${Math.abs(days)} ${Math.abs(days) === 1 ? 'día' : 'días'}`
-                  : PAYMENT_STATE_LABELS[paymentStateOf(invoice)]}
+                  : acreditadaPorNc(invoice)
+                    ? 'Acreditada por nota de crédito'
+                    : PAYMENT_STATE_LABELS[paymentStateOf(invoice)]}
               </span>
             )
           }
@@ -355,9 +358,12 @@ export function InvoiceDetails() {
         )}
 
         {!voided && !pendiente && (
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className={cn('mb-6 grid grid-cols-2 gap-3', (invoice.creditedAmount ?? 0) > 0 ? 'md:grid-cols-5' : 'md:grid-cols-4')}>
             <Metric label="Total" value={`$ ${formatMoney(invoice.totalAmount)}`} />
             <Metric label="Cobrado" value={`$ ${formatMoney(invoice.paidAmount)}`} />
+            {(invoice.creditedAmount ?? 0) > 0 && (
+              <Metric label="Acreditado" value={`$ ${formatMoney(invoice.creditedAmount ?? 0)}`} />
+            )}
             <Metric label="Saldo" value={`$ ${formatMoney(balance)}`} strong />
             <VencimientoMetric
               invoice={invoice}
