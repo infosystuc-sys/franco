@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn, coincideBusqueda } from '@/src/lib/utils';
@@ -68,6 +70,25 @@ export function Vehicles() {
     });
   }, [vehicles, search, customerFilter]);
 
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Vehículo / Equipo': return [c.brand, c.model].filter(Boolean).join(' ');
+      case 'Patente': return c.licensePlate;
+      case 'Cliente': return c.customerName;
+      case 'Motor': return [c.engineBrand, c.engineModel].filter(Boolean).join(' ');
+      case 'Inyección': return c.injectionSystem;
+      case 'Uso': return c.odometer;
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
+
   async function handleDelete(vehicle: Vehicle) {
     const label = [vehicle.brand, vehicle.model].filter(Boolean).join(' ');
     if (!window.confirm(`¿Eliminar el vehículo "${label}"?`)) return;
@@ -129,12 +150,12 @@ export function Vehicles() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="p-3 font-semibold">Vehículo / Equipo</th>
-                <th className="p-3 font-semibold w-32">Patente</th>
-                <th className="p-3 font-semibold w-44">Cliente</th>
-                <th className="p-3 font-semibold w-40">Motor</th>
-                <th className="p-3 font-semibold w-36">Inyección</th>
-                <th className="p-3 font-semibold w-28 text-right">Uso</th>
+                <ThOrdenable columna="Vehículo / Equipo" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Vehículo / Equipo</ThOrdenable>
+                <ThOrdenable columna="Patente" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-32">Patente</ThOrdenable>
+                <ThOrdenable columna="Cliente" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-44">Cliente</ThOrdenable>
+                <ThOrdenable columna="Motor" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-40">Motor</ThOrdenable>
+                <ThOrdenable columna="Inyección" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-36">Inyección</ThOrdenable>
+                <ThOrdenable columna="Uso" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-28 text-right">Uso</ThOrdenable>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>
@@ -151,7 +172,7 @@ export function Vehicles() {
                   </td>
                 </tr>
               )}
-              {filtered.map((vehicle) => (
+              {ordenados.map((vehicle) => (
                 <tr key={vehicle.id} className={cn(
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !vehicle.active && "opacity-55"

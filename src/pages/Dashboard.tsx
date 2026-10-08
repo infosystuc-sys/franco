@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Eye, Edit2 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -32,6 +34,20 @@ function WorkOrderPanel() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const [orders, setOrders] = React.useState<WorkOrderListRow[]>([]);
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenadas = React.useMemo(
+    () =>
+      ordenarFilas(orders, orden, (o, columna) => {
+        switch (columna) {
+          case 'N° OT': return o.number;
+          case 'Cliente': return o.customerName;
+          case 'Vehículo / Equipo': return o.vehicleLabel;
+          case 'Estado': return o.status.label;
+          default: return null;
+        }
+      }),
+    [orders, orden]
+  );
   const [kpis, setKpis] = React.useState<WorkOrderStatusCount[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -117,10 +133,10 @@ function WorkOrderPanel() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="w-28 p-3 font-semibold">N° OT</th>
-                <th className="p-3 font-semibold">Cliente</th>
-                <th className="p-3 font-semibold">Vehículo / Equipo</th>
-                <th className="w-40 p-3 font-semibold">Estado</th>
+                <ThOrdenable columna="N° OT" orden={orden} onOrden={setOrden} className="w-28 p-3 font-semibold">N° OT</ThOrdenable>
+                <ThOrdenable columna="Cliente" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Cliente</ThOrdenable>
+                <ThOrdenable columna="Vehículo / Equipo" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Vehículo / Equipo</ThOrdenable>
+                <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="w-40 p-3 font-semibold">Estado</ThOrdenable>
                 <th className="w-28 p-3 text-right font-semibold">Acciones</th>
               </tr>
             </thead>
@@ -137,7 +153,7 @@ function WorkOrderPanel() {
                   </td>
                 </tr>
               )}
-              {orders.map((order) => (
+              {ordenadas.map((order) => (
                 <tr
                   key={order.id}
                   className="relative border-b border-line transition-colors last:border-b-0 hover:bg-panel-alt"

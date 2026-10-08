@@ -2,6 +2,8 @@ import React from 'react';
 import { ChevronDown, LayoutGrid, List, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn, coincideBusqueda } from '@/src/lib/utils';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Button, Panel } from '@/src/components/ui';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { guardarEtiquetas, type TipoComprobante } from '@/src/lib/comprobantes';
@@ -22,6 +24,11 @@ export interface ColumnaListado<T> {
   label: string;
   valor: (fila: T) => React.ReactNode;
   derecha?: boolean;
+  /**
+   * Qué valor se compara al ordenar por esta columna, si no es lo que se ve
+   * (un estado con su color, por ejemplo). Por defecto, el texto de la celda.
+   */
+  orden?: (fila: T) => unknown;
   /** Clases del ancho de la columna (Tailwind). */
   ancho?: string;
 }
@@ -160,7 +167,20 @@ export function ComprobantesListado<T>({
 
   const filtrando = busqueda.trim() !== '' || estados.length > 0;
 
-  const visibles = filtradas.slice(0, cantidad);
+  // Orden por columna: un click en el título ordena, otro invierte, otro
+  // vuelve al orden de la pantalla. Se aplica a todo lo filtrado, no solo a
+  // lo que se ve: "Ver más" sigue el mismo orden.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenadas = React.useMemo(
+    () =>
+      ordenarFilas(filtradas, orden, (fila, columna) => {
+        const c = columnas.find((x) => x.label === columna);
+        return c ? (c.orden ? c.orden(fila) : textoDe(c.valor(fila))) : null;
+      }),
+    [filtradas, orden, columnas]
+  );
+
+  const visibles = ordenadas.slice(0, cantidad);
 
   // Siempre hay una fila elegida, como en Tango: la primera, hasta que se
   // toque otra. Si la elegida deja de estar (se recargó el listado), vuelve
@@ -387,12 +407,16 @@ export function ComprobantesListado<T>({
                 <thead>
                   <tr className="text-[17px] font-semibold text-text">
                     {columnas.map((c) => (
-                      <th
+                      <ThOrdenable
                         key={c.label}
-                        className={cn('whitespace-nowrap px-2 py-2', c.derecha && 'text-right', c.ancho)}
+                        columna={c.label}
+                        orden={orden}
+                        onOrden={setOrden}
+                        derecha={c.derecha}
+                        className={cn('whitespace-nowrap px-2 py-2', c.ancho)}
                       >
                         {c.label}
-                      </th>
+                      </ThOrdenable>
                     ))}
                   </tr>
                 </thead>

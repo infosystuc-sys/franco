@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Search, Ban, AlertTriangle, Wallet, ArrowRight } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
@@ -78,6 +80,24 @@ export function Treasury() {
       return coincideBusqueda(term, [mv.fullNumber, mv.description, mv.payee, mv.conceptName]);
     });
   }, [movements, search, typeFilter]);
+
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Comprobante': return c.fullNumber;
+      case 'Fecha': return c.movementDate;
+      case 'Detalle': return c.description;
+      case 'Concepto': return c.conceptName;
+      case 'Importe': return c.amount;
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
 
   // La cartera queda fuera del total a propósito: un cheque en cartera es un
   // valor a cobrar, no plata disponible. Mezclarlos daría un número que
@@ -223,12 +243,12 @@ export function Treasury() {
         <table className="table-stack w-full text-left text-[15px]">
           <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
-              <th className="px-4 py-1 w-32">Comprobante</th>
-              <th className="px-3 py-1 w-28">Fecha</th>
-              <th className="px-3 py-1">Detalle</th>
-              <th className="px-3 py-1 w-40">Concepto</th>
+              <ThOrdenable columna="Comprobante" orden={orden} onOrden={setOrden} className="px-4 py-1 w-32">Comprobante</ThOrdenable>
+              <ThOrdenable columna="Fecha" orden={orden} onOrden={setOrden} className="px-3 py-1 w-28">Fecha</ThOrdenable>
+              <ThOrdenable columna="Detalle" orden={orden} onOrden={setOrden} className="px-3 py-1">Detalle</ThOrdenable>
+              <ThOrdenable columna="Concepto" orden={orden} onOrden={setOrden} className="px-3 py-1 w-40">Concepto</ThOrdenable>
               <th className="px-3 py-1 w-56">Medios</th>
-              <th className="px-3 py-1 w-32 text-right">Importe</th>
+              <ThOrdenable columna="Importe" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32 text-right">Importe</ThOrdenable>
               <th className="px-3 py-1 w-12"></th>
             </tr>
           </thead>
@@ -253,7 +273,7 @@ export function Treasury() {
             )}
 
             {!loading &&
-              filtered.map((mv) => {
+              ordenados.map((mv) => {
                 const voided = mv.status === 'ANULADO';
                 return (
                   <tr key={mv.id} className="relative h-11 border-b border-line last:border-b-0 hover:bg-panel-alt">

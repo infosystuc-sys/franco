@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Pencil, Trash2, Search, Truck, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney, coincideBusqueda } from '@/src/lib/utils';
@@ -69,12 +71,32 @@ export function Customers() {
     );
   }, [customers, search]);
 
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Cliente': return c.name;
+      case 'CUIT / CUIL': return c.taxId;
+      case 'Cond. IVA': return TAX_CONDITION_LABELS[c.taxCondition];
+      case 'Contacto': return c.email ?? c.phone;
+      case 'Saldo': return saldos.get(c.id) ?? 0;
+      case 'Vehíc.': return c.vehicles.length;
+      case 'Estado': return c.active ? 'Activo' : 'Inactivo';
+          default: return null;
+        }
+      }),
+    [filtered, orden, saldos]
+  );
+
   // Con más de mil clientes, dibujarlos todos juntos hace la pantalla lenta e
   // inmanejable: se muestran de a páginas. Al buscar se vuelve a la primera,
   // que es donde quedan los resultados.
   const totalPaginas = Math.max(1, Math.ceil(filtered.length / POR_PAGINA));
   const paginaActual = Math.min(pagina, totalPaginas - 1);
-  const visibles = filtered.slice(paginaActual * POR_PAGINA, (paginaActual + 1) * POR_PAGINA);
+  const visibles = ordenados.slice(paginaActual * POR_PAGINA, (paginaActual + 1) * POR_PAGINA);
   React.useEffect(() => { setPagina(0); }, [search]);
 
   async function handleDelete(customer: Customer) {
@@ -130,13 +152,13 @@ export function Customers() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="p-3 font-semibold">Cliente</th>
-                <th className="p-3 font-semibold w-36">CUIT / CUIL</th>
-                <th className="p-3 font-semibold w-44">Cond. IVA</th>
-                <th className="p-3 font-semibold w-48">Contacto</th>
-                <th className="p-3 font-semibold w-36 text-right">Saldo</th>
-                <th className="p-3 font-semibold w-20 text-center">Vehíc.</th>
-                <th className="p-3 font-semibold w-20 text-center">Estado</th>
+                <ThOrdenable columna="Cliente" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Cliente</ThOrdenable>
+                <ThOrdenable columna="CUIT / CUIL" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-36">CUIT / CUIL</ThOrdenable>
+                <ThOrdenable columna="Cond. IVA" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-44">Cond. IVA</ThOrdenable>
+                <ThOrdenable columna="Contacto" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-48">Contacto</ThOrdenable>
+                <ThOrdenable columna="Saldo" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-36 text-right">Saldo</ThOrdenable>
+                <ThOrdenable columna="Vehíc." orden={orden} onOrden={setOrden} className="p-3 font-semibold w-20 text-center">Vehíc.</ThOrdenable>
+                <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-20 text-center">Estado</ThOrdenable>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>

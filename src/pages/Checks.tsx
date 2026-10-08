@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
@@ -74,6 +76,25 @@ export function Checks() {
       return coincideBusqueda(term, [check.number, check.bankName, check.drawer]);
     });
   }, [checks, search, statusFilter, tipoFilter]);
+
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Número': return c.number;
+      case 'Tipo': return c.electronico ? 'eCheq' : 'Cheque';
+      case 'Banco / Librador': return c.bankName;
+      case 'Cobro': return c.dueDate;
+      case 'Importe': return c.amount;
+      case 'Estado': return c.status;
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
 
   const totals = React.useMemo(() => {
     const wallet = checks.filter((c) => isInWallet(c.status));
@@ -232,12 +253,12 @@ export function Checks() {
         <table className="table-stack w-full text-left text-[15px]">
           <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
-              <th className="px-4 py-1 w-32">Número</th>
-              <th className="px-3 py-1 w-28">Tipo</th>
-              <th className="px-3 py-1">Banco / Librador</th>
-              <th className="px-3 py-1 w-28">Cobro</th>
-              <th className="px-3 py-1 w-32 text-right">Importe</th>
-              <th className="px-3 py-1 w-32">Estado</th>
+              <ThOrdenable columna="Número" orden={orden} onOrden={setOrden} className="px-4 py-1 w-32">Número</ThOrdenable>
+              <ThOrdenable columna="Tipo" orden={orden} onOrden={setOrden} className="px-3 py-1 w-28">Tipo</ThOrdenable>
+              <ThOrdenable columna="Banco / Librador" orden={orden} onOrden={setOrden} className="px-3 py-1">Banco / Librador</ThOrdenable>
+              <ThOrdenable columna="Cobro" orden={orden} onOrden={setOrden} className="px-3 py-1 w-28">Cobro</ThOrdenable>
+              <ThOrdenable columna="Importe" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32 text-right">Importe</ThOrdenable>
+              <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32">Estado</ThOrdenable>
               <th className="px-3 py-1 w-52">Acciones</th>
             </tr>
           </thead>
@@ -257,7 +278,7 @@ export function Checks() {
             )}
 
             {!loading &&
-              filtered.map((check) => {
+              ordenados.map((check) => {
                 const overdue = check.status === 'EN_CARTERA' && check.dueDate <= todayLocal();
                 return (
                   <tr key={check.id} className="relative h-12 border-b border-line last:border-b-0 hover:bg-panel-alt">

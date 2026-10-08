@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn, coincideBusqueda } from '@/src/lib/utils';
@@ -64,6 +66,25 @@ export function Suppliers() {
     );
   }, [suppliers, search]);
 
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Proveedor': return c.name;
+      case 'CUIT / CUIL': return c.taxId;
+      case 'Cond. IVA': return TAX_CONDITION_LABELS[c.taxCondition];
+      case 'Contacto': return c.email ?? c.phone;
+      case 'Artículos': return c.articles.length;
+      case 'Estado': return c.active ? 'Activo' : 'Inactivo';
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
+
   async function handleDelete(supplier: Supplier) {
     const warning = supplier.articles.length > 0
       ? `\n\nSus ${supplier.articles.length} artículo(s) quedarán sin proveedor asignado (no se eliminan).`
@@ -112,12 +133,12 @@ export function Suppliers() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="p-3 font-semibold">Proveedor</th>
-                <th className="p-3 font-semibold w-36">CUIT / CUIL</th>
-                <th className="p-3 font-semibold w-44">Cond. IVA</th>
-                <th className="p-3 font-semibold w-48">Contacto</th>
-                <th className="p-3 font-semibold w-24 text-center">Artículos</th>
-                <th className="p-3 font-semibold w-20 text-center">Estado</th>
+                <ThOrdenable columna="Proveedor" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Proveedor</ThOrdenable>
+                <ThOrdenable columna="CUIT / CUIL" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-36">CUIT / CUIL</ThOrdenable>
+                <ThOrdenable columna="Cond. IVA" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-44">Cond. IVA</ThOrdenable>
+                <ThOrdenable columna="Contacto" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-48">Contacto</ThOrdenable>
+                <ThOrdenable columna="Artículos" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-24 text-center">Artículos</ThOrdenable>
+                <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-20 text-center">Estado</ThOrdenable>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>
@@ -132,7 +153,7 @@ export function Suppliers() {
                   </td>
                 </tr>
               )}
-              {filtered.map((supplier) => (
+              {ordenados.map((supplier) => (
                 <tr key={supplier.id} className={cn(
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !supplier.active && "opacity-55"

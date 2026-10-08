@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { Plus, Pencil, Trash2, X, Search, PackageX, Star, Factory } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -83,6 +85,26 @@ export function Inventory() {
   const busqueda = React.useDeferredValue(search);
   const filtered = React.useMemo(() => buscarArticulos(articles, busqueda), [articles, busqueda]);
 
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Código': return c.code;
+      case 'Descripción': return c.description;
+      case 'Proveedor preferido': return c.preferredSupplierName;
+      case 'P. Compra': return c.purchasePrice;
+      case 'Util.': return c.markupPercent;
+      case 'P. Venta': return c.unitPrice;
+      case 'Stock': return c.tracksStock ? c.stockQuantity : null;
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
+
   async function handleDelete(article: Article) {
     if (!window.confirm(`¿Eliminar el artículo ${article.code}?`)) return;
     setError(null);
@@ -139,13 +161,13 @@ export function Inventory() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="p-3 font-semibold w-28">Código</th>
-                <th className="p-3 font-semibold">Descripción</th>
-                <th className="p-3 font-semibold w-44">Proveedor preferido</th>
-                <th className="p-3 font-semibold w-28 text-right">P. Compra</th>
-                <th className="p-3 font-semibold w-20 text-right">Util.</th>
-                <th className="p-3 font-semibold w-28 text-right">P. Venta</th>
-                <th className="p-3 font-semibold w-24 text-center">Stock</th>
+                <ThOrdenable columna="Código" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-28">Código</ThOrdenable>
+                <ThOrdenable columna="Descripción" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Descripción</ThOrdenable>
+                <ThOrdenable columna="Proveedor preferido" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-44">Proveedor preferido</ThOrdenable>
+                <ThOrdenable columna="P. Compra" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-28 text-right">P. Compra</ThOrdenable>
+                <ThOrdenable columna="Util." orden={orden} onOrden={setOrden} className="p-3 font-semibold w-20 text-right">Util.</ThOrdenable>
+                <ThOrdenable columna="P. Venta" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-28 text-right">P. Venta</ThOrdenable>
+                <ThOrdenable columna="Stock" orden={orden} onOrden={setOrden} className="p-3 font-semibold w-24 text-center">Stock</ThOrdenable>
                 <th className="p-3 font-semibold w-24 text-right">Acciones</th>
               </tr>
             </thead>
@@ -160,7 +182,7 @@ export function Inventory() {
                   </td>
                 </tr>
               )}
-              {filtered.slice(0, ARTICULOS_A_MOSTRAR).map((article) => (
+              {ordenados.slice(0, ARTICULOS_A_MOSTRAR).map((article) => (
                 <tr key={article.id} className={cn(
                   "border-b border-line hover:bg-panel-alt transition-colors",
                   !article.active && "opacity-55"

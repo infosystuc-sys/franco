@@ -5,6 +5,8 @@ import { cn, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import {
   agruparFilas,
@@ -113,9 +115,10 @@ export function ReportView() {
   React.useEffect(() => {
     setLetras([]);
     setClases([]);
+    setOrden(null);
   }, [rows]);
 
-  const filtered = React.useMemo(() => {
+  const filtradas = React.useMemo(() => {
     if (!rows) return [];
     const term = search.trim().toLowerCase();
     return rows.filter((row) => {
@@ -127,6 +130,14 @@ export function ReportView() {
       return !term || coincideBusqueda(term, Object.values(row));
     });
   }, [rows, search, letras, clases, report]);
+
+  // Orden por columna: un click en el título ordena, otro invierte, otro
+  // vuelve al orden del informe. Lo que se imprime y se exporta sale así.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const filtered = React.useMemo(
+    () => ordenarFilas(filtradas, orden, (row, columna) => row[columna]),
+    [filtradas, orden]
+  );
 
   // Los totales se calculan sobre lo FILTRADO, no sobre todo: si alguien
   // busca un cliente, el total tiene que ser el de ese cliente. Un total que
@@ -329,12 +340,15 @@ export function ReportView() {
               <thead className="h-9 bg-panel-head text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   {report.columns.map((column) => (
-                    <th
+                    <ThOrdenable
                       key={column.key}
+                      columna={column.key}
+                      orden={orden}
+                      onOrden={setOrden}
                       className={cn('px-3 py-1', isNumeric(column.format) && 'text-right')}
                     >
                       {column.label}
-                    </th>
+                    </ThOrdenable>
                   ))}
                 </tr>
               </thead>

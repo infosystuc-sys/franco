@@ -1,4 +1,6 @@
 import React from 'react';
+import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
+import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { RefreshCw, AlertTriangle, MessageSquare, Power, FlaskConical } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -59,6 +61,25 @@ export function Notifications() {
 
   const filtered = filter ? rows.filter((r) => r.status === filter) : rows;
 
+  // Orden por columna: click en el título ordena, otro invierte, otro vuelve
+  // al orden original.
+  const [orden, setOrden] = React.useState<Orden | null>(null);
+  const ordenados = React.useMemo(
+    () =>
+      ordenarFilas(filtered, orden, (c, columna) => {
+        switch (columna) {
+      case 'Fecha': return c.createdAt;
+      case 'Tipo': return c.kind;
+      case 'Destinatario': return c.customerName ?? c.toPhone;
+      case 'Referencia': return c.workOrderNumber ?? c.quotationNumber;
+      case 'Estado': return c.status;
+      case 'Intentos': return c.attempts;
+          default: return null;
+        }
+      }),
+    [filtered, orden]
+  );
+
   if (role && !isAdmin) return <Navigate to="/" replace />;
 
   return (
@@ -105,12 +126,12 @@ export function Notifications() {
           <table className="table-stack w-full text-left text-[15px]">
             <thead>
               <tr className="border-b border-line bg-panel-head text-[13px] uppercase tracking-[0.06em] text-text-soft">
-                <th className="w-40 p-3 font-semibold">Fecha</th>
-                <th className="w-36 p-3 font-semibold">Tipo</th>
-                <th className="p-3 font-semibold">Destinatario</th>
-                <th className="w-28 p-3 font-semibold">Referencia</th>
-                <th className="w-28 p-3 font-semibold">Estado</th>
-                <th className="w-20 p-3 text-right font-semibold">Intentos</th>
+                <ThOrdenable columna="Fecha" orden={orden} onOrden={setOrden} className="w-40 p-3 font-semibold">Fecha</ThOrdenable>
+                <ThOrdenable columna="Tipo" orden={orden} onOrden={setOrden} className="w-36 p-3 font-semibold">Tipo</ThOrdenable>
+                <ThOrdenable columna="Destinatario" orden={orden} onOrden={setOrden} className="p-3 font-semibold">Destinatario</ThOrdenable>
+                <ThOrdenable columna="Referencia" orden={orden} onOrden={setOrden} className="w-28 p-3 font-semibold">Referencia</ThOrdenable>
+                <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="w-28 p-3 font-semibold">Estado</ThOrdenable>
+                <ThOrdenable columna="Intentos" orden={orden} onOrden={setOrden} className="w-20 p-3 text-right font-semibold">Intentos</ThOrdenable>
               </tr>
             </thead>
             <tbody>
@@ -124,7 +145,7 @@ export function Notifications() {
                   </td>
                 </tr>
               )}
-              {filtered.map((row) => (
+              {ordenados.map((row) => (
                 <React.Fragment key={row.id}>
                   <tr
                     onClick={() => setExpanded(expanded === row.id ? null : row.id)}
