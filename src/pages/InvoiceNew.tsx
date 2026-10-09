@@ -783,6 +783,7 @@ export function InvoiceNew() {
                       address_city: guardado.addressCity,
                       address_state: guardado.addressState,
                       address_zip: guardado.addressZip,
+                      email: guardado.email,
                       sectors: guardado.sectors,
                     },
                   }
@@ -817,6 +818,7 @@ export function InvoiceNew() {
                       address_city: guardado.addressCity,
                       address_state: guardado.addressState,
                       address_zip: guardado.addressZip,
+                      email: guardado.email,
                       sectors: guardado.sectors,
                     },
                   }

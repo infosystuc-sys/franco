@@ -12,6 +12,65 @@ export interface QuotationDocumentItem {
   unitPrice: number;
 }
 
+/** El presupuesto tal como llega de la base, listo para dibujarlo. */
+export function datosDeCotizacion(q: {
+  number: string;
+  createdAt: string;
+  validUntil: string | null;
+  component: string | null;
+  notes: string | null;
+  customer: {
+    name: string;
+    legal_name: string | null;
+    tax_id: string | null;
+    tax_condition: TaxCondition | null;
+    address_street: string | null;
+    address_city: string | null;
+    address_state: string | null;
+    address_zip: string | null;
+  } | null;
+  vehicle: {
+    brand: string | null;
+    model: string;
+    license_plate: string | null;
+    reference_number?: string | null;
+    kind?: 'VEHICULO' | 'PIEZA';
+  } | null;
+  workOrderNumber: string | null;
+  items: { code: string; description: string; quantity: number; unitPrice: number }[];
+}): QuotationDocumentData {
+  return {
+    number: q.number,
+    issueDate: q.createdAt,
+    validUntil: q.validUntil,
+    component: q.component,
+    notes: q.notes,
+    customerName: q.customer?.legal_name || q.customer?.name || '—',
+    customerTaxId: q.customer?.tax_id ?? null,
+    customerAddress: q.customer
+      ? formatAddress({
+          addressStreet: q.customer.address_street,
+          addressCity: q.customer.address_city,
+          addressState: q.customer.address_state,
+          addressZip: q.customer.address_zip,
+        })
+      : null,
+    customerTaxCondition: q.customer?.tax_condition ?? null,
+    vehicleBrand: q.vehicle?.brand ?? null,
+    vehicleModel: q.vehicle?.model ?? null,
+    licensePlate: q.vehicle?.license_plate ?? null,
+    vehicleKind: q.vehicle?.kind ?? null,
+    referenceNumber: q.vehicle?.reference_number ?? null,
+    workOrderNumber: q.workOrderNumber,
+    items: q.items.map((item) => ({
+      code: item.code || null,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+    })),
+  };
+}
+
 export interface QuotationDocumentData {
   number: string;
   issueDate: string;

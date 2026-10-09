@@ -622,6 +622,7 @@ export interface WorkOrderDetail {
         address_city: string | null;
         address_state: string | null;
         address_zip: string | null;
+        email: string | null;
         sectors: { id: string; name: string; responsable: string | null; phone: string | null; email: string | null }[];
       }
     | null;
@@ -694,7 +695,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        price_auth_status, price_auth_requested_total, price_auth_requested_at, price_auth_decided_at, price_auth_reason,
        reception_kind, observations, customer_sector_id, discount_percent, discount_fixed,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
-       customer:customers(id, name, phone, legal_name, tax_id, tax_condition,
+       customer:customers(id, name, phone, email, legal_name, tax_id, tax_condition,
                           address_street, address_city, address_state, address_zip,
                           sectors:customer_sectors(id, name, responsable, phone, email)),
        vehicle:vehicles(id, brand, model, license_plate, reference_number, kind, vehicle_type, year, engine_brand, engine_model, injection_system),

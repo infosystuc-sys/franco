@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer, Undo2, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, Check, FileText, ArrowRight, History, Receipt, Camera, ImageOff, Trash2, AlertTriangle, Send, Printer, Undo2, Pencil, Mail, MessageCircle } from 'lucide-react';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
@@ -7,6 +7,13 @@ import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
 import { setWorkOrderSector, setWorkOrderDescuento } from '@/src/lib/workOrders';
 import { descuentoDe } from '@/src/components/DescuentoEditor';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { WorkOrderBlankDocument } from '@/src/components/WorkOrderBlankDocument';
+import { QuotationDocument, datosDeCotizacion } from '@/src/components/QuotationDocument';
+import { fetchTallerHeader, formatAddress, type TallerHeader } from '@/src/lib/companySettings';
+import { fetchQuotationByNumber, type QuotationDetail } from '@/src/lib/quotations';
+import { contactosDeEnvio, contactoDeEnvio } from '@/src/lib/customers';
+import { marcarEnviado } from '@/src/lib/comprobantes';
 import type { Descuento } from '@/src/lib/invoices';
 import { Button, inputClass, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { fetchArticles, type Article } from '@/src/lib/articles';
@@ -71,6 +78,29 @@ export function WorkOrderDetails() {
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
   // La ficha del equipo recibido (vehículo o pieza) abierta para corregirla.
   const [equipoEnEdicion, setEquipoEnEdicion] = useState<Vehicle | null>(null);
+  // Envío de la OT impresa y su presupuesto por mail o WhatsApp. Los dos papeles
+  // se arman recién al abrir la ventana de envío y viajan en un solo PDF, cada
+  // uno en su hoja.
+  const [envio, setEnvio] = useState<'email' | 'whatsapp' | null>(null);
+  const [tallerEnvio, setTallerEnvio] = useState<TallerHeader | null>(null);
+  const [cotizacionEnvio, setCotizacionEnvio] = useState<QuotationDetail | null>(null);
+  const [preparandoEnvio, setPreparandoEnvio] = useState(false);
+  const papelesRef = React.useRef<HTMLDivElement>(null);
+  async function abrirEnvio(canal: 'email' | 'whatsapp') {
+    if (!order) return;
+    setPreparandoEnvio(true);
+    try {
+      const [taller, cotizacion] = await Promise.all([
+        fetchTallerHeader().catch(() => null),
+        order.quotationNumber ? fetchQuotationByNumber(order.quotationNumber).catch(() => null) : Promise.resolve(null),
+      ]);
+      setTallerEnvio(taller);
+      setCotizacionEnvio(cotizacion);
+      setEnvio(canal);
+    } finally {
+      setPreparandoEnvio(false);
+    }
+  }
   const [abriendoEquipo, setAbriendoEquipo] = useState(false);
   async function editarEquipo() {
     if (!order?.vehicle) return;
@@ -737,6 +767,18 @@ export function WorkOrderDetails() {
                 lo borró— esto lo repite. Va en la barra con el resto de los
                 botones: probado aparte, en la ficha del cliente, no se
                 encontraba. */}
+            {/* La OT impresa (con el presupuesto, si lo tiene) por mail o
+                WhatsApp, en un solo PDF. */}
+            {isAdmin && (
+              <>
+                <Button type="button" variant="ghost" onClick={() => abrirEnvio('email')} disabled={preparandoEnvio}>
+                  <Mail size={16} /> Enviar por mail
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => abrirEnvio('whatsapp')} disabled={preparandoEnvio}>
+                  <MessageCircle size={16} /> Enviar por WhatsApp
+                </Button>
+              </>
+            )}
             {isAdmin && (
               <Button
                 type="button"
@@ -1169,6 +1211,76 @@ export function WorkOrderDetails() {
           onDescuentoChange={isAdmin && !locked ? cambiarDescuento : undefined}
         />
       </Panel>
+
+      {envio && order.customer && (
+        <>
+          {/* Los papeles que viajan en el PDF: fuera de la vista pero dibujados
+              (html2canvas no fotografía lo que está oculto con display:none). */}
+          <div aria-hidden className="pointer-events-none fixed left-[-10000px] top-0 w-[900px]">
+            <div ref={papelesRef} data-hojas-separadas>
+              {/* Con 8 renglones en blanco la orden entra justo en una hoja; con los 18
+                  de la versión para imprimir se iría a una segunda. */}
+              <WorkOrderBlankDocument
+                filas={8}
+                taller={tallerEnvio}
+                order={{
+                  number: order.number,
+                  component: order.component,
+                  customerName: order.customer.name,
+                  customerPhone: order.customer.phone ?? null,
+                  customerTaxId: order.customer.tax_id ?? null,
+                  customerTaxCondition: order.customer.tax_condition ?? null,
+                  customerAddress:
+                    formatAddress({
+                      addressStreet: order.customer.address_street,
+                      addressCity: order.customer.address_city,
+                      addressState: order.customer.address_state,
+                      addressZip: order.customer.address_zip,
+                    }) || null,
+                  vehicleBrand: order.vehicle?.brand ?? null,
+                  vehicleModel: order.vehicle?.model ?? null,
+                  licensePlate: order.vehicle?.license_plate ?? null,
+                  referenceNumber: order.vehicle?.reference_number ?? null,
+                  kind: order.vehicle?.kind ?? null,
+                  year: order.vehicle?.year ?? null,
+                  engineBrand: order.vehicle?.engine_brand ?? null,
+                  engineModel: order.vehicle?.engine_model ?? null,
+                }}
+              />
+              {cotizacionEnvio && (
+                <QuotationDocument
+                  taller={tallerEnvio}
+                  quotation={datosDeCotizacion(cotizacionEnvio)}
+                />
+              )}
+            </div>
+          </div>
+          <SendDocumentModal
+            channel={envio}
+            contactos={contactosDeEnvio(
+              { email: order.customer.email ?? null, phone: order.customer.phone ?? null },
+              order.customer.sectors
+            )}
+            defaultDestino={(() => {
+              const contacto = contactoDeEnvio(
+                { email: order.customer.email ?? null, phone: order.customer.phone ?? null },
+                order.customer.sectors.find((x) => x.id === order.customerSectorId)
+              );
+              return (envio === 'email' ? contacto.email : contacto.phone) ?? null;
+            })()}
+            fileName={`${order.number}.pdf`}
+            documentRef={papelesRef}
+            subject={`Orden de trabajo ${order.number}${cotizacionEnvio ? ` y presupuesto ${cotizacionEnvio.number}` : ''}`}
+            text={
+              cotizacionEnvio
+                ? `Le enviamos la orden de trabajo ${order.number} y el presupuesto ${cotizacionEnvio.number}.`
+                : `Le enviamos la orden de trabajo ${order.number}.`
+            }
+            onSent={() => cotizacionEnvio ? marcarEnviado('presupuesto', cotizacionEnvio.id) : undefined}
+            onClose={() => setEnvio(null)}
+          />
+        </>
+      )}
 
       {equipoEnEdicion && (
         <VehicleModal
