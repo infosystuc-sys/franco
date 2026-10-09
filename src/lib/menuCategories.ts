@@ -96,7 +96,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', adminOnly: true },
+          { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', newPath: '/cotizaciones/nueva', adminOnly: true },
           // El + no abre una orden: lleva a cargar el vehículo. Antes de abrir la OT
           // hay que tener el equipo dado de alta, y es el paso que más se repite.
           { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo?destino=ot' },
