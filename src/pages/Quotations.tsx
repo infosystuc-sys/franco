@@ -142,8 +142,8 @@ export function Quotations() {
       getId={getId}
       columnas={COLUMNAS}
       nuevo={{
-        to: '/ordenes',
-        title: 'Los presupuestos se arman desde la orden de trabajo, con el botón Cotizar.',
+        to: '/cotizaciones/nueva',
+        title: 'Emitir una cotización sin orden de trabajo. Las de una OT se arman desde la orden, con el botón Cotizar.',
       }}
       onAbrir={(f) => navigate(ficha(f))}
       botones={botones}

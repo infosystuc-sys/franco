@@ -74,7 +74,8 @@ export interface QuotationDetail {
   notes: string | null;
   validUntil: string | null;
   customerId: string;
-  vehicleId: string;
+  /** Null en una cotización suelta que no lleva equipo. */
+  vehicleId: string | null;
   customer: {
     name: string;
     legal_name: string | null;
@@ -281,6 +282,41 @@ export function describirEnvioCotizacion(resultado: EnvioCotizacionResultado): s
     default:
       return 'No se encontró el presupuesto.';
   }
+}
+
+/**
+ * Emite una cotización sin orden de trabajo. Se arma entera en la base (la
+ * cotización y sus renglones en un mismo paso) y devuelve su número para
+ * abrirla.
+ */
+export async function crearCotizacion(input: {
+  customerId: string;
+  vehicleId: string | null;
+  sectorId: string | null;
+  component: string;
+  notes: string;
+  validUntil: string;
+  items: WorkOrderItemInput[];
+}): Promise<{ id: string; number: string }> {
+  const { data, error } = await supabase.rpc('crear_cotizacion', {
+    p_customer_id: input.customerId,
+    p_vehicle_id: input.vehicleId,
+    p_component: input.component,
+    p_notes: input.notes,
+    p_valid_until: input.validUntil || null,
+    p_customer_sector_id: input.sectorId,
+    p_items: input.items.map((i) => ({
+      article_id: i.articleId,
+      code: i.code,
+      description: i.description,
+      quantity: i.quantity,
+      unit_price: i.unitPrice,
+    })),
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) throw new Error('La base no devolvió la cotización.');
+  return { id: row.quotation_id, number: row.quotation_number };
 }
 
 /** A qué sector del cliente se manda el presupuesto. Null = general. */

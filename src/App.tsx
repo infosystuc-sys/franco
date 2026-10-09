@@ -31,6 +31,7 @@ import { Notifications } from './pages/Notifications';
 import { PriceLists } from './pages/PriceLists';
 import { PublicQuotation } from './pages/PublicQuotation';
 import { QuotationDetails } from './pages/QuotationDetails';
+import { QuotationNew } from './pages/QuotationNew';
 import { PaymentMethods } from './pages/PaymentMethods';
 import { Banks } from './pages/Banks';
 import { PendingRetentions } from './pages/PendingRetentions';
@@ -111,6 +112,7 @@ export default function App() {
                     <Route path="/orden/:id" element={<WorkOrderDetails />} />
                     <Route path="/orden/:id/imprimir-blanco" element={<WorkOrderPrintBlank />} />
                     <Route path="/cotizaciones" element={<Quotations />} />
+                    <Route path="/cotizaciones/nueva" element={<QuotationNew />} />
                     <Route path="/cotizacion/:number" element={<QuotationDetails />} />
                     <Route path="/facturas" element={<Invoices />} />
                     <Route path="/facturas/nueva" element={<InvoiceNewFree />} />
