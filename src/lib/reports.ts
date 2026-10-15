@@ -59,6 +59,12 @@ export interface ReportDefinition {
    */
   agruparPor?: string;
   /**
+   * Con un solo cliente en pantalla, el informe se le puede mandar por mail o
+   * WhatsApp. `idKey` es la columna (no visible) con el id del cliente y
+   * `totalKey` la del importe que se le informa en el mensaje.
+   */
+  enviarPorCliente?: { idKey: string; totalKey: string };
+  /**
    * El informe lleva una columna "tipo" ("FACTURA A", "NOTA DE CREDITO B") y
    * se puede acotar a ciertas letras y a facturas o notas de crédito.
    */
@@ -173,6 +179,7 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'balance', label: 'Saldo', format: 'money', total: true, width: 14 },
     ],
     agruparPor: 'customer_name',
+    enviarPorCliente: { idKey: 'customer_id', totalKey: 'balance' },
     run: () => callReport('report_customer_balances'),
   },
   {

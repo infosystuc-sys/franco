@@ -1,13 +1,16 @@
 import React from 'react';
-import { XCircle, FileSpreadsheet, Play, Search, Printer, ChevronRight, ChevronDown } from 'lucide-react';
+import { XCircle, FileSpreadsheet, Play, Search, Printer, ChevronRight, ChevronDown, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { cn, todayLocal, coincideBusqueda } from '@/src/lib/utils';
+import { cn, todayLocal, coincideBusqueda, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { getErrorMessage } from '@/src/lib/workOrders';
+import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { fetchContactosDe } from '@/src/lib/composicionSaldos';
+import type { ContactoDeEnvio } from '@/src/lib/customers';
 import {
   agruparFilas,
   computeTotals,
@@ -152,6 +155,38 @@ export function ReportView() {
     [filtered, report]
   );
 
+  // Un solo cliente en pantalla (filtrado por nombre, por ejemplo): se le
+  // puede mandar el informe. Se mira el id y no el nombre, que se puede repetir.
+  const unCliente = React.useMemo(() => {
+    const envio = report?.enviarPorCliente;
+    if (!envio || !grupos || grupos.length !== 1) return null;
+    const ids = new Set(filtered.map((r) => r[envio.idKey]).filter(Boolean));
+    if (ids.size !== 1) return null;
+    return {
+      id: String([...ids][0]),
+      nombre: grupos[0].clave,
+      clave: grupos[0].clave,
+      total: filtered.reduce((s, r) => s + Number(r[envio.totalKey] ?? 0), 0),
+    };
+  }, [report, grupos, filtered]);
+
+  const documentRef = React.useRef<HTMLDivElement>(null);
+  const [enviando, setEnviando] = React.useState<'email' | 'whatsapp' | null>(null);
+  const [contactos, setContactos] = React.useState<ContactoDeEnvio[] | null>(null);
+
+  async function abrirEnvio(canal: 'email' | 'whatsapp') {
+    if (!unCliente) return;
+    // Lo que se manda es el detalle, no el renglón del total.
+    setAbiertos(new Set([unCliente.clave]));
+    setContactos(null);
+    try {
+      setContactos(await fetchContactosDe('clientes', unCliente.id));
+    } catch {
+      // Sin contactos se escribe a mano.
+    }
+    setEnviando(canal);
+  }
+
   function alternarGrupo(clave: string) {
     setAbiertos((actual) => {
       const nuevo = new Set(actual);
@@ -212,6 +247,16 @@ export function ReportView() {
                   <Button variant="secondary" type="button" onClick={handleExport}>
                     <FileSpreadsheet size={16} /> Exportar a Excel
                   </Button>
+                  {unCliente && (
+                    <>
+                      <Button variant="secondary" type="button" onClick={() => abrirEnvio('email')}>
+                        <Mail size={16} /> Enviar por mail
+                      </Button>
+                      <Button variant="secondary" type="button" onClick={() => abrirEnvio('whatsapp')}>
+                        <MessageCircle size={16} /> Enviar por WhatsApp
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -318,6 +363,7 @@ export function ReportView() {
                       )
                     }
                     className="no-print font-semibold text-accent-deep hover:underline"
+                    data-html2canvas-ignore
                   >
                     {abiertos.size === grupos.length ? 'Ocultar el detalle' : 'Ver el detalle de todos'}
                   </button>
@@ -335,6 +381,18 @@ export function ReportView() {
             )}
           </div>
 
+          <div ref={documentRef} className="bg-panel">
+          {unCliente && (
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-ink pb-2">
+              <div>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">{report.name}</div>
+                <div className="text-lg font-bold">{unCliente.nombre}</div>
+              </div>
+              <span className="font-mono text-[13px] text-text-soft">
+                Al {new Date().toLocaleDateString('es-AR')}
+              </span>
+            </div>
+          )}
           <Panel className="overflow-x-auto overflow-y-hidden">
             <table className="w-full text-left text-[14px]">
               <thead className="h-9 bg-panel-head text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
@@ -477,7 +535,21 @@ export function ReportView() {
               )}
             </table>
           </Panel>
+          </div>
         </div>
+      )}
+
+      {enviando && unCliente && (
+        <SendDocumentModal
+          channel={enviando}
+          contactos={contactos ?? undefined}
+          defaultDestino={enviando === 'email' ? (contactos?.[0]?.email ?? null) : (contactos?.[0]?.phone ?? null)}
+          fileName={`composicion-saldo-${unCliente.nombre.replace(/[^\w]+/g, '-').toLowerCase()}.pdf`}
+          documentRef={documentRef}
+          subject={`Composición de saldo — ${unCliente.nombre}`}
+          text={`Adjuntamos la composición de su saldo al ${new Date().toLocaleDateString('es-AR')}: $ ${formatMoney(unCliente.total)}.`}
+          onClose={() => setEnviando(null)}
+        />
       )}
     </div>
   );
