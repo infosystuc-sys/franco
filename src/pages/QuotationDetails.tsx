@@ -77,7 +77,9 @@ export function QuotationDetails() {
    */
   const destinoAlSalir = searchParams.get('volver')
     ? `/orden/${searchParams.get('volver')}`
-    : '/cotizaciones';
+    : quotation?.workOrderNumber
+      ? `/orden/${quotation.workOrderNumber}`
+      : '/cotizaciones';
 
   const loadQuotation = React.useCallback(async () => {
     if (!number) return;

@@ -11,6 +11,7 @@ import {
   fetchWorkOrderStatuses,
   getErrorMessage,
   reenviarLinkSeguimiento,
+  setWorkOrderStatus,
   type WorkOrderDeletionResult,
   type WorkOrderRow,
   type WorkOrderStatusDef,
@@ -22,7 +23,77 @@ import {
   type ColumnaListado,
 } from '@/src/components/ComprobantesListado';
 
-const COLUMNAS: ColumnaListado<WorkOrderRow>[] = [
+/**
+ * Los estados a los que se puede pasar una orden desde el listado. Mismas
+ * reglas que el desplegable de la ficha: facturada y en curso no vuelve al
+ * tramo previo (ingresar, cotizar, autorizar, rechazar); facturada y terminada
+ * solo puede pasar a Retirado. Cotizado no se ofrece si la orden no tiene
+ * presupuesto: desde la ficha eso arma la cotización, acá no.
+ */
+function estadosPosibles(f: WorkOrderRow, statuses: WorkOrderStatusDef[]): { id: string; label: string }[] {
+  const todos = statuses.some((s) => s.id === f.status.id) ? statuses : [{ ...f.status } as WorkOrderStatusDef, ...statuses];
+  const vedadosConFactura = ['INGRESADO', 'COTIZADO', 'AUTORIZADA', 'RECHAZADA'];
+  return todos.filter((s) => {
+    if (s.id === f.status.id) return true;
+    if (s.systemKey === 'COTIZADO' && !f.quotationNumber) return false;
+    if (!f.invoiceNumber) return true;
+    if (f.status.isTerminal) return s.systemKey === 'RETIRADO';
+    return !vedadosConFactura.includes(s.systemKey ?? '');
+  });
+}
+
+function CeldaEstado({
+  fila,
+  statuses,
+  editable,
+  onCambiar,
+}: {
+  fila: WorkOrderRow;
+  statuses: WorkOrderStatusDef[];
+  editable: boolean;
+  onCambiar: (fila: WorkOrderRow, statusId: string) => Promise<void>;
+}) {
+  const [cambiando, setCambiando] = React.useState(false);
+  const opciones = estadosPosibles(fila, statuses);
+  const cuadradito = <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0" style={{ backgroundColor: fila.status.color }} />;
+  if (!editable || opciones.length < 2) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        {cuadradito}
+        {fila.status.label}
+      </span>
+    );
+  }
+  // Los eventos no suben a la fila: un click acá no la abre ni cambia la
+  // selección, y las flechas recorren las opciones y no las órdenes.
+  const frenar = (e: React.SyntheticEvent) => e.stopPropagation();
+  return (
+    <span className="inline-flex items-center gap-2" onClick={frenar} onDoubleClick={frenar} onKeyDown={frenar}>
+      {cuadradito}
+      <select
+        value={fila.status.id}
+        disabled={cambiando}
+        title="Cambiar el estado de la orden"
+        aria-label={`Estado de ${fila.number}`}
+        onChange={async (e) => {
+          setCambiando(true);
+          try {
+            await onCambiar(fila, e.target.value);
+          } finally {
+            setCambiando(false);
+          }
+        }}
+        className="h-8 max-w-[13rem] cursor-pointer rounded-[3px] border border-transparent bg-transparent px-1 text-inherit hover:border-line hover:bg-panel focus:border-accent focus:bg-panel focus:outline-none disabled:opacity-60"
+      >
+        {opciones.map((s) => (
+          <option key={s.id} value={s.id} className="text-text">{s.label}</option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+const COLUMNAS_FIJAS: ColumnaListado<WorkOrderRow>[] = [
   {
     label: 'Comprobante',
     valor: (f) => (
@@ -40,15 +111,6 @@ const COLUMNAS: ColumnaListado<WorkOrderRow>[] = [
   {
     label: 'Vehículo / Equipo',
     valor: (f) => (f.component ? `${f.vehicleLabel} · ${f.component}` : f.vehicleLabel),
-  },
-  {
-    label: 'Estado',
-    valor: (f) => (
-      <span className="inline-flex items-center gap-2">
-        <span aria-hidden className="inline-block h-2.5 w-2.5" style={{ backgroundColor: f.status.color }} />
-        {f.status.label}
-      </span>
-    ),
   },
   { label: 'Factura', valor: (f) => f.invoiceNumber ?? '—' },
   { label: 'Empleado', valor: (f) => f.employeeName ?? '—' },
@@ -208,6 +270,31 @@ export function WorkOrders() {
     },
   ];
 
+  // El estado se cambia desde el renglón, sin entrar a la orden. El cambio
+  // es el mismo que el de la ficha: dispara los avisos al cliente que tenga
+  // configurados el estado.
+  async function cambiarEstado(fila: WorkOrderRow, statusId: string) {
+    setError(null);
+    try {
+      await setWorkOrderStatus(fila.id, statusId);
+      const nuevo = statuses.find((x) => x.id === statusId);
+      setAviso(`${fila.number} pasó a "${nuevo?.label ?? 'otro estado'}".`);
+      await cargar();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  const columnas: ColumnaListado<WorkOrderRow>[] = [
+    ...COLUMNAS_FIJAS.slice(0, 3),
+    {
+      label: 'Estado',
+      texto: (f) => f.status.label,
+      valor: (f) => <CeldaEstado fila={f} statuses={statuses} editable={isAdmin} onCambiar={cambiarEstado} />,
+    },
+    ...COLUMNAS_FIJAS.slice(3),
+  ];
+
   return (
     <>
       <ComprobantesListado
@@ -217,7 +304,7 @@ export function WorkOrders() {
         loading={loading}
         error={error}
         getId={getId}
-        columnas={COLUMNAS}
+        columnas={columnas}
         // Igual que el "+" de la tarjeta del menú: una orden empieza
         // recibiendo el vehículo, no en la ventana de alta.
         nuevo={isAdmin ? { to: '/vehiculos/nuevo?destino=ot' } : undefined}

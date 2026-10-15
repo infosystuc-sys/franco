@@ -5,9 +5,11 @@ import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import type { ContactoDeEnvio } from '@/src/lib/customers';
 import {
   armarComposicion,
   fetchMails,
+  fetchContactosDe,
   fetchMovimientos,
   filasParaExportar,
   type Bloque,
@@ -58,7 +60,9 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [aviso, setAviso] = React.useState<string | null>(null);
-  const [enviando, setEnviando] = React.useState(false);
+  // Envío por mail o WhatsApp: el canal elegido y los contactos del elegido.
+  const [enviando, setEnviando] = React.useState<'email' | 'whatsapp' | null>(null);
+  const [contactos, setContactos] = React.useState<ContactoDeEnvio[] | null>(null);
   const [descargando, setDescargando] = React.useState(false);
   const documentRef = React.useRef<HTMLDivElement>(null);
 
@@ -134,6 +138,20 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
 
   const unaSolaParte = bloques.length === 1 ? bloques[0] : null;
 
+  // Con un solo cliente o proveedor en pantalla, se proponen sus contactos
+  // (y sus sectores); si hay varios, el destinatario se escribe a mano.
+  async function abrirEnvio(canal: 'email' | 'whatsapp') {
+    setContactos(null);
+    if (unaSolaParte) {
+      try {
+        setContactos(await fetchContactosDe(lado, unaSolaParte.parteId));
+      } catch {
+        // Sin contactos se escribe a mano.
+      }
+    }
+    setEnviando(canal);
+  }
+
   return (
     <div className="w-full">
       <div className="no-print">
@@ -158,12 +176,21 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
             </button>
             <button
               type="button"
-              onClick={() => setEnviando(true)}
+              onClick={() => abrirEnvio('email')}
               disabled={bloques.length === 0}
               title={unaSolaParte ? undefined : `Conviene filtrar un ${t.parte.toLowerCase()} antes de mandarla.`}
               className={cn(botonBase, botonGris)}
             >
               Enviar por correo electrónico
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirEnvio('whatsapp')}
+              disabled={bloques.length === 0}
+              title={unaSolaParte ? undefined : `Conviene filtrar un ${t.parte.toLowerCase()} antes de mandarla.`}
+              className={cn(botonBase, botonGris)}
+            >
+              Enviar por WhatsApp
             </button>
           </div>
         </div>
@@ -258,8 +285,13 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
 
       {enviando && (
         <SendDocumentModal
-          channel="email"
-          defaultDestino={unaSolaParte ? mails.get(unaSolaParte.parteId) ?? null : null}
+          channel={enviando}
+          contactos={contactos ?? undefined}
+          defaultDestino={
+            enviando === 'email'
+              ? (contactos?.[0]?.email ?? (unaSolaParte ? mails.get(unaSolaParte.parteId) ?? null : null))
+              : (contactos?.[0]?.phone ?? null)
+          }
           fileName={`composicion-saldos-${unaSolaParte ? unaSolaParte.nombre.replace(/[^\w]+/g, '-').toLowerCase() : lado}.pdf`}
           documentRef={documentRef}
           subject={unaSolaParte ? `Composición de saldo — ${unaSolaParte.nombre}` : t.titulo}
@@ -268,7 +300,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
               ? `Adjuntamos la composición de su saldo ${periodo}: $ ${formatMoney(unaSolaParte.totalSaldo)}.`
               : `Adjuntamos la composición de saldos ${periodo}.`
           }
-          onClose={() => setEnviando(false)}
+          onClose={() => setEnviando(null)}
         />
       )}
     </div>

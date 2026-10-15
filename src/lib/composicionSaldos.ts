@@ -1,3 +1,4 @@
+import { contactosDeEnvio, type ContactoDeEnvio } from '@/src/lib/customers';
 import { supabase } from '@/src/lib/supabase';
 
 /**
@@ -60,6 +61,28 @@ export async function fetchMovimientos(lado: Lado, hasta: string): Promise<Movim
 }
 
 /** El mail de cada cliente o proveedor, para "Enviar por correo electrónico". */
+/**
+ * A quién se le puede mandar la composición de un cliente o proveedor: su
+ * contacto general y, si es un cliente con sectores, cada sector. Se pide en
+ * el momento de enviar, solo para el elegido.
+ */
+export async function fetchContactosDe(lado: Lado, id: string): Promise<ContactoDeEnvio[]> {
+  if (lado === 'clientes') {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('email, phone, sectors:customer_sectors(name, responsable, phone, email)')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw error;
+    const c = data as any;
+    return contactosDeEnvio({ email: c?.email ?? null, phone: c?.phone ?? null }, c?.sectors);
+  }
+  const { data, error } = await supabase.from('suppliers').select('email, phone').eq('id', id).maybeSingle();
+  if (error) throw error;
+  const p = data as any;
+  return [{ label: 'Contacto del proveedor', email: p?.email ?? null, phone: p?.phone ?? null }];
+}
+
 export async function fetchMails(lado: Lado): Promise<Map<string, string>> {
   const tabla = lado === 'clientes' ? 'customers' : 'suppliers';
   const mails = new Map<string, string>();

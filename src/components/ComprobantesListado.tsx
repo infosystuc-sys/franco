@@ -30,6 +30,11 @@ export interface ColumnaListado<T> {
    * (un estado con su color, por ejemplo). Por defecto, el texto de la celda.
    */
   orden?: (fila: T) => unknown;
+  /**
+   * Lo que la celda "dice", para buscar, filtrar y ordenar, cuando lo que se
+   * dibuja no es texto (un desplegable para cambiar el estado, por ejemplo).
+   */
+  texto?: (fila: T) => string;
   /** Clases del ancho de la columna (Tailwind). */
   ancho?: string;
 }
@@ -54,6 +59,10 @@ const PAGINA = 20;
  * El texto que muestra una celda, aunque venga armada (un estado con su
  * cuadradito de color, por ejemplo): es lo que se busca y lo que se filtra.
  */
+function textoDeColumna<T>(c: ColumnaListado<T>, fila: T): string {
+  return c.texto ? c.texto(fila) : textoDe(c.valor(fila));
+}
+
 function textoDe(nodo: React.ReactNode): string {
   if (nodo === null || nodo === undefined || typeof nodo === 'boolean') return '';
   if (typeof nodo === 'string' || typeof nodo === 'number') return String(nodo);
@@ -143,7 +152,7 @@ export function ComprobantesListado<T>({
     if (!columnaEstado) return [];
     const cuenta = new Map<string, number>();
     for (const f of filas) {
-      const e = textoDe(columnaEstado.valor(f)).trim();
+      const e = textoDeColumna(columnaEstado, f).trim();
       if (e) cuenta.set(e, (cuenta.get(e) ?? 0) + 1);
     }
     return [...cuenta.entries()];
@@ -152,10 +161,10 @@ export function ComprobantesListado<T>({
   const filtradas = React.useMemo(() => {
     if (busquedaDiferida.trim() === '' && estados.length === 0) return filas;
     return filas.filter((f) => {
-      if (estados.length > 0 && columnaEstado && !estados.includes(textoDe(columnaEstado.valor(f)).trim())) return false;
+      if (estados.length > 0 && columnaEstado && !estados.includes(textoDeColumna(columnaEstado, f).trim())) return false;
       if (busquedaDiferida.trim() === '') return true;
       return coincideBusqueda(busquedaDiferida, [
-        ...columnas.map((c) => textoDe(c.valor(f))),
+        ...columnas.map((c) => textoDeColumna(c, f)),
         ...(textoBusqueda?.(f) ?? []),
       ]);
     });
@@ -176,7 +185,7 @@ export function ComprobantesListado<T>({
     () =>
       ordenarFilas(filtradas, orden, (fila, columna) => {
         const c = columnas.find((x) => x.label === columna);
-        return c ? (c.orden ? c.orden(fila) : textoDe(c.valor(fila))) : null;
+        return c ? (c.orden ? c.orden(fila) : textoDeColumna(c, fila)) : null;
       }),
     [filtradas, orden, columnas]
   );

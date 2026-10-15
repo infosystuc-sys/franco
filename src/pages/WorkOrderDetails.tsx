@@ -539,9 +539,10 @@ export function WorkOrderDetails() {
         mensaje = `${creada.number}: ${describirEnvioCotizacion(resultado)}`;
       }
 
-      // Como todo comprobante nuevo, el presupuesto termina en su listado. Lo
-      // que pasó con el envío viaja con la navegación y se muestra allá.
-      navigate('/cotizaciones', { state: { aviso: mensaje } });
+      // Se queda en la orden: el presupuesto es un paso de la OT, y el
+      // trabajo sigue acá. Lo que pasó con el envío se muestra arriba.
+      setAviso(mensaje);
+      await loadOrder();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
