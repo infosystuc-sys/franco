@@ -17,6 +17,8 @@ import { cn, formatMoney } from '@/src/lib/utils';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
+import { descuentoDe } from '@/src/components/DescuentoEditor';
+import { montoDeDescuento, type Descuento } from '@/src/lib/invoices';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
 import { setQuotationSector } from '@/src/lib/quotations';
 import { contactoDeEnvio, contactosDeEnvio } from '@/src/lib/customers';
@@ -58,6 +60,7 @@ export function QuotationDetails() {
   const [component, setComponent] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [validUntil, setValidUntil] = React.useState('');
+  const [descuento, setDescuento] = React.useState<Descuento | null>(null);
   const [articles, setArticles] = React.useState<Article[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
@@ -99,6 +102,7 @@ export function QuotationDetails() {
       setComponent(data?.component ?? '');
       setNotes(data?.notes ?? '');
       setValidUntil(data?.validUntil ?? '');
+      setDescuento(descuentoDe(data?.discountPercent, data?.discountFixed));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -171,7 +175,7 @@ export function QuotationDetails() {
    */
   async function guardarLoEditado() {
     if (!editable) return;
-    await updateQuotationHeader(quotation.id, { component, notes, validUntil });
+    await updateQuotationHeader(quotation.id, { component, notes, validUntil, descuento });
     await saveQuotationItems(quotation.id, items);
   }
 
@@ -221,7 +225,9 @@ export function QuotationDetails() {
   });
 
 
-  const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const itemsTotal =
+    items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0) -
+    montoDeDescuento(items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0), descuento);
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
 
   const mensaje = sendModal ? armarMensaje('presupuesto', sendModal, { numero: quotation.number, total: formatMoney(itemsTotal + itemsIva), cliente: quotation.customer?.name }) : null;
@@ -444,6 +450,8 @@ export function QuotationDetails() {
           onChange={setItems}
           articles={articles}
           editable={editable}
+          descuento={descuento}
+          onDescuentoChange={editable ? setDescuento : undefined}
         />
       </div>
       </div>
@@ -476,6 +484,8 @@ export function QuotationDetails() {
             vehicleKind: quotation.vehicle?.kind ?? null,
             referenceNumber: quotation.vehicle?.reference_number ?? null,
             workOrderNumber: quotation.workOrderNumber,
+            discountPercent: descuento?.tipo === 'PORCENTAJE' ? descuento.valor : null,
+            discountFixed: descuento?.tipo === 'MONTO' ? descuento.valor : null,
             items: items.map((item) => ({
               code: item.code || null,
               description: item.description,

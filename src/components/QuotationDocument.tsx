@@ -2,6 +2,8 @@ import { formatDate, formatMoney } from '@/src/lib/utils';
 import { formatCuit, TAX_CONDITION_LABELS, type TaxCondition } from '@/src/lib/fiscal';
 import { formatAddress, type TallerHeader } from '@/src/lib/companySettings';
 import logoPorDefecto from '@/src/assets/logo-luciano-diesel.png';
+import { montoDeDescuento } from '@/src/lib/invoices';
+import { descuentoDe } from '@/src/components/DescuentoEditor';
 
 const IVA_RATE = 0.21;
 
@@ -38,6 +40,8 @@ export function datosDeCotizacion(q: {
   } | null;
   workOrderNumber: string | null;
   items: { code: string; description: string; quantity: number; unitPrice: number }[];
+  discountPercent?: number | null;
+  discountFixed?: number | null;
 }): QuotationDocumentData {
   return {
     number: q.number,
@@ -62,6 +66,8 @@ export function datosDeCotizacion(q: {
     vehicleKind: q.vehicle?.kind ?? null,
     referenceNumber: q.vehicle?.reference_number ?? null,
     workOrderNumber: q.workOrderNumber,
+    discountPercent: q.discountPercent ?? null,
+    discountFixed: q.discountFixed ?? null,
     items: q.items.map((item) => ({
       code: item.code || null,
       description: item.description,
@@ -89,6 +95,9 @@ export interface QuotationDocumentData {
   licensePlate: string | null;
   workOrderNumber: string | null;
   items: QuotationDocumentItem[];
+  /** Descuento de la cotización: porcentaje o monto fijo (uno u otro). */
+  discountPercent?: number | null;
+  discountFixed?: number | null;
 }
 
 /**
@@ -113,7 +122,10 @@ export function QuotationDocument({
   quotation: QuotationDocumentData;
   taller: TallerHeader | null;
 }) {
-  const neto = quotation.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const bruto = quotation.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const descuento = descuentoDe(quotation.discountPercent, quotation.discountFixed);
+  const descontado = montoDeDescuento(bruto, descuento);
+  const neto = bruto - descontado;
   const iva = neto * IVA_RATE;
 
   const vehiculo =
@@ -239,6 +251,15 @@ export function QuotationDocument({
       {/* Totales */}
       <div className="flex justify-end border-t-2 border-ink pt-4">
         <div className="w-full space-y-1.5 sm:w-80">
+          {descontado > 0 && (
+            <>
+              <Renglon label="Renglones" value={bruto} />
+              <Renglon
+                label={descuento?.tipo === 'PORCENTAJE' ? `Descuento ${descuento.valor}%` : 'Descuento'}
+                value={-descontado}
+              />
+            </>
+          )}
           <Renglon label="Neto gravado" value={neto} />
           <Renglon label="IVA 21%" value={iva} />
           <div className="flex items-baseline justify-between border-t-2 border-accent pt-2">
@@ -286,7 +307,7 @@ function Renglon({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between text-[16px] text-text-soft">
       <span>{label}</span>
-      <span className="text-text">$ {formatMoney(value)}</span>
+      <span className="text-text">{value < 0 ? `− $ ${formatMoney(-value)}` : `$ ${formatMoney(value)}`}</span>
     </div>
   );
 }

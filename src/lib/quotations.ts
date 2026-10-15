@@ -91,6 +91,9 @@ export interface QuotationDetail {
   } | null;
   /** Sector del cliente al que se manda el presupuesto. Null = general. */
   customerSectorId: string | null;
+  /** Descuento: porcentaje o monto fijo (uno u otro). */
+  discountPercent: number | null;
+  discountFixed: number | null;
   vehicle: { brand: string | null; model: string; license_plate: string | null; reference_number?: string | null; kind?: 'VEHICULO' | 'PIEZA' } | null;
   workOrderId: string | null;
   workOrderNumber: string | null;
@@ -122,7 +125,7 @@ function vehicleLabelOf(
 
 const LIST_SELECT = `
   id, number, status, component, valid_until, created_at, public_token,
-  customer_id, enviado_at, etiquetas,
+  customer_id, enviado_at, etiquetas, discount_percent, discount_fixed,
   customer:customers(name),
   vehicle:vehicles(brand, model, license_plate, reference_number, kind),
   work_order:work_orders!quotations_work_order_id_fkey(id, number),
@@ -138,10 +141,19 @@ function mapQuotationRow(row: any): QuotationListRow {
     customerName: row.customer?.name ?? '—',
     vehicleLabel: vehicleLabelOf(row.vehicle),
     validUntil: row.valid_until,
-    total: (row.items ?? []).reduce(
-      (sum: number, i: any) => sum + Number(i.quantity) * Number(i.unit_price),
-      0
-    ),
+    // El neto ya con el descuento de la cotización.
+    total: (() => {
+      const bruto = (row.items ?? []).reduce(
+        (sum: number, i: any) => sum + Number(i.quantity) * Number(i.unit_price),
+        0
+      );
+      const descuento = row.discount_percent
+        ? Math.round(bruto * Number(row.discount_percent)) / 100
+        : row.discount_fixed
+          ? Number(row.discount_fixed)
+          : 0;
+      return bruto - descuento;
+    })(),
     workOrderId: row.work_order?.id ?? null,
     workOrderNumber: row.work_order?.number ?? null,
     publicToken: row.public_token,
@@ -183,7 +195,7 @@ export async function fetchUnlinkedQuotations(customerId: string): Promise<Quota
 
 const DETAIL_SELECT = `
   id, number, status, component, notes, valid_until, created_at, customer_id, vehicle_id, public_token,
-  decided_at, rejection_reason, customer_sector_id,
+  decided_at, rejection_reason, customer_sector_id, discount_percent, discount_fixed,
   customer:customers(name, legal_name, tax_id, tax_condition, address_street, address_city, address_state, address_zip, email, phone,
                      sectors:customer_sectors(id, name, responsable, phone, email)),
   vehicle:vehicles(brand, model, license_plate, reference_number, kind),
@@ -212,6 +224,8 @@ export async function fetchQuotationByNumber(number: string): Promise<QuotationD
     vehicleId: row.vehicle_id,
     customer: row.customer ? { ...row.customer, sectors: row.customer.sectors ?? [] } : null,
     customerSectorId: row.customer_sector_id ?? null,
+    discountPercent: row.discount_percent === null || row.discount_percent === undefined ? null : Number(row.discount_percent),
+    discountFixed: row.discount_fixed === null || row.discount_fixed === undefined ? null : Number(row.discount_fixed),
     vehicle: row.vehicle,
     workOrderId: row.work_order?.id ?? null,
     workOrderNumber: row.work_order?.number ?? null,
@@ -297,6 +311,7 @@ export async function crearCotizacion(input: {
   notes: string;
   validUntil: string;
   items: WorkOrderItemInput[];
+  descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
 }): Promise<{ id: string; number: string }> {
   const { data, error } = await supabase.rpc('crear_cotizacion', {
     p_customer_id: input.customerId,
@@ -305,6 +320,8 @@ export async function crearCotizacion(input: {
     p_notes: input.notes,
     p_valid_until: input.validUntil || null,
     p_customer_sector_id: input.sectorId,
+    p_discount_percent: input.descuento?.tipo === 'PORCENTAJE' ? input.descuento.valor : null,
+    p_discount_fixed: input.descuento?.tipo === 'MONTO' ? input.descuento.valor : null,
     p_items: input.items.map((i) => ({
       article_id: i.articleId,
       code: i.code,
@@ -335,7 +352,12 @@ export async function updateQuotationStatus(id: string, status: QuotationStatus)
 
 export async function updateQuotationHeader(
   id: string,
-  values: { component: string; notes: string; validUntil: string }
+  values: {
+    component: string;
+    notes: string;
+    validUntil: string;
+    descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
+  }
 ) {
   const { error } = await supabase
     .from('quotations')
@@ -343,6 +365,12 @@ export async function updateQuotationHeader(
       component: values.component || null,
       notes: values.notes || null,
       valid_until: values.validUntil || null,
+      ...(values.descuento !== undefined
+        ? {
+            discount_percent: values.descuento?.tipo === 'PORCENTAJE' ? values.descuento.valor : null,
+            discount_fixed: values.descuento?.tipo === 'MONTO' ? values.descuento.valor : null,
+          }
+        : {}),
     })
     .eq('id', id);
   if (error) throw error;

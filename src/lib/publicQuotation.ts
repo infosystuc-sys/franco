@@ -20,6 +20,9 @@ export interface PublicQuotation {
   vehicleModel: string | null;
   licensePlate: string | null;
   alreadyConverted: boolean;
+  /** Descuento de la cotización: porcentaje o monto fijo. */
+  discountPercent: number | null;
+  discountFixed: number | null;
 }
 
 export interface PublicQuotationItem {
@@ -69,6 +72,8 @@ export async function fetchPublicQuotation(token: string): Promise<PublicQuotati
     vehicleModel: row.vehicle_model,
     licensePlate: row.license_plate,
     alreadyConverted: row.already_converted,
+    discountPercent: row.discount_percent === null || row.discount_percent === undefined ? null : Number(row.discount_percent),
+    discountFixed: row.discount_fixed === null || row.discount_fixed === undefined ? null : Number(row.discount_fixed),
   };
 }
 

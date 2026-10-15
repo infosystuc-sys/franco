@@ -179,6 +179,8 @@ export function PublicQuotation() {
             vehicleModel: quotation.vehicleModel,
             licensePlate: quotation.licensePlate,
             workOrderNumber: null,
+            discountPercent: quotation.discountPercent,
+            discountFixed: quotation.discountFixed,
             items: items.map((item) => ({
               code: item.code,
               description: item.description,

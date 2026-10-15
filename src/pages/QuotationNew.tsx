@@ -13,6 +13,7 @@ import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { CustomerModal } from '@/src/components/CustomerModal';
 import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
+import type { Descuento } from '@/src/lib/invoices';
 
 /**
  * Cotización sin orden de trabajo: un presupuesto por un trabajo o un
@@ -35,6 +36,7 @@ export function QuotationNew() {
   const [validUntil, setValidUntil] = React.useState(defaultValidUntil());
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
+  const [descuento, setDescuento] = React.useState<Descuento | null>(null);
   const [fichaCliente, setFichaCliente] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -83,6 +85,7 @@ export function QuotationNew() {
         notes,
         validUntil,
         items,
+        descuento,
       });
       navigate(`/cotizacion/${creada.number}`);
     } catch (err) {
@@ -177,7 +180,14 @@ export function QuotationNew() {
       </Panel>
 
       <Panel className="mb-6 p-5">
-        <ItemsEditor items={items} onChange={setItems} articles={articles} editable />
+        <ItemsEditor
+          items={items}
+          onChange={setItems}
+          articles={articles}
+          editable
+          descuento={descuento}
+          onDescuentoChange={setDescuento}
+        />
         {emptyLines > 0 && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-danger">
             <AlertTriangle size={14} />
