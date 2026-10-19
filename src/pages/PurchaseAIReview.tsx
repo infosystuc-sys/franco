@@ -244,6 +244,25 @@ export function afinidadDePercepcion(nombreLeido: string, nombreAlicuota: string
   return hayPalabraLarga ? compartidas : 0;
 }
 
+/**
+ * El cuadro de IVA del pie leído por la IA, como ajustes de la revisión.
+ * Null si no vino o si algún importe no se puede leer.
+ */
+function leerAlicuotasDelPie(crudo: unknown): PurchaseAjustes | null {
+  if (!Array.isArray(crudo) || crudo.length === 0) return null;
+  const porAlicuota: PurchaseAjustes['porAlicuota'] = {};
+  for (const fila of crudo as any[]) {
+    const alicuota = Number(String(fila?.alicuota ?? '').replace('%', '').replace(',', '.').trim());
+    const neto = parseArgNumber(String(fila?.neto_gravado ?? ''));
+    const iva = parseArgNumber(String(fila?.iva ?? ''));
+    if (!Number.isFinite(alicuota) || alicuota <= 0) continue;
+    if (neto <= 0 && iva <= 0) continue;
+    if (neto <= 0 || iva <= 0) return null;
+    porAlicuota[String(alicuota)] = { net: neto, vat: iva };
+  }
+  return Object.keys(porAlicuota).length > 0 ? { porAlicuota } : null;
+}
+
 export function PurchaseAIReview() {
   const { role } = useAuth();
   const { id } = useParams();
@@ -399,6 +418,7 @@ export function PurchaseAIReview() {
         }
         setFootTaxes(matchedFootTaxes);
         setUnmatchedPercepciones(unmatched);
+        const ivaRates = r.filter((rate) => rate.kind === 'IVA');
 
         const rateByPercent = new Map(r.filter((rate) => rate.kind === 'IVA').map((rate) => [rate.rate, rate]));
         const articleById = new Map(catalog.map((a) => [a.id, a]));
@@ -439,6 +459,26 @@ export function PurchaseAIReview() {
           };
         });
         setLines(draftLines.length > 0 ? draftLines : [{ ...EMPTY_LINE }]);
+
+        // El neto y el IVA de cada alícuota, como los imprimió el proveedor.
+        // La cuenta de los renglones puede no dar lo mismo por centavos: el
+        // proveedor redondea el precio bonificado a tres decimales, o el IVA
+        // sobre el total. Se toman los del papel, pero solo si con ellos el
+        // comprobante cierra exacto contra el total impreso: si no cierra, la
+        // lectura del pie no es confiable y se deja la cuenta (el control de
+        // total avisa la diferencia).
+        const delPie = leerAlicuotasDelPie(raw.alicuotas_pie);
+        if (delPie && parsedDeclaredTotal > 0) {
+          const calculados = computePurchaseTotals(draftLines, matchedFootTaxes, 0, ivaRates);
+          const conPie = aplicarAjustes(calculados, delPie);
+          const todasPresentes = Object.keys(delPie.porAlicuota).every((rate) =>
+            calculados.vatByRate.some((e) => String(e.rate) === rate)
+          );
+          const difiere = Math.abs(calculados.total - parsedDeclaredTotal) >= 0.005;
+          if (todasPresentes && difiere && Math.abs(conPie.total - parsedDeclaredTotal) < 0.005) {
+            setAjustes(delPie);
+          }
+        }
       })
       .catch((err) => !cancelled && setError(describeExtractionError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));

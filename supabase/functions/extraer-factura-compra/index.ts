@@ -193,8 +193,20 @@ function esquemaFor(kind: 'ARTICULOS' | 'CONCEPTOS'): Esquema {
           required: [...itemFields, 'confianza'],
         },
       },
+      // El cuadro de totales tal como está impreso: el neto y el IVA de cada
+      // alícuota. El proveedor redondea a su manera (el precio bonificado a
+      // tres decimales, el IVA sobre el total), y la cuenta de los renglones
+      // puede no dar lo mismo por centavos: manda el papel.
+      alicuotas_pie: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { alicuota: { type: 'string' }, neto_gravado: { type: 'string' }, iva: { type: 'string' } },
+          required: ['alicuota', 'neto_gravado', 'iva'],
+        },
+      },
     },
-    required: ['valores', 'confianzas', 'percepciones', 'renglones'],
+    required: ['valores', 'confianzas', 'percepciones', 'renglones', 'alicuotas_pie'],
   };
 }
 
@@ -259,6 +271,14 @@ Reglas:
 - En "importe" va SOLO el número, sin el nombre y sin el signo pesos, y sin
   la puntuación que cierra la frase: de "Perc. Tucumán: $ 4.456,66," el
   importe es "4.456,66".
+- En "alicuotas_pie" va el cuadro de totales del comprobante, una entrada
+  por cada alícuota de IVA que tenga importe: la alícuota ("21", "10.5",
+  "27"), el neto gravado a esa alícuota y el importe de IVA, tal como están
+  impresos. Si el comprobante muestra un solo SUBTOTAL o NETO GRAVADO y una
+  sola alícuota con importe, ese subtotal es el neto de esa alícuota. Las
+  alícuotas que figuran en 0,00 no se cargan. Ejemplo: SUBTOTAL 254458.50,
+  IVA 10,5% 0.00, IVA 21% 53436.29 → [{ alicuota "21", neto_gravado
+  "254458.50", iva "53436.29" }].
 - confianza (0 a 1): qué tan seguro estás de haber leído bien ese campo/renglón. 1 = perfectamente legible, 0.5 = dudoso, 0 = adivinado.
 `.trim();
 
@@ -273,6 +293,7 @@ interface ExtractedHeader {
   confianzas: Record<string, number>;
   percepciones: { nombre: string; importe: string }[];
   renglones: Record<string, string | number>[];
+  alicuotas_pie: { alicuota: string; neto_gravado: string; iva: string }[];
 }
 
 /** Tolerante a propósito: nunca lanza por un campo raro, solo si el JSON no parsea. */
@@ -283,6 +304,7 @@ function parseExtraction(text: string): ExtractedHeader {
     confianzas: parsed.confianzas ?? {},
     percepciones: Array.isArray(parsed.percepciones) ? parsed.percepciones : [],
     renglones: Array.isArray(parsed.renglones) ? parsed.renglones : [],
+    alicuotas_pie: Array.isArray(parsed.alicuotas_pie) ? parsed.alicuotas_pie : [],
   };
 }
 
