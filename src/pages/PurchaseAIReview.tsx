@@ -445,6 +445,22 @@ export function PurchaseAIReview() {
             ? String(row.article_id)
             : codigosDelProveedor.get(printedCode.trim().toUpperCase());
           const article = matchId ? articleById.get(matchId) : undefined;
+          const cantidad = parseArgNumber(String(row.cantidad ?? '1')) || 1;
+          const importe = parseArgNumber(String(row.importe ?? ''));
+          // En conceptos no hay precio unitario: el importe es el renglón.
+          const precio =
+            d.kind === 'ARTICULOS' || row.precio_unitario
+              ? parseArgNumber(String(row.precio_unitario ?? '0'))
+              : importe;
+          const bonif = parseArgNumber(String(row.bonificacion_porcentaje ?? '0'));
+          // El importe impreso del renglón manda sobre la cuenta cuando la
+          // diferencia es de redondeo (el proveedor redondea el precio
+          // bonificado). Si difiere de verdad, es más probable que la IA haya
+          // leído mal uno de los dos: se deja la cuenta y el total de control
+          // avisa.
+          const cuenta = cantidad * precio * (1 - bonif / 100);
+          const esRedondeo =
+            importe > 0 && Math.abs(importe - cuenta) >= 0.005 && Math.abs(importe - cuenta) <= Math.max(1, cuenta * 0.001);
           return {
             articleId: article?.id ?? null,
             conceptId: null,
@@ -452,10 +468,11 @@ export function PurchaseAIReview() {
             description: article ? article.description : printedDescription,
             printedCode,
             printedDescription,
-            quantity: parseArgNumber(String(row.cantidad ?? '1')) || 1,
-            unitPrice: parseArgNumber(String(row.precio_unitario ?? '0')),
-            discountPercent: parseArgNumber(String(row.bonificacion_porcentaje ?? '0')),
+            quantity: cantidad,
+            unitPrice: precio,
+            discountPercent: bonif,
             vatRateId: vatRate?.id ?? '',
+            netAmount: esRedondeo ? importe : null,
           };
         });
         setLines(draftLines.length > 0 ? draftLines : [{ ...EMPTY_LINE }]);
@@ -1176,6 +1193,7 @@ export function PurchaseAIReview() {
                           vatRates={vatRates}
                           onPatch={(patch) => patchLine(idx, patch)}
                           onRemove={() => setLines((current) => current.filter((_, i) => i !== idx))}
+                          netoEditable
                         />
                         {showPrinted && (
                           <tr className={cn('border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>

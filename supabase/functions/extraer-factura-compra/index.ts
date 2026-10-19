@@ -161,7 +161,7 @@ const HEADER_FIELDS = [
   'punto_venta', 'numero', 'fecha_comprobante', 'condicion_pago', 'total',
 ];
 
-const ARTICULOS_ITEM_FIELDS = ['codigo', 'descripcion', 'cantidad', 'precio_unitario', 'bonificacion_porcentaje', 'alicuota_iva'];
+const ARTICULOS_ITEM_FIELDS = ['codigo', 'descripcion', 'cantidad', 'precio_unitario', 'bonificacion_porcentaje', 'importe', 'alicuota_iva'];
 const CONCEPTOS_ITEM_FIELDS = ['descripcion', 'importe', 'alicuota_iva'];
 
 // deno-lint-ignore no-explicit-any
@@ -249,6 +249,9 @@ Reglas:
   a que el cliente pague antes de una fecha: NO está aplicada al comprobante
   y no forma parte de sus totales. El "total" que tenés que devolver es
   siempre el TOTAL del comprobante, nunca el neto a pagar con ese descuento.
+- "importe" de cada renglón: el importe total del renglón tal como está
+  impreso en su columna ("Importe", "Total", "Subtotal"), ya bonificado. No
+  lo calcules: copialo, aunque no dé exacto cantidad × precio.
 - La bonificación por renglón sí va: es la columna "%BON", "BONIF" o "DTO"
   de la grilla de artículos, que ya está aplicada en el importe del renglón.
 - Las percepciones e impuestos (IIBB, percepción de IVA, impuestos internos)

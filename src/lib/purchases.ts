@@ -62,6 +62,18 @@ export interface PurchaseLine {
   unitPrice: number;
   discountPercent: number;
   vatRateId: string;
+  /**
+   * El importe del renglón como lo imprimió el proveedor, ya bonificado.
+   * Cuando está, es el neto del renglón en vez de cantidad × precio ×
+   * bonificación: el proveedor puede redondear en el medio y manda el papel.
+   */
+  netAmount?: number | null;
+}
+
+/** El neto de un renglón antes de la bonificación general: el impreso, o la cuenta. */
+export function netoDelRenglon(line: PurchaseLine): number {
+  if (line.netAmount !== null && line.netAmount !== undefined) return line.netAmount;
+  return line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100);
 }
 
 export interface PurchaseFootTax {
@@ -115,9 +127,7 @@ export function computePurchaseTotals(
     gross += lineGross;
     lineDiscount += round2((lineGross * (line.discountPercent || 0)) / 100);
 
-    const net = round2(
-      line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100) * discountFactor
-    );
+    const net = round2(netoDelRenglon(line) * discountFactor);
     const rate = byId.get(line.vatRateId);
     const treatment: VatTreatment = rate?.vatTreatment ?? 'GRAVADO';
     netByTreatment[treatment] += net;
@@ -537,6 +547,7 @@ export async function savePurchaseInvoice(
       unit_price: line.unitPrice,
       discount_percent: line.discountPercent,
       vat_rate_id: line.vatRateId,
+      net_amount: line.netAmount ?? null,
     })),
     p_taxes: footTaxes.map((tax) => ({
       tax_rate_id: tax.taxRateId,

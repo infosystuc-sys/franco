@@ -2,7 +2,7 @@ import { Trash2, Package } from 'lucide-react';
 import { cn, formatMoney } from '@/src/lib/utils';
 import type { ExpenseConcept } from '@/src/lib/expenseConcepts';
 import type { TaxRate } from '@/src/lib/taxRates';
-import type { PurchaseLine } from '@/src/lib/purchases';
+import { netoDelRenglon, type PurchaseLine } from '@/src/lib/purchases';
 
 /**
  * Una fila de la tabla de renglones de un comprobante de compra, sea
@@ -17,6 +17,7 @@ export function PurchaseItemRow({
   vatRates,
   onPatch,
   onRemove,
+  netoEditable = false,
 }: {
   line: PurchaseLine;
   idx: number;
@@ -25,8 +26,15 @@ export function PurchaseItemRow({
   vatRates: TaxRate[];
   onPatch: (patch: Partial<PurchaseLine>) => void;
   onRemove: () => void;
+  /** El neto se puede escribir como figura en el papel (revisión de la IA). */
+  netoEditable?: boolean;
 }) {
-  const net = line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100);
+  const net = netoDelRenglon(line);
+  const cuenta = line.quantity * line.unitPrice * (1 - (line.discountPercent || 0) / 100);
+  const impreso = line.netAmount !== null && line.netAmount !== undefined;
+  // Si cambia la cantidad, el precio o la bonificación, el importe escrito
+  // deja de corresponder: vuelve a mandar la cuenta.
+  const patchCuenta = (patch: Partial<PurchaseLine>) => onPatch({ ...patch, netAmount: null });
 
   return (
     <tr className={cn('h-9 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
@@ -72,7 +80,7 @@ export function PurchaseItemRow({
         <input
           type="number" step="0.01" min="0"
           value={line.quantity}
-          onChange={(e) => onPatch({ quantity: Number(e.target.value) })}
+          onChange={(e) => patchCuenta({ quantity: Number(e.target.value) })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
@@ -80,7 +88,7 @@ export function PurchaseItemRow({
         <input
           type="number" step="0.01" min="0"
           value={line.unitPrice}
-          onChange={(e) => onPatch({ unitPrice: Number(e.target.value) })}
+          onChange={(e) => patchCuenta({ unitPrice: Number(e.target.value) })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
@@ -88,7 +96,7 @@ export function PurchaseItemRow({
         <input
           type="number" step="0.01" min="0" max="100"
           value={line.discountPercent}
-          onChange={(e) => onPatch({ discountPercent: Number(e.target.value) })}
+          onChange={(e) => patchCuenta({ discountPercent: Number(e.target.value) })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
@@ -107,9 +115,33 @@ export function PurchaseItemRow({
           ))}
         </select>
       </td>
-      <td data-label="Neto" className="px-2 py-1 text-right font-semibold">
-        $ {formatMoney(net)}
-      </td>
+      {netoEditable ? (
+        <td data-label="Neto" className="px-1 py-1 text-right">
+          <input
+            type="number" step="0.01" min="0"
+            value={impreso ? line.netAmount! : Math.round(cuenta * 100) / 100}
+            onChange={(e) =>
+              onPatch({ netAmount: e.target.value.trim() === '' ? null : Number(e.target.value) })
+            }
+            className={cn(
+              'w-full bg-transparent px-2 py-1 text-right font-semibold',
+              impreso && Math.abs(net - cuenta) >= 0.005 && 'text-state-wait'
+            )}
+          />
+          {impreso && Math.abs(net - cuenta) >= 0.005 && (
+            <span className="block whitespace-nowrap px-2 text-[11px] text-text-soft">
+              cuenta $ {formatMoney(cuenta)}{' '}
+              <button type="button" onClick={() => onPatch({ netAmount: null })} className="font-semibold hover:underline">
+                usar
+              </button>
+            </span>
+          )}
+        </td>
+      ) : (
+        <td data-label="Neto" className="px-2 py-1 text-right font-semibold">
+          $ {formatMoney(net)}
+        </td>
+      )}
       <td className="px-1 py-1 text-center">
         <button
           type="button"
