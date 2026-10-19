@@ -66,6 +66,62 @@ function usarEstilosYaCargados(copia: Document) {
   copia.head.appendChild(estilo);
 }
 
+/**
+ * html2canvas no entiende los colores oklab/oklch, que es como el navegador
+ * devuelve un color con transparencia de Tailwind (bg-panel-head/60, que se
+ * arma con color-mix): corta con "unsupported color function oklab" y no
+ * hay PDF. Antes de fotografiar, cada color así de la copia se reemplaza por
+ * su equivalente rgba, pintándolo en un canvas y leyendo el píxel.
+ */
+const PROPIEDADES_DE_COLOR = [
+  'color', 'background-color', 'border-top-color', 'border-right-color',
+  'border-bottom-color', 'border-left-color', 'outline-color', 'text-decoration-color',
+] as const;
+
+function colorEnRgba(valor: string, cache: Map<string, string>, ctx: CanvasRenderingContext2D): string {
+  const guardado = cache.get(valor);
+  if (guardado) return guardado;
+  ctx.clearRect(0, 0, 1, 1);
+  ctx.fillStyle = '#000';
+  ctx.fillStyle = valor;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+  const rgba = `rgba(${r}, ${g}, ${b}, ${Math.round((a / 255) * 1000) / 1000})`;
+  cache.set(valor, rgba);
+  return rgba;
+}
+
+function colorNoSoportado(valor: string): boolean {
+  return /okl(ab|ch)|color\(|color-mix|lab\(|lch\(/i.test(valor);
+}
+
+function pasarColoresARgba(documento: Document, raiz: HTMLElement) {
+  const vista = documento.defaultView;
+  if (!vista) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return;
+  const cache = new Map<string, string>();
+  const elementos = [raiz, ...Array.from(raiz.querySelectorAll<HTMLElement>('*'))];
+  for (const el of elementos) {
+    const estilo = vista.getComputedStyle(el);
+    for (const prop of PROPIEDADES_DE_COLOR) {
+      const valor = estilo.getPropertyValue(prop);
+      if (valor && colorNoSoportado(valor)) {
+        el.style.setProperty(prop, colorEnRgba(valor, cache, ctx), 'important');
+      }
+    }
+    // Sombras y degradados con esos colores no se pueden traducir de a uno:
+    // se sacan, que en un PDF no hacen falta.
+    for (const prop of ['box-shadow', 'background-image', 'text-shadow'] as const) {
+      const valor = estilo.getPropertyValue(prop);
+      if (valor && colorNoSoportado(valor)) el.style.setProperty(prop, 'none', 'important');
+    }
+  }
+}
+
 async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
   // Con data-hojas-separadas, cada hijo es un comprobante y arranca en una
@@ -102,6 +158,7 @@ async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
       // texto termina más grande o más chico según de dónde se lo bajó.
       copia.style.width = `${anchoUtil * PX_POR_PUNTO}px`;
       copia.style.maxWidth = 'none';
+      pasarColoresARgba(documento, copia);
     },
   });
 
