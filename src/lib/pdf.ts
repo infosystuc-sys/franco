@@ -158,6 +158,11 @@ async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
       // texto termina más grande o más chico según de dónde se lo bajó.
       copia.style.width = `${anchoUtil * PX_POR_PUNTO}px`;
       copia.style.maxWidth = 'none';
+      // Lo que solo va en el papel (el membrete de los informes): la copia se
+      // dibuja con los estilos de pantalla, donde está oculto.
+      for (const el of Array.from(copia.querySelectorAll<HTMLElement>('[data-solo-pdf]'))) {
+        el.style.setProperty('display', 'grid', 'important');
+      }
       pasarColoresARgba(documento, copia);
     },
   });

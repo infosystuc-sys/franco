@@ -9,6 +9,7 @@ import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { MembreteDelTaller } from '@/src/components/MembreteDelTaller';
 import { fetchContactosDe } from '@/src/lib/composicionSaldos';
 import type { ContactoDeEnvio } from '@/src/lib/customers';
 import {
@@ -383,7 +384,19 @@ export function ReportView() {
 
           <div ref={documentRef} className="bg-panel">
           {unCliente && (
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-ink pb-2">
+            <MembreteDelTaller
+              titulo="Composición de saldo"
+              lineas={[
+                <span className="font-semibold text-text">{unCliente.nombre}</span>,
+                `Al ${new Date().toLocaleDateString('es-AR')}`,
+              ]}
+            />
+          )}
+          {unCliente && (
+            <div
+              data-html2canvas-ignore
+              className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b-2 border-ink pb-2 print:hidden"
+            >
               <div>
                 <div className="text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">{report.name}</div>
                 <div className="text-lg font-bold">{unCliente.nombre}</div>

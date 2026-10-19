@@ -5,6 +5,7 @@ import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
+import { MembreteDelTaller } from '@/src/components/MembreteDelTaller';
 import type { ContactoDeEnvio } from '@/src/lib/customers';
 import {
   armarComposicion,
@@ -273,10 +274,13 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
       ) : (
         <div ref={documentRef} className="print-document bg-panel">
           {/* Solo en el papel y en el PDF: en pantalla ya está la botonera. */}
-          <div className="hidden border-b-2 border-accent pb-2 print:block">
-            <p className="text-[18px] uppercase text-text-soft">{t.titulo}</p>
-            <p className="text-[13px] text-text-soft">{periodo}</p>
-          </div>
+          <MembreteDelTaller
+            titulo={unaSolaParte ? 'Composición de saldo' : t.titulo}
+            lineas={[
+              ...(unaSolaParte ? [<span className="font-semibold text-text">{unaSolaParte.nombre}</span>] : []),
+              periodo,
+            ]}
+          />
           {bloques.map((b) => (
             <BloqueDeSaldo key={b.parteId} bloque={b} desde={desde} lado={lado} />
           ))}
