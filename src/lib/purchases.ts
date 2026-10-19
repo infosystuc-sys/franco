@@ -157,6 +157,70 @@ export function computePurchaseTotals(
 }
 
 /**
+ * Importes escritos a mano para que el comprobante coincida con el papel:
+ * el neto y el IVA de cada alícuota (por porcentaje, "21", "10.5"), y el
+ * exento y el no gravado. Lo que no está, queda como lo da la cuenta.
+ */
+export interface PurchaseAjustes {
+  porAlicuota: Record<string, { net?: number; vat?: number }>;
+  netExempt?: number;
+  netUntaxed?: number;
+}
+
+export const SIN_AJUSTES: PurchaseAjustes = { porAlicuota: {} };
+
+export function hayAjustes(ajustes: PurchaseAjustes): boolean {
+  return (
+    ajustes.netExempt !== undefined ||
+    ajustes.netUntaxed !== undefined ||
+    Object.values(ajustes.porAlicuota).some((a) => a.net !== undefined || a.vat !== undefined)
+  );
+}
+
+/**
+ * Los totales con los ajustes encima. Una alícuota que ya no está en los
+ * renglones se ignora: su ajuste quedó viejo. Lo mismo el exento o el no
+ * gravado si no hay renglones de esa clase.
+ */
+export function aplicarAjustes(totals: PurchaseTotals, ajustes: PurchaseAjustes): PurchaseTotals {
+  const vatByRate = totals.vatByRate.map((entry) => {
+    const a = ajustes.porAlicuota[String(entry.rate)];
+    return {
+      rate: entry.rate,
+      net: round2(a?.net ?? entry.net),
+      vat: round2(a?.vat ?? entry.vat),
+    };
+  });
+  const netTaxed = round2(vatByRate.reduce((sum, e) => sum + e.net, 0));
+  const netExempt = round2(totals.netExempt > 0 ? ajustes.netExempt ?? totals.netExempt : totals.netExempt);
+  const netUntaxed = round2(totals.netUntaxed > 0 ? ajustes.netUntaxed ?? totals.netUntaxed : totals.netUntaxed);
+  const netTotal = round2(netTaxed + netExempt + netUntaxed);
+  const vat = round2(vatByRate.reduce((sum, e) => sum + e.vat, 0));
+  return {
+    ...totals,
+    netTaxed,
+    netExempt,
+    netUntaxed,
+    netTotal,
+    vatByRate,
+    vat,
+    total: round2(netTotal + vat + totals.otherTaxes),
+  };
+}
+
+/** Los ajustes como los espera save_purchase_invoice, solo de lo que está en los renglones. */
+function ajustesParaGuardar(ajustes: PurchaseAjustes, totals: PurchaseTotals) {
+  const porAlicuota = totals.vatByRate
+    .map((entry) => ({ rate: entry.rate, ...ajustes.porAlicuota[String(entry.rate)] }))
+    .filter((a) => a.net !== undefined || a.vat !== undefined);
+  return {
+    por_alicuota: porAlicuota,
+    ...(ajustes.netExempt !== undefined && totals.netExempt > 0 ? { net_exempt: ajustes.netExempt } : {}),
+    ...(ajustes.netUntaxed !== undefined && totals.netUntaxed > 0 ? { net_untaxed: ajustes.netUntaxed } : {}),
+  };
+}
+
+/**
  * Importe sugerido de un impuesto del pie. Es una propuesta: el que vale es
  * el del papel, y por eso el campo queda editable.
  */
@@ -433,6 +497,11 @@ export interface PurchaseHeaderInput {
    */
   movesStock: boolean;
   notes: string;
+  /**
+   * Importes escritos a mano (revisión de la IA) y los totales calculados de
+   * los renglones, contra los que se arma lo que se manda.
+   */
+  ajustes?: { ajustes: PurchaseAjustes; calculados: PurchaseTotals };
 }
 
 export async function savePurchaseInvoice(
@@ -455,6 +524,9 @@ export async function savePurchaseInvoice(
       general_discount_percent: header.generalDiscountPercent,
       moves_stock: header.movesStock,
       notes: header.notes.trim() || null,
+      ...(header.ajustes && hayAjustes(header.ajustes.ajustes)
+        ? { ajustes: ajustesParaGuardar(header.ajustes.ajustes, header.ajustes.calculados) }
+        : {}),
     },
     p_items: lines.map((line) => ({
       article_id: line.articleId,

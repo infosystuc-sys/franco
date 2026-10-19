@@ -19,6 +19,9 @@ import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConc
 import { fetchArticles, fetchSupplierCodeMap, linkOrCreateSupplierArticle, type Article } from '@/src/lib/articles';
 import { createTaxRate, fetchTaxRates, EMPTY_TAX_RATE_FORM, type TaxRate } from '@/src/lib/taxRates';
 import {
+  aplicarAjustes,
+  SIN_AJUSTES,
+  type PurchaseAjustes,
   computePurchaseTotals,
   describePurchaseError,
   proposeDueDate,
@@ -290,6 +293,9 @@ export function PurchaseAIReview() {
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
   const [notes, setNotes] = React.useState('');
+  // Netos e IVA escritos a mano cuando la cuenta de los renglones no da lo
+  // que dice el papel (redondeos del proveedor, un precio mal leído).
+  const [ajustes, setAjustes] = React.useState<PurchaseAjustes>(SIN_AJUSTES);
   // Total que la IA leyó del papel: control cruzado automático contra el
   // total que dan los renglones que se están por guardar (PurchaseTotalsSummary
   // hace la comparación sola en cuanto este campo tiene un valor).
@@ -463,10 +469,11 @@ export function PurchaseAIReview() {
     setMovesStock(docType === 'NOTA_CREDITO');
   }, [docType, isArticles]);
 
-  const totals = React.useMemo(
+  const calculados = React.useMemo(
     () => computePurchaseTotals(lines, footTaxes, Number(generalDiscount) || 0, vatRates),
     [lines, footTaxes, generalDiscount, vatRates]
   );
+  const totals = React.useMemo(() => aplicarAjustes(calculados, ajustes), [calculados, ajustes]);
 
   const confianzas = ((draft?.rawExtraction as any)?.confianzas ?? {}) as Record<string, number>;
 
@@ -807,6 +814,7 @@ export function PurchaseAIReview() {
           kind: draft.kind, docType, letter, salesPoint: Number(salesPoint), number: Number(number),
           supplierId, issueDate, receivedDate, dueDate, paymentTermsDays: supplier.paymentTermsDays,
           generalDiscountPercent: Number(generalDiscount) || 0, movesStock, notes,
+          ajustes: { ajustes, calculados },
         },
         lines,
         footTaxes
@@ -1232,6 +1240,9 @@ export function PurchaseAIReview() {
             onGeneralDiscountChange={setGeneralDiscount}
             declaredTotal={declaredTotal}
             onDeclaredTotalChange={setDeclaredTotal}
+            calculados={calculados}
+            ajustes={ajustes}
+            onAjustesChange={setAjustes}
           />
         </Panel>
       </div>
