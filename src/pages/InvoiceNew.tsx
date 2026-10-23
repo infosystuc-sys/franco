@@ -38,6 +38,8 @@ import {
 import { pedirCaeAlEmitir } from '@/src/lib/arcaFacturacion';
 import {
   fetchWorkOrderByNumber,
+  fetchWorkOrderStatuses,
+  setWorkOrderStatus,
   getErrorMessage,
   type WorkOrderDetail,
   type WorkOrderItemInput,
@@ -194,6 +196,10 @@ export function InvoiceNew() {
   const [items, setItems] = React.useState<WorkOrderItemInput[]>([]);
   const [notes, setNotes] = React.useState('');
   const [emitRemito, setEmitRemito] = React.useState(false);
+  // Si el cliente ya se llevó el vehículo o la pieza. Obligatorio para
+  // emitir: con "sí", la orden pasa a Retirada junto con la factura.
+  const [retirado, setRetirado] = React.useState<'' | 'SI' | 'NO'>('');
+  const [retiradoStatusId, setRetiradoStatusId] = React.useState<string | null>(null);
   // Sin valor inicial: elegir el talonario es parte de emitir. Un X puesto de
   // entrada se confirma sin mirarlo, y es la diferencia entre un comprobante
   // interno y uno fiscal.
@@ -334,6 +340,10 @@ export function InvoiceNew() {
 
     load();
     recargarRef.current = load;
+    // El estado se busca por system_key: la etiqueta la renombra el taller.
+    fetchWorkOrderStatuses()
+      .then((sts) => !cancelled && setRetiradoStatusId(sts.find((s) => s.systemKey === 'RETIRADO')?.id ?? null))
+      .catch(() => {/* sin el estado, la pregunta no se hace y la orden se pasa a mano */});
     // Para poder cambiar a quién se factura sin salir de la pantalla.
     fetchCustomers(true)
       .then((data) => !cancelled && setCustomers(data))
@@ -444,7 +454,11 @@ export function InvoiceNew() {
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   // Factura A: solo si el cliente es Responsable Inscripto.
   const puedeFacturaA = customerCondition === 'RESPONSABLE_INSCRIPTO';
+  // Una orden que ya salió del taller no pregunta: ya está retirada.
+  const preguntaRetiro = !!retiradoStatusId && !order.status.freesYard;
+  const esPieza = order.vehicle?.kind === 'PIEZA';
   const canIssue =
+    (!preguntaRetiro || retirado !== '') &&
     items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' && (invoiceType !== 'A' || puedeFacturaA) &&
     (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
 
@@ -495,6 +509,19 @@ export function InvoiceNew() {
       );
       if ((sectorId || null) !== (order.customerSectorId ?? null)) {
         await asignarSectorAFactura(issued.id, sectorId || null);
+      }
+
+      // La factura ya salió: si pasar la orden a Retirada falla, se avisa y
+      // se sigue, que el estado se puede cambiar a mano desde la orden.
+      if (preguntaRetiro && retirado === 'SI' && retiradoStatusId) {
+        try {
+          await setWorkOrderStatus(order.id, retiradoStatusId);
+        } catch (statusErr) {
+          window.alert(
+            `La factura ${issued.fullNumber} se emitió, pero no se pudo pasar la orden ${order.number} ` +
+              `a Retirada: ${getErrorMessage(statusErr)}\n\nCambiá el estado a mano desde la orden.`
+          );
+        }
       }
 
       // El CAE va en el mismo acto, no en un paso posterior. La X no pasa por
@@ -666,6 +693,27 @@ export function InvoiceNew() {
             Emitir junto con la factura
           </span>
         </FieldBox>
+
+        {preguntaRetiro && (
+          <FieldBox label={esPieza ? '¿Retiró la pieza?' : '¿Retiró el vehículo?'}>
+            <select
+              value={retirado}
+              onChange={(e) => setRetirado(e.target.value as '' | 'SI' | 'NO')}
+              className={cn(selectCabecera, 'w-full', retirado === '' && 'border-danger text-danger')}
+            >
+              <option value="">Elegí una…</option>
+              <option value="SI">Sí, se lo llevó</option>
+              <option value="NO">No, sigue en el taller</option>
+            </select>
+            <span className="mt-1 block text-[11px] normal-case text-text-soft">
+              {retirado === ''
+                ? 'Obligatorio para emitir'
+                : retirado === 'SI'
+                  ? 'La orden pasa a Retirada al emitir'
+                  : 'La orden queda en su estado actual'}
+            </span>
+          </FieldBox>
+        )}
 
         <FieldBox label="Condición de venta">
           <select
