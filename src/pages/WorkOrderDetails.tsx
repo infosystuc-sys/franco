@@ -1555,8 +1555,9 @@ function PhotoThumb({
  *
  * Ya facturada deja de ser un botón y pasa a ser un link al comprobante:
  * ofrecer "Facturar" sobre una orden que ya tiene factura sería prometer algo
- * que la base va a rechazar. Sin terminar queda deshabilitado explicando por
- * qué, que es más útil que esconderlo.
+ * que la base va a rechazar. Si no, se puede facturar en cualquier momento,
+ * esté como esté la orden: el trabajo muchas veces se cobra antes de
+ * terminarlo o de entregar el vehículo (igual que desde el listado de OT).
  */
 function InvoiceAction({
   order,
@@ -1572,26 +1573,6 @@ function InvoiceAction({
           <Receipt size={16} /> {INVOICE_TYPE_LABELS[invoice.invoiceType]} {invoice.fullNumber}
         </Button>
       </Link>
-    );
-  }
-
-  // Con el presupuesto aceptado se puede facturar en cualquier momento, sin
-  // esperar a que la orden termine: el cliente ya dijo que sí y el trabajo
-  // muchas veces se cobra antes de entregar. Sin presupuesto aceptado sigue
-  // valiendo lo de siempre —se factura la orden terminada—, que es el único
-  // punto donde se sabe qué se hizo.
-  const cotizacionAceptada = order.quotationStatus === 'ACEPTADA';
-
-  if (!order.status.isTerminal && !cotizacionAceptada) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        disabled
-        title={`Se factura con el presupuesto aceptado, o cuando la orden está terminada. Ahora está en ${order.status.label}.`}
-      >
-        <Receipt size={16} /> Facturar
-      </Button>
     );
   }
 
