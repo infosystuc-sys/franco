@@ -877,6 +877,18 @@ export async function requestPriceAuthorization(workOrderId: string): Promise<vo
   if (error) throw error;
 }
 
+/**
+ * El taller da por autorizado el monto actual de la OT, sin mandarle el link
+ * al cliente: para cuando ya lo aprobó por otro medio (en el mostrador, por
+ * teléfono). Queda igual que si el cliente hubiera respondido que sí.
+ */
+export async function autorizarCambioDePrecioEnElTaller(workOrderId: string): Promise<void> {
+  const { error } = await supabase.rpc('autorizar_cambio_de_precio_en_el_taller', {
+    p_work_order_id: workOrderId,
+  });
+  if (error) throw error;
+}
+
 export async function fetchStatusHistory(workOrderId: string): Promise<StatusChange[]> {
   const { data, error } = await supabase
     .from('work_order_status_history')

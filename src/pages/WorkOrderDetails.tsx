@@ -57,6 +57,7 @@ import {
   RECEPTION_KIND_LABELS,
   reenviarLinkSeguimiento,
   requestPriceAuthorization,
+  autorizarCambioDePrecioEnElTaller,
   saveWorkOrderItems,
   setEstimatedDeliveryDate,
   setWorkOrderStatus,
@@ -430,6 +431,25 @@ export function WorkOrderDetails() {
       await loadOrder();
     } catch (err) {
       setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleAutorizarEnElTaller() {
+    if (!order) return;
+    if (!window.confirm(
+      `¿Dar por autorizado el nuevo monto de la orden ${order.number}?\n\n` +
+        'Usalo cuando el cliente ya lo aprobó por otro medio: no se le manda nada.'
+    )) return;
+    setRequestingPriceAuth(true);
+    setError(null);
+    try {
+      await autorizarCambioDePrecioEnElTaller(order.id);
+      setAviso('Cambio de precio autorizado desde el taller.');
+      await loadOrder();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setRequestingPriceAuth(false);
     }
   }
 
@@ -884,10 +904,19 @@ export function WorkOrderDetails() {
               )}
             </span>
           </span>
-          {isAdmin && order.priceAuth.status !== 'PENDIENTE' && (
-            <Button variant="ghost" onClick={handleRequestPriceAuth} disabled={requestingPriceAuth}>
-              <Send size={15} /> {requestingPriceAuth ? 'Enviando…' : 'Solicitar autorización'}
-            </Button>
+          {isAdmin && (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {order.priceAuth.status !== 'PENDIENTE' && (
+                <Button variant="ghost" onClick={handleRequestPriceAuth} disabled={requestingPriceAuth}>
+                  <Send size={15} /> {requestingPriceAuth ? 'Enviando…' : 'Solicitar autorización'}
+                </Button>
+              )}
+              {/* El cliente ya lo aprobó en persona o por teléfono: no hace
+                  falta mandarle el link y esperar que responda. */}
+              <Button variant="secondary" onClick={handleAutorizarEnElTaller} disabled={requestingPriceAuth}>
+                <Check size={15} /> Autorizar desde el taller
+              </Button>
+            </div>
           )}
         </div>
       )}
