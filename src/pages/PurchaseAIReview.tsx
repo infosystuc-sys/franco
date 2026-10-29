@@ -12,6 +12,7 @@ import { PurchaseItemRow } from '@/src/components/purchase/PurchaseItemRow';
 import { PurchaseTaxRow } from '@/src/components/purchase/PurchaseTaxRow';
 import { PurchaseTotalsSummary } from '@/src/components/purchase/PurchaseTotalsSummary';
 import { SupplierModal } from '@/src/components/SupplierModal';
+import { ReferenciaNotaDeCredito } from '@/src/components/purchase/ReferenciaNotaDeCredito';
 import { formatCuit } from '@/src/lib/fiscal';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchSuppliers, type Supplier } from '@/src/lib/suppliers';
@@ -330,6 +331,8 @@ export function PurchaseAIReview() {
   const [dueDateTouched, setDueDateTouched] = React.useState(false);
   // Solo se pregunta en NC y ND: la factura de artículos siempre mueve stock.
   const [movesStock, setMovesStock] = React.useState(false);
+  // Nota de crédito: la factura a la que acredita (obligatoria).
+  const [creditsInvoiceId, setCreditsInvoiceId] = React.useState('');
   const [lines, setLines] = React.useState<ReviewLine[]>([]);
   const [generalDiscount, setGeneralDiscount] = React.useState('0');
   const [footTaxes, setFootTaxes] = React.useState<PurchaseFootTax[]>([]);
@@ -904,6 +907,7 @@ export function PurchaseAIReview() {
   const canSave =
     !!supplierId && salesPoint.trim() !== '' && Number(salesPoint) >= 0 &&
     Number(number) > 0 && !!issueDate && !!dueDate &&
+    (docType !== 'NOTA_CREDITO' || !!creditsInvoiceId) &&
     lines.length > 0 && !missingVat && !missingDescription && totals.total > 0 &&
     unmatchedArticleLines === 0 && !saving;
 
@@ -934,6 +938,7 @@ export function PurchaseAIReview() {
           supplierId, issueDate, receivedDate, dueDate, paymentTermsDays: supplier.paymentTermsDays,
           generalDiscountPercent: Number(generalDiscount) || 0, movesStock, notes,
           ajustes: { ajustes, calculados },
+          creditsInvoiceId: docType === 'NOTA_CREDITO' ? creditsInvoiceId : null,
         },
         lines,
         footTaxes
@@ -1028,7 +1033,7 @@ export function PurchaseAIReview() {
                     entidad="proveedor"
                     clientes={suppliers}
                     value={supplierId}
-                    onChange={(id) => setSupplierId(id)}
+                    onChange={(id) => { setSupplierId(id); setCreditsInvoiceId(''); }}
                     className={cn('flex-1 rounded-r-none', !supplierId && 'field-required')}
                   />
                   <AccionesDeCampo
@@ -1142,6 +1147,16 @@ export function PurchaseAIReview() {
                     </span>
                   </span>
                 </label>
+              )}
+
+              {docType === 'NOTA_CREDITO' && draft && (
+                <ReferenciaNotaDeCredito
+                  supplierId={supplierId}
+                  kind={draft.kind}
+                  invoiceId={creditsInvoiceId}
+                  onInvoiceChange={(factura) => setCreditsInvoiceId(factura?.id ?? '')}
+                  totalNota={totals.total}
+                />
               )}
             </div>
           </Panel>

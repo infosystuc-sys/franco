@@ -1,7 +1,7 @@
 import React from 'react';
 // Ban sigue: ya no se anula, pero los comprobantes anulados antes de este
 // cambio existen y la ficha los tiene que seguir mostrando como tales.
-import { XCircle, Ban, AlertTriangle, Printer, Boxes, Trash2 } from 'lucide-react';
+import { XCircle, Ban, AlertTriangle, Printer, Boxes, Trash2, FileMinus } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -19,6 +19,7 @@ import {
   PURCHASE_KIND_LABELS,
   signOf,
   eliminarComprobanteDeCompra,
+  fetchNotasDeCreditoDeFactura,
   type PurchaseDetail,
 } from '@/src/lib/purchases';
 import { useAccionDesdeListado } from '@/src/lib/accionDesdeListado';
@@ -31,6 +32,10 @@ export function PurchaseDetails() {
   const navigate = useNavigate();
 
   const [doc, setDoc] = React.useState<PurchaseDetail | null>(null);
+  // Factura: las notas de crédito que la acreditan.
+  const [notasDeCredito, setNotasDeCredito] = React.useState<
+    Awaited<ReturnType<typeof fetchNotasDeCreditoDeFactura>>
+  >([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [voiding, setVoiding] = React.useState(false);
@@ -41,7 +46,9 @@ export function PurchaseDetails() {
     setLoading(true);
     setError(null);
     try {
-      setDoc(await fetchPurchaseById(id));
+      const leido = await fetchPurchaseById(id);
+      setDoc(leido);
+      setNotasDeCredito(leido?.docType === 'FACTURA' ? await fetchNotasDeCreditoDeFactura(leido.id) : []);
     } catch (err) {
       setError(describePurchaseError(getErrorMessage(err)));
     } finally {
@@ -166,6 +173,13 @@ export function PurchaseDetails() {
               <Button variant="ghost" type="button" onClick={() => window.print()}>
                 <Printer size={16} /> Imprimir
               </Button>
+              {!voided && doc.docType === 'FACTURA' && (
+                <Link
+                  to={`/compras/nueva/${doc.kind === 'ARTICULOS' ? 'articulos' : 'conceptos'}?acredita=${doc.id}&proveedor=${doc.supplierId}`}
+                >
+                  <Button variant="ghost" type="button"><FileMinus size={16} /> Nota de crédito</Button>
+                </Link>
+              )}
               {!voided && (
                 <Button variant="danger" type="button" onClick={handleEliminar} disabled={voiding}>
                   <Trash2 size={16} /> {voiding ? 'Eliminando…' : 'Eliminar'}
@@ -187,6 +201,37 @@ export function PurchaseDetails() {
               {doc.voidedReason ? ` · ${doc.voidedReason}` : ''}. Ya no cuenta en
               la cuenta corriente del proveedor.
             </span>
+          </div>
+        )}
+
+        {isCredit && doc.creditsInvoice && (
+          <div className="mb-6 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
+            Acredita la factura{' '}
+            <Link to={`/compra/${doc.creditsInvoice.id}`} className="font-mono font-semibold text-accent-deep underline">
+              {doc.creditsInvoice.letter} {doc.creditsInvoice.fullNumber}
+            </Link>
+            {doc.creditAppliedAmount > 0
+              ? ` · le canceló $ ${formatMoney(doc.creditAppliedAmount)} de su saldo`
+              : ' · la factura ya estaba paga: queda como saldo a favor'}
+            {doc.creditAppliedAmount > 0 && doc.creditAppliedAmount < doc.totalAmount - 0.005 &&
+              `; los $ ${formatMoney(doc.totalAmount - doc.creditAppliedAmount)} restantes quedan como saldo a favor`}
+            .
+          </div>
+        )}
+
+        {notasDeCredito.length > 0 && (
+          <div className="mb-6 rounded-md border border-line bg-panel-head px-4 py-3 text-sm">
+            <span className="font-semibold">Notas de crédito: </span>
+            {notasDeCredito.map((nc, i) => (
+              <React.Fragment key={nc.id}>
+                {i > 0 && ', '}
+                <Link to={`/compra/${nc.id}`} className="font-mono text-accent-deep underline">
+                  {nc.letter} {nc.fullNumber}
+                </Link>{' '}
+                ($ {formatMoney(nc.totalAmount)})
+              </React.Fragment>
+            ))}
+            {' · '}acreditado $ {formatMoney(notasDeCredito.reduce((s, nc) => s + nc.totalAmount, 0))} de $ {formatMoney(doc.totalAmount)}.
           </div>
         )}
 

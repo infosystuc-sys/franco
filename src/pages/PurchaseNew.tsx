@@ -1,6 +1,6 @@
 import React from 'react';
 import { Plus, Save, XCircle, AlertTriangle, Package, Boxes } from 'lucide-react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
@@ -19,6 +19,9 @@ import {
   computePurchaseTotals,
   describePurchaseError,
   proposeDueDate,
+  fetchRenglonesParaAcreditar,
+  registrarNotaDeCreditoTotal,
+  type FacturaAcreditable,
   PURCHASE_DOC_TYPE_LABELS,
   PURCHASE_DOC_TYPES,
   PURCHASE_LETTERS,
@@ -33,6 +36,7 @@ import {
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
 import { SupplierModal } from '@/src/components/SupplierModal';
+import { ReferenciaNotaDeCredito, type ModoNotaDeCredito } from '@/src/components/purchase/ReferenciaNotaDeCredito';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null,
@@ -77,6 +81,12 @@ export function PurchaseNew() {
   // ── Encabezado
   const [supplierId, setSupplierId] = React.useState('');
   const [altaOcasional, setAltaOcasional] = React.useState(false);
+  // Nota de crédito: la factura que acredita y si la acredita entera o en
+  // parte. Desde la ficha de una factura se llega con ?acredita=<id>.
+  const [searchParams] = useSearchParams();
+  const [creditsInvoiceId, setCreditsInvoiceId] = React.useState('');
+  const [facturaAcreditada, setFacturaAcreditada] = React.useState<FacturaAcreditable | null>(null);
+  const [modoNC, setModoNC] = React.useState<ModoNotaDeCredito>('TOTAL');
   const [docType, setDocType] = React.useState<PurchaseDocType>('FACTURA');
   const [letter, setLetter] = React.useState<PurchaseLetter>('A');
   const [salesPoint, setSalesPoint] = React.useState('');
@@ -117,6 +127,13 @@ export function PurchaseNew() {
         // En conceptos se arranca con un renglón en blanco listo para tipear.
         // En artículos no: el renglón nace de elegir uno del catálogo.
         if (!isArticles) setLines([{ ...EMPTY_LINE, vatRateId: general?.id ?? '' }]);
+        const acredita = searchParams.get('acredita');
+        const proveedor = searchParams.get('proveedor');
+        if (acredita && proveedor) {
+          setDocType('NOTA_CREDITO');
+          setSupplierId(proveedor);
+          setCreditsInvoiceId(acredita);
+        }
       })
       .catch((err) => !cancelled && setError(describePurchaseError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
@@ -149,6 +166,10 @@ export function PurchaseNew() {
     () => computePurchaseTotals(lines, footTaxes, Number(generalDiscount) || 0, vatRates),
     [lines, footTaxes, generalDiscount, vatRates]
   );
+
+  const esNC = docType === 'NOTA_CREDITO';
+  // La NC total no lleva renglones propios: la base copia la factura entera.
+  const esNCTotal = esNC && modoNC === 'TOTAL' && !!facturaAcreditada;
 
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (kindParam !== 'articulos' && kindParam !== 'conceptos') {
@@ -219,18 +240,32 @@ export function PurchaseNew() {
         })
         .filter((msg): msg is string => msg !== null)
     : [];
-  const canSave =
+  const encabezadoCompleto =
     !!supplierId &&
     salesPoint.trim() !== '' &&
     Number(salesPoint) >= 0 &&
     Number(number) > 0 &&
     !!issueDate &&
-    !!dueDate &&
-    lines.length > 0 &&
-    !missingVat &&
-    !missingDescription &&
-    totals.total > 0 &&
+    (esNCTotal || !!dueDate);
+  const canSave =
+    encabezadoCompleto &&
+    (!esNC || !!creditsInvoiceId) &&
+    (esNCTotal ||
+      (lines.length > 0 && !missingVat && !missingDescription && totals.total > 0)) &&
     !saving;
+
+  async function copiarRenglonesDeLaFactura() {
+    if (!creditsInvoiceId) return;
+    setError(null);
+    try {
+      const copia = await fetchRenglonesParaAcreditar(creditsInvoiceId);
+      setLines(copia.lines);
+      setFootTaxes(copia.footTaxes);
+      setGeneralDiscount(String(copia.generalDiscountPercent));
+    } catch (err) {
+      setError(describePurchaseError(getErrorMessage(err)));
+    }
+  }
 
   const stockMoves = isArticles && (docType === 'FACTURA' || movesStock);
 
@@ -239,6 +274,19 @@ export function PurchaseNew() {
     setSaving(true);
     setError(null);
     try {
+      if (esNCTotal) {
+        await registrarNotaDeCreditoTotal(creditsInvoiceId, {
+          letter,
+          salesPoint: Number(salesPoint),
+          number: Number(number),
+          issueDate,
+          receivedDate,
+          movesStock,
+          notes,
+        });
+        navigate('/compras');
+        return;
+      }
       const saved = await savePurchaseInvoice(
         {
           kind,
@@ -254,6 +302,7 @@ export function PurchaseNew() {
           generalDiscountPercent: Number(generalDiscount) || 0,
           movesStock,
           notes,
+          creditsInvoiceId: esNC ? creditsInvoiceId : null,
         },
         lines,
         footTaxes
@@ -310,7 +359,11 @@ export function PurchaseNew() {
               entidad="proveedor"
               clientes={suppliers}
               value={supplierId}
-              onChange={(id) => setSupplierId(id)}
+              onChange={(id) => {
+                setSupplierId(id);
+                setCreditsInvoiceId('');
+                setFacturaAcreditada(null);
+              }}
               className={cn('mt-1', !supplierId && 'field-required')}
             />
             {supplier && (
@@ -430,6 +483,24 @@ export function PurchaseNew() {
           </label>
         </div>
 
+        {esNC && (
+          <ReferenciaNotaDeCredito
+            supplierId={supplierId}
+            kind={kind}
+            invoiceId={creditsInvoiceId}
+            onInvoiceChange={(factura) => {
+              setCreditsInvoiceId(factura?.id ?? '');
+              setFacturaAcreditada(factura);
+              // Con notas de crédito previas ya no puede ser total.
+              if (factura && factura.acreditado > 0) setModoNC('PARCIAL');
+            }}
+            modo={modoNC}
+            onModoChange={setModoNC}
+            onCopiarRenglones={copiarRenglonesDeLaFactura}
+            totalNota={totals.total}
+          />
+        )}
+
         {/* El tilde de stock solo aparece donde hay una decisión real que
             tomar: en la factura no la hay, la mercadería entró. */}
         {isArticles && docType !== 'FACTURA' && (
@@ -454,6 +525,21 @@ export function PurchaseNew() {
         )}
       </Panel>
 
+      {esNCTotal && facturaAcreditada && (
+        <Panel className="mb-6 p-5">
+          <SectionHeader title="Nota de crédito total" />
+          <p className="text-sm text-text">
+            Se registra una copia exacta de la factura {facturaAcreditada.letter} {facturaAcreditada.fullNumber}:
+            los mismos renglones, IVA y percepciones, por{' '}
+            <b>$ {formatMoney(facturaAcreditada.totalAmount)}</b>. La factura queda cancelada
+            {facturaAcreditada.settledAmount > 0 &&
+              '; lo que ya se le había pagado queda como saldo a favor para la próxima orden de pago'}
+            .
+          </p>
+        </Panel>
+      )}
+
+      {!esNCTotal && (<>
       {/* ── CUERPO ─────────────────────────────────────────────────── */}
       <Panel className="mb-6 p-5">
         <SectionHeader
@@ -610,6 +696,7 @@ export function PurchaseNew() {
           />
         </Panel>
       </div>
+      </>)}
 
       <Panel className="mb-10 p-5">
         <SectionHeader title="Observaciones" />

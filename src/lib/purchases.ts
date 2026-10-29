@@ -344,6 +344,11 @@ export interface PurchaseDetail extends PurchaseListRow {
 
   items: PurchaseItem[];
   taxes: PurchaseTax[];
+
+  /** Nota de crédito: la factura que acredita (null en las anteriores al cambio). */
+  creditsInvoice: { id: string; letter: PurchaseLetter; fullNumber: string } | null;
+  /** Nota de crédito: lo que canceló del saldo de esa factura. */
+  creditAppliedAmount: number;
 }
 
 const LIST_SELECT =
@@ -389,6 +394,7 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDetail | nu
        gross_amount, line_discount_amount, general_discount_percent, general_discount_amount,
        net_taxed, net_exempt, net_untaxed, vat_amount, other_taxes_amount,
        total_amount, settled_amount, notes, voided_at, voided_reason, etiquetas,
+       credits_invoice_id, credit_applied_amount,
        items:purchase_invoice_items(line_number, code, description, quantity, unit_price,
              discount_percent, net_amount, vat_rate, vat_treatment, vat_amount,
              concept:expense_concepts(name)),
@@ -401,8 +407,19 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDetail | nu
   if (!data) return null;
 
   const row = data as any;
+  let creditsInvoice: PurchaseDetail['creditsInvoice'] = null;
+  if (row.credits_invoice_id) {
+    const { data: factura } = await supabase
+      .from('purchase_invoices')
+      .select('id, letter, full_number')
+      .eq('id', row.credits_invoice_id)
+      .maybeSingle();
+    if (factura) creditsInvoice = { id: factura.id, letter: factura.letter, fullNumber: factura.full_number };
+  }
   return {
     ...mapListRow(row),
+    creditsInvoice,
+    creditAppliedAmount: Number(row.credit_applied_amount ?? 0),
     salesPoint: Number(row.sales_point),
     number: Number(row.number),
     receivedDate: row.received_date,
@@ -512,6 +529,8 @@ export interface PurchaseHeaderInput {
    * los renglones, contra los que se arma lo que se manda.
    */
   ajustes?: { ajustes: PurchaseAjustes; calculados: PurchaseTotals };
+  /** Nota de crédito: la factura a la que acredita. Obligatoria en las NC. */
+  creditsInvoiceId?: string | null;
 }
 
 export async function savePurchaseInvoice(
@@ -534,6 +553,7 @@ export async function savePurchaseInvoice(
       general_discount_percent: header.generalDiscountPercent,
       moves_stock: header.movesStock,
       notes: header.notes.trim() || null,
+      credits_invoice_id: header.docType === 'NOTA_CREDITO' ? header.creditsInvoiceId ?? null : null,
       ...(header.ajustes && hayAjustes(header.ajustes.ajustes)
         ? { ajustes: ajustesParaGuardar(header.ajustes.ajustes, header.ajustes.calculados) }
         : {}),
@@ -560,6 +580,169 @@ export async function savePurchaseInvoice(
   const row = (Array.isArray(data) ? data[0] : data) as any;
   if (!row) throw new Error('La base no devolvió el comprobante guardado.');
   return { id: row.purchase_id, fullNumber: row.purchase_full_number };
+}
+
+// ===========================================================================
+// Notas de crédito contra una factura
+// ===========================================================================
+
+/** Factura del proveedor que se puede acreditar con una nota de crédito. */
+export interface FacturaAcreditable {
+  id: string;
+  kind: PurchaseKind;
+  letter: PurchaseLetter;
+  fullNumber: string;
+  issueDate: string;
+  totalAmount: number;
+  settledAmount: number;
+  /** Lo que ya le acreditaron otras notas de crédito. */
+  acreditado: number;
+}
+
+/** Lo que todavía se le puede acreditar a la factura. */
+export function pendienteDeAcreditar(factura: FacturaAcreditable): number {
+  return round2(Math.max(0, factura.totalAmount - factura.acreditado));
+}
+
+export async function fetchFacturasAcreditables(supplierId: string): Promise<FacturaAcreditable[]> {
+  const { data, error } = await supabase
+    .from('purchase_invoices')
+    .select('id, kind, letter, full_number, issue_date, total_amount, settled_amount')
+    .eq('supplier_id', supplierId)
+    .eq('doc_type', 'FACTURA')
+    .eq('status', 'REGISTRADA')
+    .order('issue_date', { ascending: false });
+  if (error) throw error;
+  const facturas = (data ?? []) as any[];
+  if (facturas.length === 0) return [];
+
+  const { data: notas, error: errorNotas } = await supabase
+    .from('purchase_invoices')
+    .select('credits_invoice_id, total_amount')
+    .eq('status', 'REGISTRADA')
+    .in('credits_invoice_id', facturas.map((f) => f.id));
+  if (errorNotas) throw errorNotas;
+  const acreditado = new Map<string, number>();
+  for (const nc of (notas ?? []) as any[]) {
+    acreditado.set(nc.credits_invoice_id, (acreditado.get(nc.credits_invoice_id) ?? 0) + Number(nc.total_amount));
+  }
+
+  return facturas.map((f) => ({
+    id: f.id,
+    kind: f.kind,
+    letter: f.letter,
+    fullNumber: f.full_number,
+    issueDate: f.issue_date,
+    totalAmount: Number(f.total_amount),
+    settledAmount: Number(f.settled_amount),
+    acreditado: round2(acreditado.get(f.id) ?? 0),
+  }));
+}
+
+/**
+ * Los renglones y el pie de una factura, listos para arrancar una nota de
+ * crédito parcial: se borra o se corrige lo que no se acredita.
+ */
+export async function fetchRenglonesParaAcreditar(
+  invoiceId: string
+): Promise<{ lines: PurchaseLine[]; footTaxes: PurchaseFootTax[]; generalDiscountPercent: number }> {
+  const { data, error } = await supabase
+    .from('purchase_invoices')
+    .select(
+      `general_discount_percent,
+       items:purchase_invoice_items(line_number, article_id, concept_id, code, description, quantity,
+             unit_price, discount_percent, net_amount, vat_rate_id),
+       taxes:purchase_invoice_taxes(tax_rate_id, amount)`
+    )
+    .eq('id', invoiceId)
+    .single();
+  if (error) throw error;
+  const row = data as any;
+  const descuento = Number(row.general_discount_percent) || 0;
+  return {
+    generalDiscountPercent: descuento,
+    lines: ((row.items ?? []) as any[])
+      .sort((a, b) => a.line_number - b.line_number)
+      .map((item) => {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unit_price);
+        const discountPercent = Number(item.discount_percent);
+        // El neto guardado ya trae la bonificación general: se le saca para
+        // que la NC no la aplique dos veces. Solo se usa si la cuenta no da
+        // lo mismo (el proveedor redondeó distinto).
+        const netoSinGeneral = descuento > 0 ? Number(item.net_amount) / (1 - descuento / 100) : Number(item.net_amount);
+        const cuenta = quantity * unitPrice * (1 - discountPercent / 100);
+        return {
+          articleId: item.article_id,
+          conceptId: item.concept_id,
+          code: item.code ?? '',
+          description: item.description,
+          quantity,
+          unitPrice,
+          discountPercent,
+          vatRateId: item.vat_rate_id,
+          netAmount: descuento === 0 && Math.abs(netoSinGeneral - cuenta) >= 0.005 ? round2(netoSinGeneral) : null,
+        };
+      }),
+    footTaxes: ((row.taxes ?? []) as any[]).map((tax) => ({
+      taxRateId: tax.tax_rate_id,
+      amount: Number(tax.amount),
+    })),
+  };
+}
+
+/**
+ * Nota de crédito TOTAL: la base copia la factura tal cual —renglones, IVA,
+ * percepciones, al centavo— y la cancela. Solo hacen falta los datos del papel.
+ */
+export async function registrarNotaDeCreditoTotal(
+  invoiceId: string,
+  header: {
+    letter: PurchaseLetter;
+    salesPoint: number;
+    number: number;
+    issueDate: string;
+    receivedDate: string;
+    movesStock: boolean;
+    notes: string;
+  }
+): Promise<{ id: string; fullNumber: string }> {
+  const { data, error } = await supabase.rpc('registrar_nota_de_credito_total', {
+    p_invoice_id: invoiceId,
+    p_header: {
+      letter: header.letter,
+      sales_point: header.salesPoint,
+      number: header.number,
+      issue_date: header.issueDate,
+      received_date: header.receivedDate,
+      moves_stock: header.movesStock,
+      notes: header.notes.trim() || null,
+    },
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) throw new Error('La base no devolvió la nota de crédito guardada.');
+  return { id: row.purchase_id, fullNumber: row.purchase_full_number };
+}
+
+/** Las notas de crédito que acreditan una factura. */
+export async function fetchNotasDeCreditoDeFactura(
+  invoiceId: string
+): Promise<{ id: string; letter: PurchaseLetter; fullNumber: string; issueDate: string; totalAmount: number }[]> {
+  const { data, error } = await supabase
+    .from('purchase_invoices')
+    .select('id, letter, full_number, issue_date, total_amount')
+    .eq('credits_invoice_id', invoiceId)
+    .eq('status', 'REGISTRADA')
+    .order('issue_date');
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((nc) => ({
+    id: nc.id,
+    letter: nc.letter,
+    fullNumber: nc.full_number,
+    issueDate: nc.issue_date,
+    totalAmount: Number(nc.total_amount),
+  }));
 }
 
 /**
