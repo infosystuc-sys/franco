@@ -31,6 +31,7 @@ import {
   type PurchaseLine,
 } from '@/src/lib/purchases';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null,
@@ -279,6 +280,9 @@ export function PurchaseNew() {
         }
         actions={
           <>
+            {/* La factura de conceptos se puede cargar sacándole una foto: la
+                IA la lee y se sigue en la revisión del borrador. */}
+            {!isArticles && <LeerFacturaConIA kind="CONCEPTOS" onError={setError} compacto />}
             <Link to="/compras">
               <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
             </Link>

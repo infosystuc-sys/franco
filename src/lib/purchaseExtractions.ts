@@ -84,6 +84,35 @@ export function describeDraftFileProblem(file: File): string | null {
   return null;
 }
 
+/** Lado más largo con que se sube una foto: sobra para leer la letra chica
+ *  de una factura y deja el archivo en unos cientos de KB. */
+const LADO_MAXIMO_FOTO = 2400;
+
+/**
+ * Achica la foto que sale de la cámara del celular (suele venir de 4000 px y
+ * varios MB) y la pasa a JPEG, que Gemini lee siempre. Si el navegador no
+ * puede abrir la imagen (un HEIC en Chrome, por ejemplo) se sube como vino.
+ * Los PDF no se tocan.
+ */
+export async function prepararFotoDeFactura(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  try {
+    const imagen = await createImageBitmap(file);
+    const escala = Math.min(1, LADO_MAXIMO_FOTO / Math.max(imagen.width, imagen.height));
+    const lienzo = document.createElement('canvas');
+    lienzo.width = Math.round(imagen.width * escala);
+    lienzo.height = Math.round(imagen.height * escala);
+    lienzo.getContext('2d')!.drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
+    imagen.close();
+    const blob = await new Promise<Blob | null>((ok) => lienzo.toBlob(ok, 'image/jpeg', 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    const nombre = file.name.replace(/\.[^.]*$/, '') || 'factura';
+    return new File([blob], `${nombre}.jpg`, { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
 /** Sube el PDF/foto al bucket de borradores. La Edge Function lo lee después con la service key. */
 export async function uploadPurchaseInvoiceDraft(
   file: File
