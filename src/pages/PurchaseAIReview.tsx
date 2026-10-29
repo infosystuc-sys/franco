@@ -245,6 +245,23 @@ export function afinidadDePercepcion(nombreLeido: string, nombreAlicuota: string
 }
 
 /**
+ * Alícuota leída -> porcentaje. Los tickets la imprimen como fracción
+ * ("IVA % 0.21"): eso es 21, no 0,21 %. NaN si no se puede leer.
+ */
+export function leerAlicuota(texto: unknown): number {
+  const limpio = String(texto ?? '').replace('%', '').replace(',', '.').trim();
+  if (limpio === '') return Number.NaN;
+  const n = Number(limpio);
+  if (!Number.isFinite(n)) return Number.NaN;
+  return n > 0 && n < 1 ? Math.round(n * 10000) / 100 : n;
+}
+
+/** Los impuestos de combustible no son percepciones: van como impuesto interno. */
+function esImpuestoInterno(nombre: string): boolean {
+  return /combustible|di[oó]xido|\b(icl|idc|itc)\b|interno/i.test(nombre);
+}
+
+/**
  * El cuadro de IVA del pie leído por la IA, como ajustes de la revisión.
  * Null si no vino o si algún importe no se puede leer.
  */
@@ -252,7 +269,7 @@ function leerAlicuotasDelPie(crudo: unknown): PurchaseAjustes | null {
   if (!Array.isArray(crudo) || crudo.length === 0) return null;
   const porAlicuota: PurchaseAjustes['porAlicuota'] = {};
   for (const fila of crudo as any[]) {
-    const alicuota = Number(String(fila?.alicuota ?? '').replace('%', '').replace(',', '.').trim());
+    const alicuota = leerAlicuota(fila?.alicuota);
     const neto = parseArgNumber(String(fila?.neto_gravado ?? ''));
     const iva = parseArgNumber(String(fila?.iva ?? ''));
     if (!Number.isFinite(alicuota) || alicuota <= 0) continue;
@@ -411,6 +428,8 @@ export function PurchaseAIReview() {
         for (const p of (raw.percepciones ?? []) as any[]) {
           const nombre = String(p?.nombre ?? '').trim();
           if (!nombre) continue;
+          // "Perc. IIBB 0.00", "Tasas 0.00": el papel las nombra pero no suman.
+          if (parseArgNumber(String(p?.importe ?? '')) <= 0) continue;
           // Se queda con la alícuota que más palabras comparte. Si dos empatan
           // no se elige ninguna: aplicar la percepción equivocada es peor que
           // dejarla para que la asigne quien revisa.
@@ -440,8 +459,7 @@ export function PurchaseAIReview() {
           // pantalla. Ahora lo ilegible queda sin alícuota elegida —el cartel
           // de renglones incompletos lo pide— y un "0" explícito sí matchea
           // la alícuota de 0%.
-          const alicuotaTexto = String(row.alicuota_iva ?? '').trim().replace(',', '.');
-          const alicuota = alicuotaTexto === '' ? Number.NaN : Number(alicuotaTexto);
+          const alicuota = leerAlicuota(row.alicuota_iva);
           const vatRate = Number.isFinite(alicuota) ? rateByPercent.get(alicuota) : undefined;
           const printedCode = String(row.codigo ?? '');
           const printedDescription = String(row.descripcion ?? '');
@@ -485,6 +503,29 @@ export function PurchaseAIReview() {
             netAmount: esRedondeo ? importe : null,
           };
         });
+        // Ticket de combustible: la grilla trae el importe FINAL (con IVA, ICL
+        // e IDC) y la IA a veces lo copia como neto. Si el único renglón de
+        // conceptos vale lo mismo que el total y el pie trae un neto menor de
+        // una sola alícuota, el renglón es ese neto.
+        const pieLeido = leerAlicuotasDelPie(raw.alicuotas_pie);
+        if (d.kind === 'CONCEPTOS' && draftLines.length === 1 && pieLeido && parsedDeclaredTotal > 0) {
+          const alicuotasPie = Object.entries(pieLeido.porAlicuota);
+          const unico = draftLines[0];
+          const bruto = unico.quantity * unico.unitPrice;
+          if (alicuotasPie.length === 1 && Math.abs(bruto - parsedDeclaredTotal) <= 1) {
+            const [alicuota, { net }] = alicuotasPie[0];
+            if (net > 0 && net < bruto - 1) {
+              const rate = rateByPercent.get(Number(alicuota));
+              draftLines[0] = {
+                ...unico,
+                quantity: 1,
+                unitPrice: net,
+                netAmount: null,
+                vatRateId: unico.vatRateId || rate?.id || '',
+              };
+            }
+          }
+        }
         setLines(draftLines.length > 0 ? draftLines : [{ ...EMPTY_LINE }]);
 
         // El neto y el IVA de cada alícuota, como los imprimió el proveedor.
@@ -494,7 +535,7 @@ export function PurchaseAIReview() {
         // comprobante cierra exacto contra el total impreso: si no cierra, la
         // lectura del pie no es confiable y se deja la cuenta (el control de
         // total avisa la diferencia).
-        const delPie = leerAlicuotasDelPie(raw.alicuotas_pie);
+        const delPie = pieLeido;
         if (delPie && parsedDeclaredTotal > 0) {
           const calculados = computePurchaseTotals(draftLines, matchedFootTaxes, 0, ivaRates);
           const conPie = aplicarAjustes(calculados, delPie);
@@ -804,7 +845,7 @@ export function PurchaseAIReview() {
       const porcentaje = base > 0 ? Math.round((importe / base) * 10000) / 100 : 0;
       const creada = await createTaxRate({
         ...EMPTY_TAX_RATE_FORM,
-        kind: 'PERCEPCION',
+        kind: esImpuestoInterno(p.nombre) ? 'IMPUESTO_INTERNO' : 'PERCEPCION',
         name: p.nombre.trim(),
         rate: String(porcentaje),
         base: 'NETO',

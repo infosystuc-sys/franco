@@ -282,6 +282,38 @@ Reglas:
   alícuotas que figuran en 0,00 no se cargan. Ejemplo: SUBTOTAL 254458.50,
   IVA 10,5% 0.00, IVA 21% 53436.29 → [{ alicuota "21", neto_gravado
   "254458.50", iva "53436.29" }].
+- La alícuota va siempre como porcentaje: si el papel la imprime como
+  fracción ("0.21", "0,105") es 21 o 10.5, nunca "0.21".
+- Las percepciones o impuestos que figuran en 0,00 no se cargan.
+- La foto puede traer pegado arriba o abajo del comprobante el COMPROBANTE DE
+  PAGO (posnet, tarjeta, billetera virtual, "PAGO ELECTRONICO", "PARA EL
+  CLIENTE", Nro. de operación, Tarjeta, Propina). IGNORALO por completo: el
+  proveedor, el número, la fecha y el total salen SOLO de la factura
+  (la que dice FACTURA / NOTA DE CRÉDITO, con letra, punto de venta-número y
+  CUIT del emisor). El "Proveedor" de un cupón de pago es la billetera o la
+  tarjeta, no el emisor de la factura.
+- El número "A 86-1560" o "0086-00001560" es punto_venta "86" y numero "1560".
+- TICKET FACTURA DE COMBUSTIBLE (estaciones de servicio: YPF, Shell, Axion,
+  Puma; productos como INFINIA, DIESEL 500, ULTRA DIESEL, NAFTA SUPER): el
+  importe del renglón impreso en la grilla es el FINAL, con IVA e impuestos
+  incluidos. En ese caso el "importe" del renglón NO es ese: es el NETO
+  gravado del cuadro de totales ("Neto"). Si hay varios productos, repartí el
+  neto en proporción al importe impreso de cada uno. Los impuestos del pie
+  van en "percepciones", con estos nombres completos:
+      ICL  -> "Impuesto a los Combustibles Líquidos (ICL)"
+      IDC  -> "Impuesto al Dióxido de Carbono (IDC)"
+      ITC  -> "Impuesto a la Transferencia de Combustibles (ITC)"
+      Tasas, Tasa Vial, Tasa municipal -> el nombre tal cual, si no es 0,00.
+  Ejemplo: renglón INFINIA DIESEL 58.72 × 2649.00 = 155549.02; pie Neto
+  114289.82, IVA % 0.21, IVA 24000.86, Perc. IIBB 0.00, ICL 15492.55, IDC
+  1765.77, Tasas 0.00, Total 155549.00 → renglón { descripcion "INFINIA
+  DIESEL 58.72 lts", importe "114289.82", alicuota_iva "21" }; percepciones
+  [{ "Impuesto a los Combustibles Líquidos (ICL)", "15492.55" }, { "Impuesto
+  al Dióxido de Carbono (IDC)", "1765.77" }]; alicuotas_pie [{ "21",
+  "114289.82", "24000.86" }]; total "155549.00".
+- En general, en una factura A el importe del renglón es SIN IVA. Si la
+  grilla muestra importes con IVA incluido (pasa en tickets), el importe del
+  renglón es el neto, no el final.
 - confianza (0 a 1): qué tan seguro estás de haber leído bien ese campo/renglón. 1 = perfectamente legible, 0.5 = dudoso, 0 = adivinado.
 `.trim();
 
