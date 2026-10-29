@@ -300,6 +300,8 @@ export function PurchaseAIReview() {
   const [showPicker, setShowPicker] = React.useState(false);
   const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
   const [showNewSupplier, setShowNewSupplier] = React.useState(false);
+  // El alta pedida como proveedor ocasional (compra suelta de conceptos).
+  const [nuevoOcasional, setNuevoOcasional] = React.useState(false);
   // Alta de artículos pedida sin proveedor elegido: primero se da de alta el
   // proveedor (con lo que leyó la IA) y al guardarlo se siguen los artículos.
   const [altaPendiente, setAltaPendiente] = React.useState<'todos' | number | null>(null);
@@ -1032,10 +1034,19 @@ export function PurchaseAIReview() {
                   <AccionesDeCampo
                     nuevo={{
                       titulo: 'Dar de alta un proveedor nuevo',
-                      onClick: () => setShowNewSupplier(true),
+                      onClick: () => { setNuevoOcasional(false); setShowNewSupplier(true); },
                     }}
                   />
                 </div>
+                {!supplierId && !isArticles && (
+                  <button
+                    type="button"
+                    onClick={() => { setNuevoOcasional(true); setShowNewSupplier(true); }}
+                    className="mt-1 block text-[12px] font-semibold normal-case text-accent-deep hover:underline"
+                  >
+                    + Guardarlo como proveedor ocasional
+                  </button>
+                )}
                 {!supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
                   <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                     La IA leyó CUIT {(draft.rawExtraction as any).valores.proveedor_cuit} pero no coincide con ningún proveedor cargado.
@@ -1396,12 +1407,14 @@ export function PurchaseAIReview() {
             name: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
             legalName: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
             taxId: String((draft.rawExtraction as any)?.valores?.proveedor_cuit ?? '').replace(/\D/g, ''),
+            ...(nuevoOcasional && { occasional: true, paymentTermsDays: 0 }),
           }}
-          onClose={() => { setShowNewSupplier(false); setAltaPendiente(null); }}
+          onClose={() => { setShowNewSupplier(false); setAltaPendiente(null); setNuevoOcasional(false); }}
           onSaved={(created) => {
             setSuppliers((current) => [...current, created]);
             setSupplierId(created.id);
             setShowNewSupplier(false);
+            setNuevoOcasional(false);
             const pendiente = altaPendiente;
             setAltaPendiente(null);
             if (pendiente === 'todos') void altaDeTodosLosFaltantes(created.id);

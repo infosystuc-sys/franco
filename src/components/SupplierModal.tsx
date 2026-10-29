@@ -55,6 +55,7 @@ export function SupplierModal({
           paymentTermsDays: supplier.paymentTermsDays,
           codePrefix: supplier.codePrefix,
           factoryCodePrefix: supplier.factoryCodePrefix,
+          occasional: supplier.occasional,
         }
       : {
           ...EMPTY_FISCAL_FORM,
@@ -62,6 +63,7 @@ export function SupplierModal({
           paymentTermsDays: 30,
           codePrefix: null,
           factoryCodePrefix: [],
+          occasional: false,
           ...inicial,
         }
   );
@@ -106,7 +108,7 @@ export function SupplierModal({
       <div className="bg-panel w-full flex flex-col max-h-[92vh]">
         <div className="flex justify-between items-center px-6 py-4 border-b border-line">
           <h2 className="text-base font-bold text-text">
-            {supplier ? 'Editar proveedor' : 'Nuevo proveedor'}
+            {supplier ? 'Editar proveedor' : form.occasional ? 'Nuevo proveedor ocasional' : 'Nuevo proveedor'}
           </h2>
           <button onClick={onClose} className="text-text-soft hover:text-text">
             <X size={18} />
@@ -136,6 +138,20 @@ export function SupplierModal({
             <h3 className="flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-wider text-accent-deep">
               <CalendarClock size={14} /> Condiciones comerciales
             </h3>
+            <label className="flex items-start gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={form.occasional}
+                onChange={(e) => patch({ occasional: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-accent-deep"
+              />
+              <span>
+                <span className="font-semibold">Proveedor ocasional</span>
+                <span className="block text-[12px] text-text-soft">
+                  Para una compra suelta de conceptos. No aparece en el listado de Proveedores salvo que se pida verlos.
+                </span>
+              </span>
+            </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
                 Plazo de pago (días)

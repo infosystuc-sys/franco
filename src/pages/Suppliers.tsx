@@ -28,6 +28,8 @@ export function Suppliers() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
+  // Los ocasionales (compras sueltas de conceptos) se esconden salvo que se pidan.
+  const [verOcasionales, setVerOcasionales] = React.useState(false);
   const [editing, setEditing] = React.useState<Supplier | 'new' | null>(null);
   // El "+" del menu entra con ?nuevo=1 y abre el alta directo. Se limpia el
   // parametro para que recargar la pagina no vuelva a abrir el modal.
@@ -61,11 +63,13 @@ export function Suppliers() {
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return suppliers;
-    return suppliers.filter((s) =>
+    const visibles = verOcasionales ? suppliers : suppliers.filter((s) => !s.occasional);
+    if (!term) return visibles;
+    return visibles.filter((s) =>
       coincideBusqueda(term, [s.name, s.legalName, s.taxId, s.email, s.phone, s.addressCity])
     );
-  }, [suppliers, search]);
+  }, [suppliers, search, verOcasionales]);
+  const cantidadOcasionales = suppliers.filter((s) => s.occasional).length;
 
   // Orden por columna: click en el título ordena, otro invierte, otro vuelve
   // al orden original.
@@ -120,14 +124,25 @@ export function Suppliers() {
         <div className="bg-danger-soft border border-danger/40 text-danger text-sm px-4 py-3">{error}</div>
       )}
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nombre, CUIT, email..."
-          className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
-        />
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative w-full max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, CUIT, email..."
+            className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-soft">
+          <input
+            type="checkbox"
+            checked={verOcasionales}
+            onChange={(e) => setVerOcasionales(e.target.checked)}
+            className="h-4 w-4 accent-accent-deep"
+          />
+          Mostrar ocasionales{cantidadOcasionales > 0 && ` (${cantidadOcasionales})`}
+        </label>
       </div>
 
       </CabeceraFija>
@@ -166,6 +181,9 @@ export function Suppliers() {
                     <div className="font-bold text-text">{supplier.name}</div>
                     {supplier.legalName && supplier.legalName !== supplier.name && (
                       <div className="text-[13px] text-text-soft">{supplier.legalName}</div>
+                    )}
+                    {supplier.occasional && (
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-state-wait">Ocasional</span>
                     )}
                   </td>
                   <td data-label="CUIT" className="p-3 font-mono">

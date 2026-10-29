@@ -32,6 +32,12 @@ export interface Supplier extends FiscalEntity {
    * pieza: Maximiliano prefija F los common rail y B las toberas.
    */
   factoryCodePrefix: string[];
+  /**
+   * Proveedor de una compra suelta de conceptos (una estación de servicio de
+   * la ruta, un flete). Funciona igual que cualquier otro, pero no se muestra
+   * en el listado de Proveedores salvo que se pida.
+   */
+  occasional: boolean;
 }
 
 /**
@@ -43,6 +49,7 @@ export interface SupplierInput extends FiscalEntityInput {
   paymentTermsDays: number;
   codePrefix: string | null;
   factoryCodePrefix: string[];
+  occasional: boolean;
 }
 
 function mapSupplier(row: any): Supplier {
@@ -51,6 +58,7 @@ function mapSupplier(row: any): Supplier {
     paymentTermsDays: Number(row.payment_terms_days ?? 30),
     codePrefix: row.code_prefix ?? null,
     factoryCodePrefix: row.factory_code_prefix ?? [],
+    occasional: !!row.is_occasional,
     articles: (row.links ?? []).map((link: any) => ({
       id: link.article?.id ?? link.id,
       code: link.article?.code ?? '—',
@@ -74,6 +82,7 @@ function toRow(input: SupplierInput) {
     code_prefix: input.codePrefix,
     // Vacío viaja como null: es lo que la base entiende por "sin prefijo".
     factory_code_prefix: input.factoryCodePrefix.length ? input.factoryCodePrefix : null,
+    is_occasional: input.occasional,
   };
 }
 

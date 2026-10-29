@@ -32,6 +32,7 @@ import {
 } from '@/src/lib/purchases';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
+import { SupplierModal } from '@/src/components/SupplierModal';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null,
@@ -75,6 +76,7 @@ export function PurchaseNew() {
 
   // ── Encabezado
   const [supplierId, setSupplierId] = React.useState('');
+  const [altaOcasional, setAltaOcasional] = React.useState(false);
   const [docType, setDocType] = React.useState<PurchaseDocType>('FACTURA');
   const [letter, setLetter] = React.useState<PurchaseLetter>('A');
   const [salesPoint, setSalesPoint] = React.useState('');
@@ -320,6 +322,17 @@ export function PurchaseNew() {
               <span className="mt-1 block text-[12px] font-normal normal-case text-danger">
                 No hay proveedores activos. Cargá uno en Proveedores.
               </span>
+            )}
+            {/* Una compra suelta (la estación de servicio de la ruta): se da de
+                alta como ocasional y no ensucia el listado de Proveedores. */}
+            {!isArticles && !supplierId && (
+              <button
+                type="button"
+                onClick={() => setAltaOcasional(true)}
+                className="mt-1 block text-[12px] font-semibold normal-case text-accent-deep hover:underline"
+              >
+                + No está en la lista: cargarlo como proveedor ocasional
+              </button>
             )}
           </label>
 
@@ -620,6 +633,18 @@ export function PurchaseNew() {
           articles={articles}
           onPick={addArticle}
           onClose={() => setShowPicker(false)}
+        />
+      )}
+      {altaOcasional && (
+        <SupplierModal
+          supplier={null}
+          inicial={{ occasional: true, paymentTermsDays: 0 }}
+          onClose={() => setAltaOcasional(false)}
+          onSaved={(created) => {
+            setSuppliers((current) => [...current, created]);
+            setSupplierId(created.id);
+            setAltaOcasional(false);
+          }}
         />
       )}
     </div>
