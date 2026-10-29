@@ -133,6 +133,18 @@ export function Purchases() {
       onClick: (f: PurchaseListRow | null) => f && navigate(`/pagos/nueva?proveedor=${f.supplierId}`),
     },
     {
+      // Toda NC va contra una factura: se arranca desde la factura elegida.
+      label: 'Nota de crédito',
+      bloqueo: (f: PurchaseListRow) =>
+        NO_ANULADO(f) ??
+        (f.docType === 'FACTURA' ? null : 'La nota de crédito se hace sobre una factura: elegí una factura.'),
+      onClick: (f: PurchaseListRow | null) =>
+        f &&
+        navigate(
+          `/compras/nueva/${f.kind === 'ARTICULOS' ? 'articulos' : 'conceptos'}?acredita=${f.id}&proveedor=${f.supplierId}`
+        ),
+    },
+    {
       label: 'Eliminar comprobante',
       bloqueo: NO_ANULADO,
       onClick: (f: PurchaseListRow | null) => f && eliminar(f),
