@@ -40,10 +40,13 @@ export function SupplierModal({
   supplier,
   onClose,
   onSaved,
+  inicial,
 }: {
   supplier: Supplier | null;
   onClose: () => void;
   onSaved: (supplier: Supplier) => void;
+  /** Datos con que arranca un alta (los que la IA leyó de una factura). */
+  inicial?: Partial<SupplierInput>;
 }) {
   const [form, setForm] = React.useState<SupplierInput>(
     supplier
@@ -59,6 +62,7 @@ export function SupplierModal({
           paymentTermsDays: 30,
           codePrefix: null,
           factoryCodePrefix: [],
+          ...inicial,
         }
   );
   const [saving, setSaving] = React.useState(false);

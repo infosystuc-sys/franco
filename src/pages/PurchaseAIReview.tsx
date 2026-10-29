@@ -283,6 +283,9 @@ export function PurchaseAIReview() {
   const [showPicker, setShowPicker] = React.useState(false);
   const [pickerTargetIndex, setPickerTargetIndex] = React.useState<number | null>(null);
   const [showNewSupplier, setShowNewSupplier] = React.useState(false);
+  // Alta de artículos pedida sin proveedor elegido: primero se da de alta el
+  // proveedor (con lo que leyó la IA) y al guardarlo se siguen los artículos.
+  const [altaPendiente, setAltaPendiente] = React.useState<'todos' | number | null>(null);
   const [retrying, setRetrying] = React.useState(false);
   // Altas y vinculaciones contra el catálogo: son un efecto lateral de la
   // revisión, no parte del comprobante, así que tienen su propio aviso y no
@@ -343,6 +346,13 @@ export function PurchaseAIReview() {
         setDraft(d);
         setSuppliers(s);
         setRates(r);
+        // Si la lectura no encontró el proveedor, se reintenta con los dígitos
+        // del CUIT contra los proveedores de hoy: puede estar cargado con
+        // guiones, o haberse dado de alta después de leer la factura.
+        const cuitLeido = String((d.rawExtraction as any)?.valores?.proveedor_cuit ?? '').replace(/\D/g, '');
+        const proveedorId =
+          d.supplierId ??
+          (cuitLeido ? s.find((p) => (p.taxId ?? '').replace(/\D/g, '') === cuitLeido)?.id ?? null : null);
         let catalog: Article[] = [];
         // Los códigos vigentes de este proveedor, para reconocer renglones que
         // la IA no pudo matchear pero cuyo artículo se dio de alta después.
@@ -350,7 +360,7 @@ export function PurchaseAIReview() {
         if (d.kind === 'ARTICULOS') {
           catalog = await fetchArticles(false);
           setArticles(catalog);
-          if (d.supplierId) codigosDelProveedor = await fetchSupplierCodeMap(d.supplierId);
+          if (proveedorId) codigosDelProveedor = await fetchSupplierCodeMap(proveedorId);
         } else {
           setConcepts(await fetchExpenseConcepts(true));
         }
@@ -363,8 +373,8 @@ export function PurchaseAIReview() {
         const raw = (d.rawExtraction ?? {}) as any;
         const v = raw.valores ?? {};
         const appliedFields: Record<string, boolean> = {};
-        if (d.supplierId) setSupplierId(d.supplierId);
-        appliedFields.proveedor_cuit = !!d.supplierId;
+        if (proveedorId) setSupplierId(proveedorId);
+        appliedFields.proveedor_cuit = !!proveedorId;
 
         const tipoLeido = String(v.tipo_comprobante ?? '');
         if (tipoLeido === 'NOTA_CREDITO' || tipoLeido === 'NOTA_DEBITO') setDocType(tipoLeido);
@@ -709,15 +719,20 @@ export function PurchaseAIReview() {
   }
 
   /** Da de alta el artículo del renglón y lo engancha, con el código del proveedor. */
-  async function altaDesdeRenglon(index: number) {
+  async function altaDesdeRenglon(index: number, proveedor = supplierId) {
     const line = lines[index];
     const codigo = (line?.printedCode ?? '').trim();
-    if (!supplierId || !codigo) return;
+    if (!codigo) return;
+    if (!proveedor) {
+      setAltaPendiente(index);
+      setShowNewSupplier(true);
+      return;
+    }
     setCatalogBusy(true);
     setCatalogNote(null);
     try {
       const creado = await linkOrCreateSupplierArticle({
-        supplierId,
+        supplierId: proveedor,
         supplierCode: codigo,
         description: line.printedDescription || line.description,
         purchasePrice: line.unitPrice,
@@ -733,8 +748,12 @@ export function PurchaseAIReview() {
   }
 
   /** Lo mismo para todos los renglones sin artículo, que es el caso de una factura entera nueva. */
-  async function altaDeTodosLosFaltantes() {
-    if (!supplierId) return;
+  async function altaDeTodosLosFaltantes(proveedor = supplierId) {
+    if (!proveedor) {
+      setAltaPendiente('todos');
+      setShowNewSupplier(true);
+      return;
+    }
     setCatalogBusy(true);
     setCatalogNote(null);
     let altas = 0;
@@ -746,7 +765,7 @@ export function PurchaseAIReview() {
         const codigo = (line.printedCode ?? '').trim();
         if (line.articleId || !codigo) continue;
         const creado = await linkOrCreateSupplierArticle({
-          supplierId,
+          supplierId: proveedor,
           supplierCode: codigo,
           description: line.printedDescription || line.description,
           purchasePrice: line.unitPrice,
@@ -976,7 +995,7 @@ export function PurchaseAIReview() {
                     }}
                   />
                 </div>
-                {!draft.supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
+                {!supplierId && ((draft.rawExtraction as any)?.valores?.proveedor_cuit ? (
                   <span className="mt-1 block text-[12px] font-normal normal-case text-state-wait">
                     La IA leyó CUIT {(draft.rawExtraction as any).valores.proveedor_cuit} pero no coincide con ningún proveedor cargado.
                   </span>
@@ -1107,11 +1126,15 @@ export function PurchaseAIReview() {
                 type="button"
                 variant="ghost"
                 className="px-3"
-                disabled={catalogBusy || !supplierId}
-                onClick={altaDeTodosLosFaltantes}
+                disabled={catalogBusy}
+                onClick={() => altaDeTodosLosFaltantes()}
               >
                 <Plus size={16} />
-                {catalogBusy ? 'Dando de alta…' : `Dar de alta los ${unmatchedWithCode} que faltan`}
+                {catalogBusy
+                  ? 'Dando de alta…'
+                  : supplierId
+                    ? `Dar de alta los ${unmatchedWithCode} que faltan`
+                    : `Dar de alta el proveedor y los ${unmatchedWithCode} artículos`}
               </Button>
             )}
           </div>
@@ -1161,7 +1184,7 @@ export function PurchaseAIReview() {
                             {(line.printedCode ?? '').trim() !== '' && (
                               <button
                                 type="button"
-                                disabled={catalogBusy || !supplierId}
+                                disabled={catalogBusy}
                                 onClick={() => altaDesdeRenglon(idx)}
                                 className="text-[13px] font-semibold uppercase tracking-wider text-accent-deep hover:underline disabled:opacity-50"
                               >
@@ -1328,11 +1351,20 @@ export function PurchaseAIReview() {
       {showNewSupplier && (
         <SupplierModal
           supplier={null}
-          onClose={() => setShowNewSupplier(false)}
+          inicial={{
+            name: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
+            legalName: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
+            taxId: String((draft.rawExtraction as any)?.valores?.proveedor_cuit ?? '').replace(/\D/g, ''),
+          }}
+          onClose={() => { setShowNewSupplier(false); setAltaPendiente(null); }}
           onSaved={(created) => {
             setSuppliers((current) => [...current, created]);
             setSupplierId(created.id);
             setShowNewSupplier(false);
+            const pendiente = altaPendiente;
+            setAltaPendiente(null);
+            if (pendiente === 'todos') void altaDeTodosLosFaltantes(created.id);
+            else if (typeof pendiente === 'number') void altaDesdeRenglon(pendiente, created.id);
           }}
         />
       )}
