@@ -15,6 +15,9 @@ import {
   type WorkOrderDeletionResult,
   type WorkOrderRow,
   type WorkOrderStatusDef,
+  type WorkType,
+  WORK_TYPE_LABELS,
+  WORK_TYPES,
 } from '@/src/lib/workOrders';
 import {
   ComprobantesListado,
@@ -99,6 +102,22 @@ const COLUMNAS_FIJAS: ColumnaListado<WorkOrderRow>[] = [
     valor: (f) => (
       <span className="inline-flex items-center gap-1.5">
         {f.number}
+        {f.claimOfNumber && (
+          <span
+            title={`Reclamo de la orden ${f.claimOfNumber}`}
+            className="rounded-sm bg-danger px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-white"
+          >
+            Reclamo de {f.claimOfNumber}
+          </span>
+        )}
+        {f.reclamada && (
+          <span
+            title="El cliente reclamó este trabajo: hay una orden de reclamo que la referencia."
+            className="rounded-sm bg-state-wait px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-white"
+          >
+            Reclamada
+          </span>
+        )}
         {f.priceDiffers && (
           <span title="El monto de la OT difiere de la cotización original">
             <AlertTriangle size={14} className="text-state-wait" />
@@ -112,6 +131,7 @@ const COLUMNAS_FIJAS: ColumnaListado<WorkOrderRow>[] = [
     label: 'Vehículo / Equipo',
     valor: (f) => (f.component ? `${f.vehicleLabel} · ${f.component}` : f.vehicleLabel),
   },
+  { label: 'Tipo', valor: (f) => (f.workType ? WORK_TYPE_LABELS[f.workType] : '—') },
   { label: 'Factura', valor: (f) => f.invoiceNumber ?? '—' },
   { label: 'Empleado', valor: (f) => f.employeeName ?? '—' },
   { label: 'Fecha', valor: (f) => formatDate(f.createdAt.slice(0, 10)) },
@@ -141,6 +161,8 @@ export function WorkOrders() {
    * orden termina retirada— y son justamente las que ya no piden nada.
    */
   const [verRetirados, setVerRetirados] = React.useState(false);
+  // Filtro por tipo de trabajo: vacío = todos; SIN = las que no lo tienen.
+  const [tipoDeTrabajo, setTipoDeTrabajo] = React.useState<WorkType | 'SIN' | ''>('');
 
   // Una orden arranca por el vehículo: el ingreso manda de vuelta acá con
   // ?nuevo=1 y el vehículo ya recibido, y recién ahí se abre el alta con ese
@@ -180,7 +202,17 @@ export function WorkOrders() {
 
   // El estado se busca por system_key: la etiqueta la renombra el taller.
   const retiradoId = statuses.find((s) => s.systemKey === 'RETIRADO')?.id ?? null;
-  const visibles = verRetirados || !retiradoId ? orders : orders.filter((o) => o.status.id !== retiradoId);
+  const sinRetirados = verRetirados || !retiradoId ? orders : orders.filter((o) => o.status.id !== retiradoId);
+  // "Electrónico" incluye las que son de los dos tipos, y lo mismo "Mecánico":
+  // es el trabajo que le toca a cada sector del taller.
+  const visibles =
+    tipoDeTrabajo === ''
+      ? sinRetirados
+      : sinRetirados.filter((o) =>
+          tipoDeTrabajo === 'SIN'
+            ? !o.workType
+            : o.workType === tipoDeTrabajo || (tipoDeTrabajo !== 'AMBOS' && o.workType === 'AMBOS')
+        );
 
   const ficha = (f: WorkOrderRow) => `/orden/${f.number}`;
   const soloAdmin = () => (isAdmin ? null : 'Solo un administrador puede hacerlo.');
@@ -315,9 +347,32 @@ export function WorkOrders() {
         onEtiquetasGuardadas={(id, etiquetas) =>
           setOrders((rows) => rows.map((r) => (r.id === id ? { ...r, etiquetas } : r)))
         }
-        vacio={orders.length === 0 ? 'No hay órdenes cargadas todavía.' : 'No hay órdenes sin retirar.'}
+        vacio={
+          orders.length === 0
+            ? 'No hay órdenes cargadas todavía.'
+            : tipoDeTrabajo
+              ? 'No hay órdenes de ese tipo de trabajo.'
+              : 'No hay órdenes sin retirar.'
+        }
         aviso={aviso}
         onCerrarAviso={() => setAviso(null)}
+        filtrosExtra={
+          <select
+            value={tipoDeTrabajo}
+            onChange={(e) => setTipoDeTrabajo(e.target.value as WorkType | 'SIN' | '')}
+            aria-label="Filtrar por tipo de trabajo"
+            className={`h-10 rounded-[3px] border bg-panel px-3 text-[15px] text-text focus:border-accent focus:outline-none ${
+              tipoDeTrabajo ? 'border-accent' : 'border-line'
+            }`}
+          >
+            <option value="">Electrónico y mecánico</option>
+            {WORK_TYPES.filter((t) => t !== 'AMBOS').map((t) => (
+              <option key={t} value={t}>Solo {WORK_TYPE_LABELS[t].toLowerCase()}</option>
+            ))}
+            <option value="AMBOS">Solo las de los dos</option>
+            <option value="SIN">Sin tipo definido</option>
+          </select>
+        }
       />
 
       {showNewOrder && (

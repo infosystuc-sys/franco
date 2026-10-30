@@ -95,6 +95,7 @@ export function ComprobantesListado<T>({
   aviso,
   onCerrarAviso,
   textoBusqueda,
+  filtrosExtra,
 }: {
   titulo: string;
   tipo: TipoComprobante;
@@ -122,6 +123,8 @@ export function ComprobantesListado<T>({
    * de pieza o la patente del equipo de una factura, por ejemplo).
    */
   textoBusqueda?: (fila: T) => unknown[];
+  /** Filtros propios de la pantalla, al lado del de estado (el tipo de trabajo de las OT). */
+  filtrosExtra?: React.ReactNode;
 }) {
   const navigate = useNavigate();
   const [cantidad, setCantidad] = React.useState(PAGINA);
@@ -377,6 +380,7 @@ export function ComprobantesListado<T>({
         {columnaEstado && (
           <FiltroDeEstados opciones={estadosPresentes} elegidos={estados} onChange={setEstados} />
         )}
+        {filtrosExtra}
         {filtrando && (
           <>
             <span className="text-[14px] text-text-soft">

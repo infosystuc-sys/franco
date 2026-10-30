@@ -4,7 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { AccionesDeCampo, Button, PageHeader, Panel, SectionHeader } from '@/src/components/ui';
-import { createWorkOrder, getErrorMessage } from '@/src/lib/workOrders';
+import { createWorkOrder, getErrorMessage, WORK_TYPE_LABELS, WORK_TYPES, type WorkType } from '@/src/lib/workOrders';
 import {
   conElUsuarioIncluido,
   fetchEmpleadoDelUsuario,
@@ -145,6 +145,8 @@ export function VehicleNew() {
   const [estimatedDelivery, setEstimatedDelivery] = React.useState('');
   const [component, setComponent] = React.useState('');
   const [otObservations, setOtObservations] = React.useState('');
+  // Electrónico, mecánico o los dos: para filtrar el listado de órdenes.
+  const [workType, setWorkType] = React.useState<WorkType | ''>('');
 
   // Se entra acá por dos caminos. Desde Vehículos se viene a cargar una ficha
   // y se vuelve al listado. Desde Órdenes de trabajo se viene a recibir un
@@ -317,6 +319,10 @@ export function VehicleNew() {
       setError('Elegí quién toma la orden: toda orden tiene que tener un responsable.');
       return;
     }
+    if (vieneDeOT && !workType) {
+      setError('Elegí el tipo de trabajo: electrónico, mecánico o los dos.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -379,6 +385,7 @@ export function VehicleNew() {
             receptionKind: form.kind,
             observations: otObservations,
             employeeId,
+            workType: workType || null,
             estimatedDeliveryDate: form.kind === 'VEHICULO' ? estimatedDelivery : null,
           });
         } catch (err) {
@@ -787,6 +794,23 @@ export function VehicleNew() {
                 <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                   Viene sugerido quien está cargando la recepción. Se puede cambiar, pero toda orden
                   tiene que quedar con un responsable.
+                </span>
+              </label>
+
+              <label className={cn(labelClass, 'sm:col-span-3')}>
+                Tipo de trabajo *
+                <select
+                  value={workType}
+                  onChange={(e) => setWorkType(e.target.value as WorkType | '')}
+                  className={cn(inputClass, 'bg-panel', workType === '' && 'field-required')}
+                >
+                  <option value="">Elegí el tipo de trabajo…</option>
+                  {WORK_TYPES.map((t) => (
+                    <option key={t} value={t}>{WORK_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                  Con esto se filtra el listado de órdenes.
                 </span>
               </label>
 

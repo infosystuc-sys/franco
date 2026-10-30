@@ -53,6 +53,13 @@ import {
   fetchStatusHistory,
   fetchWorkOrderByNumber,
   fetchWorkOrderStatuses,
+  fetchRelacionDeReclamo,
+  createWorkOrder,
+  setWorkOrderWorkType,
+  WORK_TYPE_LABELS,
+  WORK_TYPES,
+  type RelacionDeReclamo,
+  type WorkType,
   getErrorMessage,
   getWorkOrderPhotoUrl,
   RECEPTION_KIND_LABELS,
@@ -78,6 +85,10 @@ export function WorkOrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState<WorkOrderDetail | null>(null);
+  // Tipo de trabajo y reclamos: se leen aparte para que la ficha ande aunque
+  // la migración todavía no se haya corrido.
+  const [reclamo, setReclamo] = useState<RelacionDeReclamo | null>(null);
+  const [abriendoReclamo, setAbriendoReclamo] = useState(false);
   // La ficha del equipo recibido (vehículo o pieza) abierta para corregirla.
   const [equipoEnEdicion, setEquipoEnEdicion] = useState<Vehicle | null>(null);
   // Envío de la OT impresa y su presupuesto por mail o WhatsApp. Los dos papeles
@@ -231,6 +242,7 @@ export function WorkOrderDetails() {
         itemsLoadedForRef.current = id;
       }
       setHistory(data ? await fetchStatusHistory(data.id) : []);
+      setReclamo(data ? await fetchRelacionDeReclamo(data.id).catch(() => null) : null);
 
       // La factura se consulta aparte y sin propagar el error: el operario no
       // tiene permiso de lectura sobre facturas, y si la migracion todavia no
@@ -813,6 +825,13 @@ export function WorkOrderDetails() {
                 {reenviandoLink ? 'Enviando…' : 'Reenviar seguimiento'}
               </Button>
             )}
+            {/* Un reclamo del cliente es una orden nueva que apunta a esta:
+                la original queda marcada como Reclamada. */}
+            {isAdmin && reclamo && !reclamo.original && (
+              <Button type="button" variant="ghost" onClick={() => setAbriendoReclamo(true)}>
+                <AlertTriangle size={16} /> Abrir reclamo
+              </Button>
+            )}
             {isAdmin && !order.quotationNumber && candidatas.length > 0 && (
               <select
                 value=""
@@ -883,6 +902,36 @@ export function WorkOrderDetails() {
         <div className="mb-6 rounded-md border border-line-strong bg-panel-alt px-4 py-3 text-sm text-text">{aviso}</div>
       )}
 
+      {reclamo && reclamo.reclamos.length > 0 && (
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-text">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" />
+          <span>
+            <b className="uppercase tracking-[0.06em] text-danger">Reclamada.</b> El cliente reclamó este trabajo:{' '}
+            {reclamo.reclamos.map((r, i) => (
+              <React.Fragment key={r.id}>
+                {i > 0 && ', '}
+                <Link to={`/orden/${r.number}`} className="font-semibold text-accent-deep hover:underline">{r.number}</Link>
+                {` (${formatDate(r.createdAt.slice(0, 10))}${r.claimReason ? `: ${r.claimReason}` : ''})`}
+              </React.Fragment>
+            ))}
+            .
+          </span>
+        </div>
+      )}
+
+      {reclamo?.original && (
+        <div className="mb-6 flex items-start gap-2 rounded-md border border-state-wait/40 bg-state-wait/10 px-4 py-3 text-sm text-text">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-state-wait" />
+          <span>
+            <b className="uppercase tracking-[0.06em]">Reclamo</b> de la orden{' '}
+            <Link to={`/orden/${reclamo.original.number}`} className="font-semibold text-accent-deep hover:underline">
+              {reclamo.original.number}
+            </Link>
+            {reclamo.claimReason ? `: ${reclamo.claimReason}` : '.'}
+          </span>
+        </div>
+      )}
+
       {order.quotedTotal !== null && priceDiffers && !priceAuthCoversCurrent && (
         <div className="mb-6 flex flex-col gap-2 rounded-md border border-state-wait/40 bg-state-wait/10 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span className="flex items-start gap-2 text-text">
@@ -947,6 +996,37 @@ export function WorkOrderDetails() {
               email={order.customer.email ?? null}
             />
           )}
+          <div className="mt-2">
+            <span className="mb-1 block text-[12px] font-semibold uppercase tracking-[0.06em] text-text-faint">
+              Tipo de trabajo
+            </span>
+            {isAdmin && reclamo ? (
+              <select
+                value={reclamo.workType ?? ''}
+                onChange={async (e) => {
+                  const nuevo = (e.target.value || null) as WorkType | null;
+                  const anterior = reclamo.workType;
+                  setReclamo((r) => (r ? { ...r, workType: nuevo } : r));
+                  try {
+                    await setWorkOrderWorkType(order.id, nuevo);
+                  } catch (err) {
+                    setReclamo((r) => (r ? { ...r, workType: anterior } : r));
+                    setError(getErrorMessage(err));
+                  }
+                }}
+                className={cn(inputClass, 'mt-0 h-9 bg-panel text-sm', !reclamo.workType && 'field-required')}
+              >
+                <option value="">Sin definir</option>
+                {WORK_TYPES.map((t) => (
+                  <option key={t} value={t}>{WORK_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="block text-sm text-text">
+                {reclamo?.workType ? WORK_TYPE_LABELS[reclamo.workType] : 'Sin definir'}
+              </span>
+            )}
+          </div>
           {(() => {
             const sector = order.customer?.sectors.find((x) => x.id === order.customerSectorId);
             return sector ? (
@@ -1262,6 +1342,31 @@ export function WorkOrderDetails() {
           onDescuentoChange={isAdmin && !locked ? cambiarDescuento : undefined}
         />
       </Panel>
+
+      {abriendoReclamo && order.customer && (
+        <AbrirReclamoModal
+          numero={order.number}
+          esVehiculo={order.receptionKind === 'VEHICULO'}
+          onClose={() => setAbriendoReclamo(false)}
+          onConfirm={async (motivo, entrega) => {
+            const nueva = await createWorkOrder({
+              customerId: order.customer!.id,
+              customerSectorId: order.customerSectorId,
+              vehicleId: order.vehicle?.id ?? null,
+              component: `Reclamo de ${order.number}${order.component ? `: ${order.component}` : ''}`,
+              receptionKind: order.receptionKind,
+              observations: motivo,
+              employeeId: order.employee?.id ?? null,
+              estimatedDeliveryDate: order.receptionKind === 'VEHICULO' ? entrega : null,
+              workType: reclamo?.workType ?? null,
+              claimOfId: order.id,
+              claimReason: motivo,
+            });
+            setAbriendoReclamo(false);
+            navigate(`/orden/${(nueva as any).number}`);
+          }}
+        />
+      )}
 
       {envio && order.customer && (
         <>
@@ -1783,5 +1888,81 @@ function StatusHistory({ history }: { history: StatusChange[] }) {
         ))}
       </ul>
     </Panel>
+  );
+}
+
+/**
+ * El reclamo de un cliente por un trabajo ya hecho: abre una orden nueva, con
+ * el mismo cliente y el mismo equipo, que apunta a la original. La original
+ * queda como Reclamada.
+ */
+function AbrirReclamoModal({
+  numero,
+  esVehiculo,
+  onClose,
+  onConfirm,
+}: {
+  numero: string;
+  esVehiculo: boolean;
+  onClose: () => void;
+  onConfirm: (motivo: string, entrega: string | null) => Promise<void>;
+}) {
+  const [motivo, setMotivo] = React.useState('');
+  const [entrega, setEntrega] = React.useState('');
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const listo = motivo.trim() !== '' && (!esVehiculo || entrega !== '');
+
+  async function confirmar() {
+    if (!listo) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      await onConfirm(motivo.trim(), esVehiculo ? entrega : null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Panel className="w-full max-w-lg p-5">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-text">Reclamo de la orden {numero}</h3>
+        <p className="mt-2 text-sm text-text-soft">
+          Se abre una orden nueva con el mismo cliente y el mismo equipo, que hace referencia a la {numero}. La{' '}
+          {numero} queda marcada como <b>Reclamada</b>.
+        </p>
+        <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-text-soft">
+          Qué reclama el cliente *
+          <textarea
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Volvió a fallar el inyector 3, pierde potencia…"
+            className={cn(inputClass, 'resize-y font-normal normal-case', !motivo.trim() && 'field-required')}
+          />
+        </label>
+        {esVehiculo && (
+          <label className="mt-3 block text-xs font-bold uppercase tracking-wider text-text-soft">
+            Entrega estimada *
+            <input
+              type="date"
+              value={entrega}
+              onChange={(e) => setEntrega(e.target.value)}
+              className={cn(inputClass, !entrega && 'field-required')}
+            />
+          </label>
+        )}
+        {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" type="button" onClick={onClose} disabled={guardando}>Cancelar</Button>
+          <Button type="button" onClick={confirmar} disabled={!listo || guardando}>
+            {guardando ? 'Abriendo…' : 'Abrir la orden de reclamo'}
+          </Button>
+        </div>
+      </Panel>
+    </div>
   );
 }

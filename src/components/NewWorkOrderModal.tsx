@@ -15,7 +15,10 @@ import {
   getErrorMessage,
   RECEPTION_KIND_LABELS,
   RECEPTION_KINDS,
+  WORK_TYPE_LABELS,
+  WORK_TYPES,
   type ReceptionKind,
+  type WorkType,
 } from '@/src/lib/workOrders';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
@@ -54,6 +57,7 @@ export function NewWorkOrderModal({
   const [lugar, setLugar] = React.useState<YardAvailability | null>(null);
   const [vehicleId, setVehicleId] = React.useState('');
   const [component, setComponent] = React.useState('');
+  const [workType, setWorkType] = React.useState<WorkType | ''>('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Qué se recibe define si el vehículo es obligatorio: una pieza suelta
@@ -177,6 +181,10 @@ export function NewWorkOrderModal({
       setError('Asigná un empleado: toda orden tiene que tener un responsable.');
       return;
     }
+    if (!workType) {
+      setError('Elegí el tipo de trabajo: electrónico, mecánico o los dos.');
+      return;
+    }
     setSaving(true);
     setError(null);
 
@@ -197,6 +205,7 @@ export function NewWorkOrderModal({
         receptionKind,
         observations,
         employeeId,
+        workType: workType || null,
         estimatedDeliveryDate: receptionKind === 'VEHICULO' ? estimatedDelivery : null,
       });
     } catch (err) {
@@ -367,6 +376,20 @@ export function NewWorkOrderModal({
                 className={fieldClass(false, 'font-normal normal-case')}
                 placeholder="Bomba de inyección Common Rail"
               />
+            </Label>
+
+            <Label>
+              Tipo de trabajo *
+              <select
+                value={workType}
+                onChange={(e) => setWorkType(e.target.value as WorkType | '')}
+                className={fieldClass(true, 'font-normal normal-case bg-panel')}
+              >
+                <option value="">Elegí el tipo de trabajo…</option>
+                {WORK_TYPES.map((t) => (
+                  <option key={t} value={t}>{WORK_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
             </Label>
 
             <Label>

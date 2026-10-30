@@ -385,6 +385,16 @@ export interface WorkOrderRow extends WorkOrderListRow {
   invoiceId: string | null;
   quotationNumber: string | null;
   etiquetas: string[];
+  workType: WorkType | null;
+  /** Es un reclamo: el número de la orden original. */
+  claimOfNumber: string | null;
+  /** Otra orden la reclama: el cliente volvió por este trabajo. */
+  reclamada: boolean;
+}
+
+/** Postgres no conoce la columna: la migración todavía no se corrió. */
+function faltaColumna(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /column .* does not exist/i.test(error.message ?? ''));
 }
 
 /**
@@ -397,10 +407,11 @@ export interface WorkOrderRow extends WorkOrderListRow {
  * propias órdenes, sin que esta función tenga que saberlo.
  */
 export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
-  const { data, error } = await supabase
-    .from('work_orders')
-    .select(
-      `id, number, component, public_token, created_at, etiquetas,
+  const consulta = (extra: string) =>
+    supabase
+      .from('work_orders')
+      .select(
+      `id, number, component, public_token, created_at, etiquetas,${extra}
        price_auth_status, price_auth_requested_total,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
@@ -409,12 +420,19 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
        quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
        invoice:invoices!invoices_work_order_id_fkey(id, full_number, status, revertida_por_nc)`
-    )
-    .order('created_at', { ascending: false });
+      )
+      .order('created_at', { ascending: false });
 
+  // Sin la migración del tipo de trabajo y los reclamos, el listado igual anda.
+  let { data, error } = await consulta(' work_type, claim_of_id,');
+  if (faltaColumna(error)) ({ data, error } = await consulta(''));
   if (error) throw error;
 
-  return (data ?? []).map((row: any) => {
+  const filas = (data ?? []) as any[];
+  const numeroPorId = new Map(filas.map((r) => [r.id as string, r.number as string]));
+  const reclamadas = new Set(filas.map((r) => r.claim_of_id).filter(Boolean));
+
+  return filas.map((row: any) => {
     const quotation = row.quotation;
     const quotedTotal = quotation
       ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
@@ -442,8 +460,59 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
       invoiceId: emitida?.id ?? null,
       quotationNumber: quotation?.number ?? null,
       etiquetas: row.etiquetas ?? [],
+      workType: row.work_type ?? null,
+      claimOfNumber: row.claim_of_id ? numeroPorId.get(row.claim_of_id) ?? '—' : null,
+      reclamada: reclamadas.has(row.id),
     };
   });
+}
+
+/** Una orden con sus reclamos, o el reclamo con su orden original. */
+export interface RelacionDeReclamo {
+  workType: WorkType | null;
+  claimReason: string | null;
+  original: { id: string; number: string } | null;
+  reclamos: { id: string; number: string; createdAt: string; claimReason: string | null }[];
+}
+
+/**
+ * Lo del reclamo de una orden: si es un reclamo, cuál es la original; si es
+ * una original, qué reclamos tiene. Sin la migración, todo vacío.
+ */
+export async function fetchRelacionDeReclamo(workOrderId: string): Promise<RelacionDeReclamo> {
+  const vacia: RelacionDeReclamo = { workType: null, claimReason: null, original: null, reclamos: [] };
+  const { data: propia, error } = await supabase
+    .from('work_orders')
+    .select('work_type, claim_of_id, claim_reason')
+    .eq('id', workOrderId)
+    .maybeSingle();
+  if (faltaColumna(error)) return vacia;
+  if (error) throw error;
+
+  const [original, reclamos] = await Promise.all([
+    (propia as any)?.claim_of_id
+      ? supabase.from('work_orders').select('id, number').eq('id', (propia as any).claim_of_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from('work_orders')
+      .select('id, number, created_at, claim_reason')
+      .eq('claim_of_id', workOrderId)
+      .order('created_at'),
+  ]);
+  if (original.error) throw original.error;
+  if (reclamos.error) throw reclamos.error;
+
+  return {
+    workType: ((propia as any)?.work_type ?? null) as WorkType | null,
+    claimReason: (propia as any)?.claim_reason ?? null,
+    original: (original.data as any) ?? null,
+    reclamos: ((reclamos.data ?? []) as any[]).map((r) => ({
+      id: r.id,
+      number: r.number,
+      createdAt: r.created_at,
+      claimReason: r.claim_reason ?? null,
+    })),
+  };
 }
 
 /** Qué comprobante cuelga de una orden que se está por eliminar. */
@@ -539,6 +608,22 @@ export const RECEPTION_KIND_LABELS: Record<ReceptionKind, string> = {
 
 export const RECEPTION_KINDS = Object.keys(RECEPTION_KIND_LABELS) as ReceptionKind[];
 
+/** Qué clase de trabajo es la orden: para separar el taller en el listado. */
+export type WorkType = 'ELECTRONICO' | 'MECANICO' | 'AMBOS';
+
+export const WORK_TYPE_LABELS: Record<WorkType, string> = {
+  ELECTRONICO: 'Electrónico',
+  MECANICO: 'Mecánico',
+  AMBOS: 'Electrónico y mecánico',
+};
+
+export const WORK_TYPES = Object.keys(WORK_TYPE_LABELS) as WorkType[];
+
+export async function setWorkOrderWorkType(workOrderId: string, workType: WorkType | null) {
+  const { error } = await supabase.from('work_orders').update({ work_type: workType }).eq('id', workOrderId);
+  if (error) throw error;
+}
+
 export interface ReceivedPart {
   id: string;
   name: string;
@@ -566,6 +651,11 @@ export interface NewWorkOrderInput {
   estimatedDeliveryDate: string | null;
   /** Sector del cliente al que van los avisos de la orden. Null = general. */
   customerSectorId?: string | null;
+  /** Electrónico, mecánico o los dos. Sin el campo, queda sin definir. */
+  workType?: WorkType | null;
+  /** Reclamo: la orden original que el cliente reclamó, y qué reclamó. */
+  claimOfId?: string | null;
+  claimReason?: string | null;
 }
 
 /**
@@ -597,6 +687,10 @@ export async function createWorkOrder(input: NewWorkOrderInput) {
       employee_id: input.employeeId,
       estimated_delivery_date: input.estimatedDeliveryDate,
       customer_sector_id: input.customerSectorId || null,
+      // Solo si vienen: así el alta sigue andando aunque la base todavía no
+      // tenga estas columnas.
+      ...(input.workType && { work_type: input.workType }),
+      ...(input.claimOfId && { claim_of_id: input.claimOfId, claim_reason: input.claimReason?.trim() || null }),
     })
     .select()
     .single();
