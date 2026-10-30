@@ -403,8 +403,8 @@ export function PurchaseAIReview() {
         appliedFields.tipo_comprobante = tipoLeido === 'FACTURA' || tipoLeido === 'NOTA_CREDITO' || tipoLeido === 'NOTA_DEBITO';
 
         const letraLeida = String(v.letra ?? '');
-        if (['A', 'B', 'C', 'M'].includes(letraLeida)) setLetter(letraLeida as PurchaseLetter);
-        appliedFields.letra = ['A', 'B', 'C', 'M'].includes(letraLeida);
+        if (['A', 'B', 'C', 'M', 'X'].includes(letraLeida)) setLetter(letraLeida as PurchaseLetter);
+        appliedFields.letra = ['A', 'B', 'C', 'M', 'X'].includes(letraLeida);
 
         const puntoVenta = v.punto_venta ? String(Number(String(v.punto_venta).replace(/\D/g, '')) || '') : '';
         if (puntoVenta) setSalesPoint(puntoVenta);
@@ -1075,7 +1075,7 @@ export function PurchaseAIReview() {
                 <label className={labelClass}>
                   Letra <FieldMark applied={!!applied.letra} confidence={confianzas.letra} />
                   <select value={letter} onChange={(e) => setLetter(e.target.value as PurchaseLetter)} className={cn(inputClass, 'bg-panel font-mono')}>
-                    {(['A', 'B', 'C', 'M'] as PurchaseLetter[]).map((l) => <option key={l} value={l}>{l}</option>)}
+                    {(['A', 'B', 'C', 'M', 'X'] as PurchaseLetter[]).map((l) => <option key={l} value={l}>{l === 'X' ? 'X (sin IVA)' : l}</option>)}
                   </select>
                 </label>
                 <label className={labelClass}>

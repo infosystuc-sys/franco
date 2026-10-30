@@ -263,8 +263,10 @@ export const REPORTS: ReportDefinition[] = [
     area: 'IMPOSITIVO',
     name: 'Libro IVA Compras',
     description:
-      'Comprobantes recibidos en el período. Las notas de crédito figuran con todos sus importes en negativo.',
+      'Comprobantes recibidos en el período. Las notas de crédito figuran con todos sus importes en negativo. ' +
+      'Los comprobantes X se filtran por letra.',
     usesPeriod: true,
+    filtraPorTipo: true,
     columns: [
       { key: 'issue_date', label: 'Fecha', format: 'date', width: 12 },
       { key: 'tipo', label: 'Tipo', width: 18 },

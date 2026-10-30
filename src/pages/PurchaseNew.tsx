@@ -184,8 +184,18 @@ export function PurchaseNew() {
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   }
 
+  // Un comprobante X no lleva IVA: sus renglones van como no gravados.
+  const noGravadoId =
+    (vatRates.find((r) => r.vatTreatment === 'NO_GRAVADO') ?? vatRates.find((r) => r.rate === 0))?.id ?? '';
+
   function defaultVatRateId(): string {
+    if (letter === 'X' && noGravadoId) return noGravadoId;
     return (vatRates.find((r) => r.rate === 21) ?? vatRates[0])?.id ?? '';
+  }
+
+  function cambiarLetra(nueva: PurchaseLetter) {
+    setLetter(nueva);
+    if (nueva === 'X' && noGravadoId) setLines((current) => current.map((l) => ({ ...l, vatRateId: noGravadoId })));
   }
 
   function addConceptLine() {
@@ -406,11 +416,11 @@ export function PurchaseNew() {
             Letra
             <select
               value={letter}
-              onChange={(e) => setLetter(e.target.value as PurchaseLetter)}
+              onChange={(e) => cambiarLetra(e.target.value as PurchaseLetter)}
               className={cn(inputClass, 'bg-panel font-mono')}
             >
               {PURCHASE_LETTERS.map((l) => (
-                <option key={l} value={l}>{l}</option>
+                <option key={l} value={l}>{l === 'X' ? 'X (sin IVA)' : l}</option>
               ))}
             </select>
           </label>

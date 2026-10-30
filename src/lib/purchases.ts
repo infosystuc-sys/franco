@@ -18,7 +18,8 @@ import type { TaxRate, VatTreatment } from '@/src/lib/taxRates';
 
 export type PurchaseKind = 'ARTICULOS' | 'CONCEPTOS';
 export type PurchaseDocType = 'FACTURA' | 'NOTA_CREDITO' | 'NOTA_DEBITO';
-export type PurchaseLetter = 'A' | 'B' | 'C' | 'M';
+/** X: comprobante en negro, sin IVA; en el Libro IVA Compras se filtra por letra. */
+export type PurchaseLetter = 'A' | 'B' | 'C' | 'M' | 'X';
 export type PurchaseStatus = 'REGISTRADA' | 'ANULADA';
 
 export const PURCHASE_DOC_TYPE_LABELS: Record<PurchaseDocType, string> = {
@@ -35,7 +36,7 @@ export const PURCHASE_DOC_TYPE_SHORT: Record<PurchaseDocType, string> = {
 };
 
 export const PURCHASE_DOC_TYPES = Object.keys(PURCHASE_DOC_TYPE_LABELS) as PurchaseDocType[];
-export const PURCHASE_LETTERS: PurchaseLetter[] = ['A', 'B', 'C', 'M'];
+export const PURCHASE_LETTERS: PurchaseLetter[] = ['A', 'B', 'C', 'M', 'X'];
 
 export const PURCHASE_KIND_LABELS: Record<PurchaseKind, string> = {
   ARTICULOS: 'Artículos',
