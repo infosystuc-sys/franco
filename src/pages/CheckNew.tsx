@@ -88,7 +88,7 @@ export function CheckNew() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Recibir cheque"
         subtitle="Entra a la cartera y queda registrado como ingreso en el libro de caja."

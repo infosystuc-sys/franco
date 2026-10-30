@@ -284,7 +284,8 @@ export function InvoiceNewFree() {
 
   const issueDate = new Date();
   const dueDate = new Date();
-  if (!isCash) dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
+  // El plazo de la cuenta corriente es el del cliente; si no tiene, el general.
+  if (!isCash) dueDate.setDate(dueDate.getDate() + (customer?.paymentTermsDays ?? PAYMENT_TERMS_DAYS));
 
   async function handleIssue() {
     if (!customer || !canIssue) return;
@@ -303,7 +304,7 @@ export function InvoiceNewFree() {
     try {
       const issued = await issueFreeInvoice(
         customer.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
-        isCash ? null : (vencimiento || null), remitoId, descuento
+        isCash ? null : (vencimiento || toDateString(dueDate)), remitoId, descuento
       );
       if (sectorId) await asignarSectorAFactura(issued.id, sectorId);
 

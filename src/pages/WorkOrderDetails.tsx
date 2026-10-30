@@ -5,6 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
+import { ContactoDelCliente } from '@/src/components/ContactoDelCliente';
 import { setWorkOrderSector, setWorkOrderDescuento } from '@/src/lib/workOrders';
 import { descuentoDe } from '@/src/components/DescuentoEditor';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
@@ -938,6 +939,26 @@ export function WorkOrderDetails() {
               {TAX_CONDITION_LABELS[order.customer.tax_condition]}
             </span>
           )}
+          {/* Para poder llamarlo o escribirle sin salir de la orden. */}
+          {order.customer && (
+            <ContactoDelCliente
+              className="mt-2 space-y-0.5"
+              phone={order.customer.phone ?? null}
+              email={order.customer.email ?? null}
+            />
+          )}
+          {(() => {
+            const sector = order.customer?.sectors.find((x) => x.id === order.customerSectorId);
+            return sector ? (
+              <ContactoDelCliente
+                className="mt-2 space-y-0.5"
+                titulo={`Contacto de ${sector.name}`}
+                responsable={sector.responsable}
+                phone={sector.phone}
+                email={sector.email}
+              />
+            ) : null;
+          })()}
           {/* El sector decide a qué teléfono van los avisos de la orden (y
               lo heredan su cotización y su factura). */}
           {order.customer && order.customer.sectors.length > 0 && (

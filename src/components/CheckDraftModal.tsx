@@ -93,7 +93,8 @@ export function CheckDraftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Panel className="max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5">
+      {/* Ancho: el nombre del banco no entra en una columna angosta. */}
+      <Panel className="max-h-[90vh] w-full max-w-5xl overflow-y-auto p-5">
         <h3 className="text-sm font-bold uppercase tracking-wider text-text">
           {electronico ? 'Cargar cheques electrónicos (eCheq)' : 'Cargar cheques físicos'}
         </h3>
@@ -116,7 +117,7 @@ export function CheckDraftModal({
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[0.9fr_1.2fr_1.35fr_1fr]">
+              <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_2fr_1fr_1.1fr]">
                 <label className={cn(labelClass, 'flex min-w-0 flex-col whitespace-nowrap')}>
                   Número *
                   <input

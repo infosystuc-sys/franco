@@ -67,11 +67,21 @@ export interface Customer extends FiscalEntity {
    * pasa hoy con todos los clientes ya cargados.
    */
   condicionVenta: CondicionVenta | null;
+  /**
+   * Días de plazo de la cuenta corriente: con esto se propone el vencimiento
+   * al facturarle. Null = el plazo general (PAYMENT_TERMS_DAYS).
+   */
+  paymentTermsDays: number | null;
 }
 
 export interface CustomerInput extends FiscalEntityInput {
   /** Vacío = sin definir. */
   condicionVenta: CondicionVenta | '';
+  /**
+   * Días de plazo; vacío = el general. Sin el campo no se toca: así la ficha
+   * sigue guardando aunque la base todavía no tenga la columna.
+   */
+  paymentTermsDays?: string;
   /** Los sectores tal como quedan en la ficha. Sin el campo, no se tocan. */
   sectors?: CustomerSectorInput[];
 }
@@ -80,6 +90,7 @@ function mapCustomer(row: any): Customer {
   return {
     ...mapFiscalEntity(row),
     condicionVenta: (row.condicion_venta ?? null) as CondicionVenta | null,
+    paymentTermsDays: row.payment_terms_days === null || row.payment_terms_days === undefined ? null : Number(row.payment_terms_days),
     sectors: ((row.sectors ?? []) as any[])
       .map((s) => ({ id: s.id, name: s.name, responsable: s.responsable ?? null, phone: s.phone ?? null, email: s.email ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name)),
@@ -150,6 +161,9 @@ function aFilaDeCliente(input: CustomerInput): Record<string, unknown> {
   return {
     ...fiscalEntityToRow(input),
     condicion_venta: input.condicionVenta === '' ? null : input.condicionVenta,
+    ...(input.paymentTermsDays !== undefined && {
+      payment_terms_days: input.paymentTermsDays.trim() === '' ? null : Number(input.paymentTermsDays),
+    }),
   };
 }
 

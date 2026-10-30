@@ -6,14 +6,16 @@ import { useAuth } from '@/src/lib/auth';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { MembreteDelTaller } from '@/src/components/MembreteDelTaller';
+import { ContactoDelCliente } from '@/src/components/ContactoDelCliente';
 import type { ContactoDeEnvio } from '@/src/lib/customers';
 import {
   armarComposicion,
-  fetchMails,
+  fetchContactos,
   fetchContactosDe,
   fetchMovimientos,
   filasParaExportar,
   type Bloque,
+  type ContactoDeLaParte,
   type Lado,
   type Movimiento,
 } from '@/src/lib/composicionSaldos';
@@ -57,7 +59,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   const [modo, setModo] = React.useState<'pendientes' | 'todos'>('pendientes');
 
   const [movimientos, setMovimientos] = React.useState<Movimiento[]>([]);
-  const [mails, setMails] = React.useState<Map<string, string>>(new Map());
+  const [datosDeContacto, setDatosDeContacto] = React.useState<Map<string, ContactoDeLaParte>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [aviso, setAviso] = React.useState<string | null>(null);
@@ -82,7 +84,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   }, [lado, hasta]);
 
   React.useEffect(() => {
-    fetchMails(lado).then(setMails).catch(() => {/* sin mails, el envío pide la dirección a mano */});
+    fetchContactos(lado).then(setDatosDeContacto).catch(() => {/* sin contactos, el envío pide la dirección a mano */});
   }, [lado]);
 
   const bloques = React.useMemo(
@@ -282,7 +284,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
             ]}
           />
           {bloques.map((b) => (
-            <BloqueDeSaldo key={b.parteId} bloque={b} desde={desde} lado={lado} />
+            <BloqueDeSaldo key={b.parteId} bloque={b} desde={desde} lado={lado} contacto={datosDeContacto.get(b.parteId)} />
           ))}
         </div>
       )}
@@ -293,7 +295,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
           contactos={contactos ?? undefined}
           defaultDestino={
             enviando === 'email'
-              ? (contactos?.[0]?.email ?? (unaSolaParte ? mails.get(unaSolaParte.parteId) ?? null : null))
+              ? (contactos?.[0]?.email ?? (unaSolaParte ? datosDeContacto.get(unaSolaParte.parteId)?.email ?? null : null))
               : (contactos?.[0]?.phone ?? null)
           }
           fileName={`composicion-saldos-${unaSolaParte ? unaSolaParte.nombre.replace(/[^\w]+/g, '-').toLowerCase() : lado}.pdf`}
@@ -311,7 +313,17 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   );
 }
 
-function BloqueDeSaldo({ bloque, desde: d, lado: l }: { bloque: Bloque; desde: string; lado: Lado }) {
+function BloqueDeSaldo({
+  bloque,
+  desde: d,
+  lado: l,
+  contacto,
+}: {
+  bloque: Bloque;
+  desde: string;
+  lado: Lado;
+  contacto?: ContactoDeLaParte;
+}) {
   const t = TEXTOS[l];
   return (
     <section className="mb-6 border-t-2 border-[#2b6cb0] pt-2 print:break-inside-auto">
@@ -324,6 +336,14 @@ function BloqueDeSaldo({ bloque, desde: d, lado: l }: { bloque: Bloque; desde: s
               {TEXTOS[l].accion}
             </Link>
           </p>
+          {/* Para llamarlo sin ir a buscar el teléfono. No va en el papel. */}
+          {contacto && (
+            <ContactoDelCliente
+              className="no-print mt-1 flex flex-wrap items-center gap-x-4"
+              phone={contacto.phone}
+              email={contacto.email}
+            />
+          )}
         </div>
         <div className="text-right text-[14px] text-text-soft">
           {d && <p>Saldo anterior a {formatDate(d)} $ {formatMoney(bloque.saldoAnterior)}</p>}

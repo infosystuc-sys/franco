@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigationType } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { CategoryRail } from './CategoryRail';
 import { TopNavBar } from './TopNavBar';
@@ -43,6 +43,17 @@ export function MainLayout({ children }: MainLayoutProps) {
   React.useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  /**
+   * Una pantalla nueva arranca desde arriba. Sin esto se heredaba el scroll de
+   * la anterior: al guardar la recepción (con el botón al pie de un formulario
+   * largo) el listado de órdenes abría bajado, con la orden recién creada
+   * tapada por la cabecera fija. Con "Atrás" se deja el scroll que había.
+   */
+  const tipoDeNavegacion = useNavigationType();
+  React.useEffect(() => {
+    if (tipoDeNavegacion !== 'POP') window.scrollTo(0, 0);
+  }, [location.pathname, tipoDeNavegacion]);
 
   /**
    * Entrar a cargar algo contrae la barra; al salir vuelve a como la había

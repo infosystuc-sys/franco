@@ -18,6 +18,7 @@ import {
   type CuentaDeLaParte,
 } from '@/src/lib/imputaciones';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
+import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 
 /**
  * Imputación de comprobantes.
@@ -50,8 +51,9 @@ export function Imputaciones() {
 
   React.useEffect(() => {
     if (role !== 'admin') return;
-    fetchCustomers(true).then(setCustomers).catch(() => setCustomers([]));
-    fetchSuppliers(true).then(setSuppliers).catch(() => setSuppliers([]));
+    // También los dados de baja: pueden tener comprobantes que imputar.
+    fetchCustomers().then(setCustomers).catch(() => setCustomers([]));
+    fetchSuppliers().then(setSuppliers).catch(() => setSuppliers([]));
   }, [role]);
 
   const cargarCuenta = React.useCallback(async (c: Circuito, id: string) => {
@@ -136,7 +138,7 @@ export function Imputaciones() {
     }
   }
 
-  const partes = circuito === 'VENTAS' ? customers : suppliers;
+  const partes: (Customer | Supplier)[] = circuito === 'VENTAS' ? customers : suppliers;
   const creditoElegido = creditos.find((c) => c.id === elegido) ?? null;
   const esVentas = circuito === 'VENTAS';
 
@@ -192,16 +194,16 @@ export function Imputaciones() {
 
           <label className={cn(labelClass, 'min-w-64 flex-1')}>
             {esVentas ? 'Cliente' : 'Proveedor'}
-            <select
+            {/* Un buscador y no un desplegable: con miles de clientes, el
+                desplegable solo saltaba por la primera letra del nombre. */}
+            <ClienteCombobox<Customer | Supplier>
+              key={circuito}
+              clientes={partes}
               value={parteId}
-              onChange={(e) => elegirParte(e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Elegí {esVentas ? 'un cliente' : 'un proveedor'}…</option>
-              {partes.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={(id) => elegirParte(id)}
+              entidad={esVentas ? 'cliente' : 'proveedor'}
+              className="mt-1"
+            />
           </label>
         </div>
       </Panel>

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { FiscalFields, labelClass, inputClass } from '@/src/components/FiscalFields';
-import { CONDICION_VENTA_LABELS, type CondicionVenta } from '@/src/lib/invoices';
+import { CONDICION_VENTA_LABELS, PAYMENT_TERMS_DAYS, type CondicionVenta } from '@/src/lib/invoices';
 import {
   EMPTY_FISCAL_FORM,
   fiscalEntityToForm,
@@ -38,6 +38,7 @@ export function CustomerModal({
       ? {
           ...fiscalEntityToForm(customer),
           condicionVenta: customer.condicionVenta ?? '',
+          paymentTermsDays: customer.paymentTermsDays === null ? undefined : String(customer.paymentTermsDays),
           sectors: customer.sectors.map((s) => ({
             id: s.id,
             name: s.name,
@@ -74,6 +75,11 @@ export function CustomerModal({
           'Se puede guardar igual, pero no sirve para Factura A ni para consultar ARCA. ¿Guardar el cliente así?'
       )
     ) {
+      return;
+    }
+    const plazo = form.paymentTermsDays?.trim() ?? '';
+    if (plazo !== '' && !(/^\d+$/.test(plazo) && Number(plazo) <= 365)) {
+      setError('El plazo de la cuenta corriente va en días, de 0 a 365.');
       return;
     }
     const sectores = form.sectors ?? [];
@@ -144,6 +150,23 @@ export function CustomerModal({
                   </select>
                   <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
                     Se propone al facturar y se puede cambiar ahí mismo.
+                  </span>
+                </label>
+
+                <label className={cn(labelClass, 'mt-4 block max-w-sm')}>
+                  Plazo de la cuenta corriente (días)
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    inputMode="numeric"
+                    value={form.paymentTermsDays ?? ''}
+                    onChange={(e) => patch({ paymentTermsDays: e.target.value })}
+                    placeholder={`${PAYMENT_TERMS_DAYS} (el general)`}
+                    className={inputClass}
+                  />
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                    Con este plazo se propone el vencimiento de sus facturas en cuenta corriente. Vacío: {PAYMENT_TERMS_DAYS} días.
                   </span>
                 </label>
 

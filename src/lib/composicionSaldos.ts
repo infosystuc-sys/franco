@@ -60,7 +60,6 @@ export async function fetchMovimientos(lado: Lado, hasta: string): Promise<Movim
   }));
 }
 
-/** El mail de cada cliente o proveedor, para "Enviar por correo electrónico". */
 /**
  * A quién se le puede mandar la composición de un cliente o proveedor: su
  * contacto general y, si es un cliente con sectores, cada sector. Se pide en
@@ -83,21 +82,32 @@ export async function fetchContactosDe(lado: Lado, id: string): Promise<Contacto
   return [{ label: 'Contacto del proveedor', email: p?.email ?? null, phone: p?.phone ?? null }];
 }
 
-export async function fetchMails(lado: Lado): Promise<Map<string, string>> {
+export interface ContactoDeLaParte {
+  phone: string | null;
+  email: string | null;
+}
+
+/**
+ * El teléfono y el mail de cada cliente o proveedor: se muestran en su
+ * bloque, para llamarlo sin ir a buscarlo, y el mail se propone al enviar.
+ */
+export async function fetchContactos(lado: Lado): Promise<Map<string, ContactoDeLaParte>> {
   const tabla = lado === 'clientes' ? 'customers' : 'suppliers';
-  const mails = new Map<string, string>();
+  const contactos = new Map<string, ContactoDeLaParte>();
   for (let desde = 0; ; desde += 1000) {
     const { data, error } = await supabase
       .from(tabla)
-      .select('id, email')
-      .not('email', 'is', null)
+      .select('id, email, phone')
+      .or('email.not.is.null,phone.not.is.null')
       .order('id')
       .range(desde, desde + 999);
     if (error) throw error;
-    for (const r of (data ?? []) as any[]) if (r.email) mails.set(r.id, r.email);
+    for (const r of (data ?? []) as any[]) {
+      if (r.email || r.phone) contactos.set(r.id, { phone: r.phone || null, email: r.email || null });
+    }
     if ((data ?? []).length < 1000) break;
   }
-  return mails;
+  return contactos;
 }
 
 export interface Renglon {

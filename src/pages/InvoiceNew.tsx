@@ -449,7 +449,8 @@ export function InvoiceNew() {
 
   const issueDate = new Date();
   const dueDate = new Date();
-  if (!isCash) dueDate.setDate(dueDate.getDate() + PAYMENT_TERMS_DAYS);
+  // El plazo de la cuenta corriente es el del cliente; si no tiene, el general.
+  if (!isCash) dueDate.setDate(dueDate.getDate() + (clienteElegido?.paymentTermsDays ?? PAYMENT_TERMS_DAYS));
 
   const emptyLines = items.filter((item) => item.description.trim() === '').length;
   // Factura A: solo si el cliente es Responsable Inscripto.
@@ -504,7 +505,7 @@ export function InvoiceNew() {
     try {
       const issued = await issueInvoice(
         order.id, items, notes, emitRemito, invoiceType, condicion as CondicionVenta,
-        isCash ? null : (vencimiento || null),
+        isCash ? null : (vencimiento || toDateString(dueDate)),
         descuento
       );
       if ((sectorId || null) !== (order.customerSectorId ?? null)) {
