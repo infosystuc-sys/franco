@@ -242,3 +242,45 @@ export function describeExtractionError(message: string): string {
   }
   return message;
 }
+
+// ── Correo de compras ───────────────────────────────────────────────────────
+
+/** La casilla de Gmail de donde se leen solos los comprobantes de compra. */
+export interface CorreoDeCompras {
+  email: string | null;
+  tipo: PurchaseKind;
+  tieneClave: boolean;
+  /** Última revisión: cuándo, cuántos mails y cuántos comprobantes tomó. */
+  ultima: { fecha: string; mails: number; comprobantes: number } | null;
+}
+
+export async function fetchCorreoDeCompras(): Promise<CorreoDeCompras> {
+  const { data, error } = await supabase.rpc('correo_compras_configurado').maybeSingle();
+  if (error) throw error;
+  const r = data as { email: string | null; tipo: string; tiene_clave: boolean; ultima_revision: string | null } | null;
+  const [fecha, mails, comprobantes] = (r?.ultima_revision ?? '').split('|');
+  return {
+    email: r?.email ?? null,
+    tipo: r?.tipo === 'CONCEPTOS' ? 'CONCEPTOS' : 'ARTICULOS',
+    tieneClave: !!r?.tiene_clave,
+    ultima: fecha ? { fecha, mails: Number(mails) || 0, comprobantes: Number(comprobantes) || 0 } : null,
+  };
+}
+
+/** La clave vacía deja la que ya estaba cargada. */
+export async function guardarCorreoDeCompras(email: string, clave: string, tipo: PurchaseKind): Promise<void> {
+  const { error } = await supabase.rpc('set_correo_compras', { p_email: email, p_password: clave, p_tipo: tipo });
+  if (error) throw error;
+}
+
+export async function borrarCorreoDeCompras(): Promise<void> {
+  const { error } = await supabase.rpc('borrar_correo_compras');
+  if (error) throw error;
+}
+
+/** Revisa la casilla ya, sin esperar al cron. */
+export async function revisarCorreoDeCompras(): Promise<{ mails: number; comprobantes: number; avisos: string[] }> {
+  const { data, error } = await supabase.functions.invoke('leer-correo-compras', { body: {} });
+  if (error) throw new Error(await describeFunctionError(error));
+  return data as { mails: number; comprobantes: number; avisos: string[] };
+}

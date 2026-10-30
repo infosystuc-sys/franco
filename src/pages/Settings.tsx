@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlantillasMensajes } from '@/src/components/PlantillasMensajes';
+import { CorreoDeComprasConfig } from '@/src/components/CorreoDeComprasConfig';
 import { Save, Receipt, Building2, Check, AlertTriangle, Mail, Warehouse, Sparkles, Trash2, Landmark, Upload, Activity, Image as ImageIcon } from 'lucide-react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -644,6 +645,7 @@ export function Settings() {
 
       {pestana === 'ia' && (
       <>
+      <CorreoDeComprasConfig />
       <Panel className="space-y-4 p-5">
         <h3 className={sectionTitleClass}><Sparkles size={14} /> Lectura de comprobantes con IA</h3>
         <p className="text-xs text-text-soft">

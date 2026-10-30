@@ -499,7 +499,22 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json({ error: 'Método no permitido.' }, 405);
 
-  const autorizacion = await verificarAdmin(req);
+  // Lo que llega del correo de compras (leer-correo-compras) no trae sesión de
+  // un usuario: viene con el secreto del cron y a nombre de quien configuró
+  // la casilla.
+  const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
+  const delCorreo = !!CRON_SECRET && req.headers.get('x-cron-secret') === CRON_SECRET;
+  let cuerpoDelCorreo: Record<string, unknown> | null = null;
+  if (delCorreo) {
+    try {
+      cuerpoDelCorreo = await req.clone().json();
+    } catch {
+      cuerpoDelCorreo = {};
+    }
+  }
+  const autorizacion: Autorizacion = delCorreo
+    ? { estado: 'admin', userId: (cuerpoDelCorreo?.usuario as string | null) ?? (null as unknown as string) }
+    : await verificarAdmin(req);
   // Un solo control contra 'admin' en vez de dos contra los otros dos estados:
   // así queda claro, para quien lee y para el compilador, que más abajo
   // autorizacion es la variante que tiene userId.
@@ -531,6 +546,7 @@ Deno.serve(async (req: Request) => {
       attachment_mime_type: mimeType,
       status: 'EXTRAIDO',
       created_by: autorizacion.userId,
+      ...(typeof body.origen === 'string' && body.origen && { origen: body.origen }),
     })
     .select('id')
     .single();
