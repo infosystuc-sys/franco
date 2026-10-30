@@ -293,6 +293,21 @@ export async function fetchSaldosDeClientes(): Promise<SaldoCliente[]> {
   }));
 }
 
+/**
+ * La cuenta de un solo cliente, para mostrarla al facturar: lo que debe de
+ * facturas anteriores y lo que tiene a favor (plata dejada a cuenta, notas de
+ * crédito sin aplicar). Lo a favor sale de customer_credit, que es contra lo
+ * que la base valida al usarlo en un recibo.
+ */
+export async function fetchSaldoDelCliente(customerId: string): Promise<{ deuda: number; aFavor: number }> {
+  const [fila, aFavor] = await Promise.all([
+    supabase.rpc('saldos_de_clientes').eq('customer_id', customerId).maybeSingle(),
+    fetchCustomerCredit(customerId),
+  ]);
+  if (fila.error) throw fila.error;
+  return { deuda: Number((fila.data as any)?.deuda ?? 0), aFavor: Math.max(0, aFavor) };
+}
+
 /** Crédito disponible del cliente: lo cobrado de más que todavía no se usó. */
 export async function fetchCustomerCredit(customerId: string): Promise<number> {
   const { data, error } = await supabase.rpc('customer_credit', { p_customer_id: customerId });

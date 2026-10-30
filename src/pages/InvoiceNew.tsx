@@ -53,6 +53,12 @@ import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { SelectorDeSector, sectorPorDefecto } from '@/src/components/SelectorDeSector';
 import { descuentoDe } from '@/src/components/DescuentoEditor';
 import { ActualizarClienteArca } from '@/src/components/ActualizarClienteArca';
+import {
+  SaldoDelClienteAlFacturar,
+  reciboAlEmitir,
+  saldoAImputar,
+  useSaldoDelCliente,
+} from '@/src/components/SaldoDelClienteAlFacturar';
 
 /**
  * Un dato de la cabecera: rótulo chico arriba, valor abajo. Sin recuadro
@@ -232,6 +238,12 @@ export function InvoiceNew() {
   const [arcaCliente, setArcaCliente] = React.useState<Customer | null>(null);
   const [cambiandoCliente, setCambiandoCliente] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // La cuenta del cliente a la vista, y cuánto de su saldo a favor se imputa
+  // en esta factura (de entrada, todo lo que se pueda).
+  const saldoCliente = useSaldoDelCliente(order?.customer?.id);
+  const [imputarSaldo, setImputarSaldo] = React.useState(true);
+  const [montoSaldo, setMontoSaldo] = React.useState<number | null>(null);
+  React.useEffect(() => { setMontoSaldo(null); setImputarSaldo(true); }, [order?.customer?.id]);
 
   // El número que va a llevar la factura, para mostrarlo antes de emitir. Se
   // vuelve a pedir con cada cambio de letra porque cada una tiene su propia
@@ -434,9 +446,12 @@ export function InvoiceNew() {
   // Sin talonario elegido todavía, la previsualización usa la letra fiscal:
   // el total no puede quedar en blanco solo porque falta esa elección.
   const totals = computeTotals(items, invoiceType === '' ? letraFiscal : invoiceType, descuento);
+  const imputado = saldoAImputar(saldoCliente, totals.total, imputarSaldo, montoSaldo);
+  // Lo que falta cobrar con medios de pago, después del saldo a favor.
+  const aCobrar = Math.round((totals.total - imputado) * 100) / 100;
   // Con un solo medio, ese medio cubre lo que falte (el total menos los
   // cheques): el caso de siempre no pide escribir el importe.
-  const pagosEfectivos = ajustarUnicoMedio(pagos, checkDrafts, totals.total);
+  const pagosEfectivos = ajustarUnicoMedio(pagos, checkDrafts, aCobrar);
   // Lo ya asignado, para proponer el importe del próximo cheque. El medio
   // único no cuenta: es el que absorbe lo que el cheque no cubra.
   const totalCobradoSinUnico =
@@ -461,7 +476,7 @@ export function InvoiceNew() {
   const canIssue =
     (!preguntaRetiro || retirado !== '') &&
     items.length > 0 && totals.total > 0 && emptyLines === 0 && condicion !== '' && invoiceType !== '' && (invoiceType !== 'A' || puedeFacturaA) &&
-    (!isCash || cobroCompleto(pagosEfectivos, checkDrafts, totals.total)) && !issuing;
+    (!isCash || (aCobrar <= 0 ? !checkDrafts?.length : cobroCompleto(pagosEfectivos, checkDrafts, aCobrar))) && !issuing;
 
   /**
    * Cambiar el cliente antes de emitir. Se recarga la orden después: el tipo
@@ -493,6 +508,7 @@ export function InvoiceNew() {
     const confirmed = window.confirm(
       `Emitir ${INVOICE_TYPE_LABELS[invoiceType]} por $ ${formatMoney(totals.total)} ` +
         `a ${order.customer?.name ?? 'el cliente'}${isCash ? ' y cobrarla de contado' : ''}?\n\n` +
+        (imputado > 0 ? `Se imputan $ ${formatMoney(imputado)} del saldo a favor del cliente.\n\n` : '') +
         (invoiceType === 'X'
           ? 'Es un comprobante interno, sin validez fiscal.\n\nUna vez emitido no se puede editar: solo anular.'
           : 'Se le va a pedir el CAE a ARCA en este mismo paso. Si lo autoriza, el ' +
@@ -534,18 +550,23 @@ export function InvoiceNew() {
         return;
       }
 
-      if (isCash) {
+      // En contado se cobra todo; en cuenta corriente, solo si se imputó
+      // saldo a favor. Las dos cosas van en un mismo recibo.
+      const recibo = reciboAlEmitir(
+        totals.total, isCash, imputado, aCobrar > 0 ? valoresDelCobro(pagosEfectivos, checkDrafts) : []
+      );
+      if (recibo) {
         try {
-          const values = valoresDelCobro(pagosEfectivos, checkDrafts);
           await saveReceipt(
-            { customerId: order.customer.id, receiptDate: toDateString(new Date()), notes: 'Factura de contado' },
-            [{ invoiceId: issued.id, amount: totals.total }],
-            values
+            { customerId: order.customer.id, receiptDate: toDateString(new Date()), notes: recibo.notas },
+            [{ invoiceId: issued.id, amount: recibo.monto }],
+            recibo.valores
           );
         } catch (receiptErr) {
           window.alert(
-            `La factura ${issued.fullNumber} se emitió, pero el cobro automático falló: ` +
-              `${describeReceiptError(getErrorMessage(receiptErr))}\n\nRegistrá el cobro a mano desde Cobranzas.`
+            `La factura ${issued.fullNumber} se emitió, pero ` +
+              (isCash ? 'el cobro automático falló' : 'no se pudo imputar el saldo a favor') +
+              `: ${describeReceiptError(getErrorMessage(receiptErr))}\n\nRegistralo a mano desde Cobranzas.`
           );
         }
       }
@@ -735,11 +756,31 @@ export function InvoiceNew() {
           </span>
         </FieldBox>
 
-        {isCash && (
+        <FieldBox label="Cuenta del cliente" className="col-span-2">
+          <SaldoDelClienteAlFacturar
+            saldo={saldoCliente}
+            total={totals.total}
+            contado={isCash}
+            imputar={imputarSaldo}
+            onImputarChange={setImputarSaldo}
+            monto={montoSaldo}
+            onMontoChange={setMontoSaldo}
+            imputado={imputado}
+          />
+        </FieldBox>
+
+        {isCash && aCobrar <= 0 && (
           <FieldBox label="Cobrado con" className="col-span-2">
-            {/* Uno o varios medios (y cheques): la suma tiene que dar el total. */}
+            <span className="block normal-case text-text-soft">Saldo a favor del cliente</span>
+          </FieldBox>
+        )}
+
+        {isCash && aCobrar > 0 && (
+          <FieldBox label="Cobrado con" className="col-span-2">
+            {/* Uno o varios medios (y cheques): la suma tiene que dar lo que
+                falta después del saldo a favor. */}
             <CobroContado
-              total={totals.total}
+              total={aCobrar}
               paymentMethods={paymentMethods}
               pagos={pagosEfectivos}
               onPagosChange={setPagos}
@@ -880,7 +921,7 @@ export function InvoiceNew() {
       {checkModalOpen && (
         <CheckDraftModal
           electronico={chequeElectronico}
-          remainingBase={Math.max(0, Math.round((totals.total - totalCobradoSinUnico) * 100) / 100)}
+          remainingBase={Math.max(0, Math.round((aCobrar - totalCobradoSinUnico) * 100) / 100)}
           banks={banks}
           onBankCreated={(bank) => setBanks((current) => [...current, bank])}
           onConfirm={(checks) => {
