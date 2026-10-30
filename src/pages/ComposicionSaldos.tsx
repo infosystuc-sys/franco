@@ -314,7 +314,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
 function BloqueDeSaldo({ bloque, desde: d, lado: l }: { bloque: Bloque; desde: string; lado: Lado }) {
   const t = TEXTOS[l];
   return (
-    <section className="mb-6 border-t-2 border-[#2b6cb0] pt-2">
+    <section className="mb-6 border-t-2 border-[#2b6cb0] pt-2 print:break-inside-auto">
       <div className="flex flex-wrap items-start justify-between gap-2 px-1">
         <div>
           <h2 className="text-[16px] font-bold uppercase text-[#d9480f]">{bloque.nombre}</h2>
@@ -331,8 +331,8 @@ function BloqueDeSaldo({ bloque, desde: d, lado: l }: { bloque: Bloque; desde: s
         </div>
       </div>
 
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-[14px]">
+      <div className="mt-2 overflow-x-auto print:overflow-visible">
+        <table className="w-full min-w-[900px] text-left text-[14px] print:min-w-0 print:text-[12px]">
           <thead className="bg-[#666] text-white">
             <tr>
               <th className="px-2 py-2 font-semibold">Comprobante</th>

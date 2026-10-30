@@ -139,6 +139,10 @@ async function renderElementToPdf(element: HTMLElement): Promise<jsPDF> {
 async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
   const anchoUtil = pdf.internal.pageSize.getWidth() - MARGEN * 2;
   const altoUtil = pdf.internal.pageSize.getHeight() - MARGEN * 2;
+  // Dónde se puede cortar la hoja sin partir un renglón, en píxeles de la
+  // copia y medidos desde su borde de arriba; se llenan al armar la copia.
+  let cortes: number[] = [];
+  let altoDeLaCopia = 0;
 
   const canvas = await html2canvas(element, {
     // Tres píxeles por punto de pantalla: con dos, el QR de ARCA salía con los
@@ -163,9 +167,33 @@ async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
       for (const el of Array.from(copia.querySelectorAll<HTMLElement>('[data-solo-pdf]'))) {
         el.style.setProperty('display', 'grid', 'important');
       }
+      // Y lo que no va en el papel (un botón "Cobrar" junto al cliente) tampoco
+      // va en el PDF que se le manda.
+      for (const el of Array.from(copia.querySelectorAll<HTMLElement>('.no-print'))) {
+        el.style.setProperty('display', 'none', 'important');
+      }
+      // Una tabla más ancha que la hoja (la composición de saldos, con sus
+      // ocho columnas) quedaba recortada por su contenedor con scroll: en el
+      // PDF faltaban Debe, Haber y Total. Sin el scroll, la copia se ensancha
+      // hasta que entre todo y después se achica entera al ancho de la A4.
+      for (const el of Array.from(copia.querySelectorAll<HTMLElement>('*'))) {
+        const { overflowX } = documento.defaultView!.getComputedStyle(el);
+        if (overflowX === 'auto' || overflowX === 'scroll') el.style.setProperty('overflow', 'visible', 'important');
+      }
+      if (copia.scrollWidth > copia.clientWidth) copia.style.width = `${copia.scrollWidth}px`;
+
+      const arriba = copia.getBoundingClientRect().top;
+      altoDeLaCopia = copia.getBoundingClientRect().height;
+      cortes = [
+        ...Array.from(copia.querySelectorAll('tr')).map((tr) => tr.getBoundingClientRect().bottom - arriba),
+        ...Array.from(copia.querySelectorAll('section')).map((s) => s.getBoundingClientRect().top - arriba),
+        ...Array.from(copia.children).map((c) => c.getBoundingClientRect().bottom - arriba),
+      ];
       pasarColoresARgba(documento, copia);
     },
   });
+  const pixelesPorPx = altoDeLaCopia > 0 ? canvas.height / altoDeLaCopia : 0;
+  const cortesEnElDibujo = cortes.map((c) => Math.round(c * pixelesPorPx)).sort((a, b) => a - b);
 
   // Cuántos puntos de hoja mide un píxel del dibujo, para traducir de uno a
   // otro en los dos sentidos.
@@ -181,7 +209,14 @@ async function dibujarEnPdf(pdf: jsPDF, element: HTMLElement): Promise<void> {
   let primera = true;
 
   while (desde < canvas.height) {
-    const alto = Math.min(altoDeUnaHoja, canvas.height - desde);
+    let alto = Math.min(altoDeUnaHoja, canvas.height - desde);
+    // Si no es la última hoja, se corta en el último borde de renglón que
+    // entra, para que ningún renglón quede partido entre dos hojas. Si no hay
+    // ninguno en la segunda mitad de la hoja, se corta donde caiga.
+    if (desde + alto < canvas.height) {
+      const corte = cortesEnElDibujo.filter((c) => c > desde + alto / 2 && c <= desde + alto).pop();
+      if (corte) alto = corte - desde;
+    }
 
     const pedazo = document.createElement('canvas');
     pedazo.width = canvas.width;
