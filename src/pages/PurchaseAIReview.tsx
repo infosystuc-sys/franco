@@ -45,6 +45,8 @@ import {
   type PurchaseExtraction,
 } from '@/src/lib/purchaseExtractions';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
+import { describePaymentOrderError, fetchOpenPurchaseDocs, savePaymentOrder } from '@/src/lib/paymentOrders';
 
 const EMPTY_LINE: PurchaseLine = {
   articleId: null, conceptId: null, code: '', description: '',
@@ -355,6 +357,30 @@ export function PurchaseAIReview() {
   // Lo que no se aplicó no lleva chip de confianza: lleva el aviso de que hay
   // que completarlo a mano.
   const [applied, setApplied] = React.useState<Record<string, boolean>>({});
+  // Condición de compra. Un ticket sacado con la cámara casi siempre se pagó
+  // en el momento: arranca en contado y al guardar se registra la orden de
+  // pago con el medio elegido. Lo que llega por correo es de proveedores con
+  // cuenta corriente: arranca ahí.
+  const [condicion, setCondicion] = React.useState<'CONTADO' | 'CUENTA_CORRIENTE'>('CONTADO');
+  const [medioDePagoId, setMedioDePagoId] = React.useState('');
+  const [mediosDePago, setMediosDePago] = React.useState<PaymentMethod[]>([]);
+
+  React.useEffect(() => {
+    if (!draft) return;
+    setCondicion(draft.attachmentStoragePath.startsWith('correo/') ? 'CUENTA_CORRIENTE' : 'CONTADO');
+  }, [draft?.id]);
+
+  React.useEffect(() => {
+    fetchPaymentMethods(true)
+      .then((medios) => {
+        // La cartera de cheques no paga sola: un cheque se endosa desde Pagos.
+        const usables = medios.filter((m) => m.kind !== 'CARTERA_CHEQUES');
+        setMediosDePago(usables);
+        const efectivo = usables.find((m) => m.kind === 'EFECTIVO');
+        setMedioDePagoId((actual) => actual || efectivo?.id || '');
+      })
+      .catch(() => {/* sin medios, el contado no se puede elegir: queda el aviso */});
+  }, []);
 
   const isArticles = draft?.kind === 'ARTICULOS';
 
@@ -560,6 +586,8 @@ export function PurchaseAIReview() {
   }, [role, id]);
 
   const supplier = suppliers.find((s) => s.id === supplierId) ?? null;
+  // La nota de crédito no se paga: no tiene condición de compra.
+  const esContado = condicion === 'CONTADO' && docType !== 'NOTA_CREDITO';
   const vatRates = React.useMemo(() => rates.filter((r) => r.kind === 'IVA'), [rates]);
   const footRates = React.useMemo(
     () => rates.filter((r) => r.kind === 'PERCEPCION' || r.kind === 'IMPUESTO_INTERNO'),
@@ -571,9 +599,13 @@ export function PurchaseAIReview() {
   // ya lo haya escrito a mano. Antes solo se escribía si estaba vacío, así que
   // corregir una fecha mal leída dejaba el vencimiento viejo.
   React.useEffect(() => {
+    if (esContado) {
+      if (issueDate) setDueDate(issueDate);
+      return;
+    }
     if (dueDateTouched || !supplier || !issueDate) return;
     setDueDate(proposeDueDate(issueDate, supplier.paymentTermsDays));
-  }, [supplier, issueDate, dueDateTouched]);
+  }, [supplier, issueDate, dueDateTouched, esContado]);
 
   // La NC suele ser devolución, así que arranca marcada; la ND casi nunca
   // trae mercadería, así que arranca desmarcada. La factura no pregunta.
@@ -908,6 +940,7 @@ export function PurchaseAIReview() {
     !!supplierId && salesPoint.trim() !== '' && Number(salesPoint) >= 0 &&
     Number(number) > 0 && !!issueDate && !!dueDate &&
     (docType !== 'NOTA_CREDITO' || !!creditsInvoiceId) &&
+    (!esContado || !!medioDePagoId) &&
     lines.length > 0 && !missingVat && !missingDescription && totals.total > 0 &&
     unmatchedArticleLines === 0 && !saving;
 
@@ -947,6 +980,28 @@ export function PurchaseAIReview() {
       setError(describePurchaseError(getErrorMessage(err)));
       setSaving(false);
       return;
+    }
+
+    // Contado: se paga en el mismo acto. La compra ya quedó guardada, así que
+    // si el pago falla se avisa y se sigue: se puede pagar desde Pagos.
+    if (esContado) {
+      try {
+        const pendiente = (await fetchOpenPurchaseDocs(supplierId)).find((d) => d.id === saved.id)?.pending ?? 0;
+        if (pendiente > 0) {
+          await savePaymentOrder(
+            { supplierId, paymentDate: issueDate, notes: `Pago de contado de ${saved.fullNumber}` },
+            [{ purchaseInvoiceId: saved.id, amount: pendiente }],
+            [{ kind: 'MEDIO_PAGO', amount: pendiente, paymentMethodId: medioDePagoId }]
+          );
+        }
+      } catch (err) {
+        window.alert(
+          `La compra ${saved.fullNumber} se guardó, pero no se pudo registrar el pago de contado: ` +
+            `${describePaymentOrderError(getErrorMessage(err))}
+
+Registralo desde Pagos.`
+        );
+      }
     }
 
     try {
@@ -1111,16 +1166,58 @@ export function PurchaseAIReview() {
                 </label>
               </div>
 
+              {docType !== 'NOTA_CREDITO' && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    Condición de compra
+                    <select
+                      value={condicion}
+                      onChange={(e) => setCondicion(e.target.value as 'CONTADO' | 'CUENTA_CORRIENTE')}
+                      className={inputClass}
+                    >
+                      <option value="CONTADO">Contado</option>
+                      <option value="CUENTA_CORRIENTE">Cuenta corriente</option>
+                    </select>
+                    <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                      {esContado
+                        ? 'Al guardar se registra el pago con el medio elegido.'
+                        : 'Queda en la cuenta del proveedor para pagar desde Pagos.'}
+                    </span>
+                  </label>
+                  {esContado && (
+                    <label className={labelClass}>
+                      Pagado con
+                      <select
+                        value={medioDePagoId}
+                        onChange={(e) => setMedioDePagoId(e.target.value)}
+                        className={cn(inputClass, !medioDePagoId && 'field-required')}
+                      >
+                        <option value="">Elegí un medio…</option>
+                        {mediosDePago.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                      {mediosDePago.length === 0 && (
+                        <span className="mt-1 block text-[12px] font-normal normal-case text-danger">
+                          No hay medios de pago activos. Cargá uno desde Medios de pago.
+                        </span>
+                      )}
+                    </label>
+                  )}
+                </div>
+              )}
+
               <label className={labelClass}>
                 Vencimiento
                 <input
                   type="date"
                   value={dueDate}
+                  disabled={esContado}
                   onChange={(e) => { setDueDate(e.target.value); setDueDateTouched(true); }}
                   className={cn(inputClass, !dueDate && 'field-required')}
                 />
                 <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
-                  {dueDateTouched
+                  {esContado
+                    ? 'Contado: vence el mismo día.'
+                    : dueDateTouched
                     ? 'Cargado a mano.'
                     : supplier
                       ? `Propuesto por el plazo del proveedor (${supplier.paymentTermsDays} días).`

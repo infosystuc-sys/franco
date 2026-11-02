@@ -103,6 +103,17 @@ export function ReportView() {
   // Tipos de comprobante elegidos (letra y clase). Vacío = todos.
   const [letras, setLetras] = React.useState<string[]>([]);
   const [clases, setClases] = React.useState<string[]>([]);
+  // Composición de saldos: comprobantes emitidos entre dos fechas, y un solo
+  // cliente o proveedor. Vacío = sin filtro.
+  const [fechaDesde, setFechaDesde] = React.useState('');
+  const [fechaHasta, setFechaHasta] = React.useState('');
+  const [parteElegida, setParteElegida] = React.useState('');
+
+  const partesPresentes = React.useMemo(() => {
+    const columna = report?.filtraPorFechaYParte?.parte;
+    if (!columna || !rows) return [];
+    return [...new Set(rows.map((r) => String(r[columna] ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [rows, report]);
 
   // Qué letras y clases hay en lo consultado: "FACTURA A" → clase FACTURA, letra A.
   const tiposPresentes = React.useMemo(() => {
@@ -120,6 +131,7 @@ export function ReportView() {
     setLetras([]);
     setClases([]);
     setOrden(null);
+    setParteElegida('');
   }, [rows]);
 
   const filtradas = React.useMemo(() => {
@@ -131,9 +143,19 @@ export function ReportView() {
         if (letras.length > 0 && !letras.includes(letra)) return false;
         if (clases.length > 0 && !clases.includes(clase)) return false;
       }
+      const fp = report?.filtraPorFechaYParte;
+      if (fp) {
+        if (parteElegida && String(row[fp.parte] ?? '') !== parteElegida) return false;
+        // Lo que no tiene fecha (el saldo a favor ya usado) no es de ningún
+        // período: con un filtro de fechas no entra.
+        const fecha = String(row[fp.fecha] ?? '').slice(0, 10);
+        if ((fechaDesde || fechaHasta) && !fecha) return false;
+        if (fechaDesde && fecha < fechaDesde) return false;
+        if (fechaHasta && fecha > fechaHasta) return false;
+      }
       return !term || coincideBusqueda(term, Object.values(row));
     });
-  }, [rows, search, letras, clases, report]);
+  }, [rows, search, letras, clases, report, fechaDesde, fechaHasta, parteElegida]);
 
   // Orden por columna: un click en el título ordena, otro invierte, otro
   // vuelve al orden del informe. Lo que se imprime y se exporta sale así.
@@ -320,6 +342,35 @@ export function ReportView() {
                     elegidos={clases}
                     onChange={setClases}
                   />
+                )}
+              </>
+            )}
+
+            {report.filtraPorFechaYParte && rows && rows.length > 0 && (
+              <>
+                <label className={labelClass}>
+                  Emitidos desde
+                  <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className={inputClass} />
+                </label>
+                <label className={labelClass}>
+                  Hasta
+                  <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className={inputClass} />
+                </label>
+                <label className={cn(labelClass, 'min-w-[14rem]')}>
+                  {report.filtraPorFechaYParte.etiquetaParte}
+                  <select value={parteElegida} onChange={(e) => setParteElegida(e.target.value)} className={inputClass}>
+                    <option value="">Todos</option>
+                    {partesPresentes.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                {(fechaDesde || fechaHasta || parteElegida) && (
+                  <button
+                    type="button"
+                    onClick={() => { setFechaDesde(''); setFechaHasta(''); setParteElegida(''); }}
+                    className="h-9 text-[13px] font-semibold text-accent-deep hover:underline"
+                  >
+                    Limpiar filtros
+                  </button>
                 )}
               </>
             )}

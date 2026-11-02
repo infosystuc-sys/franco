@@ -69,6 +69,11 @@ export interface ReportDefinition {
    * se puede acotar a ciertas letras y a facturas o notas de crédito.
    */
   filtraPorTipo?: boolean;
+  /**
+   * Filtros sobre lo consultado: por la fecha de cada comprobante (la columna
+   * `fecha`) y por cliente o proveedor (la columna `parte`, con su nombre).
+   */
+  filtraPorFechaYParte?: { fecha: string; parte: string; etiquetaParte: string };
   run: (params: ReportParams) => Promise<Record<string, unknown>[]>;
 }
 
@@ -180,6 +185,7 @@ export const REPORTS: ReportDefinition[] = [
     ],
     agruparPor: 'customer_name',
     enviarPorCliente: { idKey: 'customer_id', totalKey: 'balance' },
+    filtraPorFechaYParte: { fecha: 'issue_date', parte: 'customer_name', etiquetaParte: 'Cliente' },
     run: () => callReport('report_customer_balances'),
   },
   {
@@ -216,6 +222,7 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'settled_amount', label: 'Pagado', format: 'money', width: 14 },
       { key: 'balance', label: 'Saldo', format: 'money', total: true, width: 14 },
     ],
+    filtraPorFechaYParte: { fecha: 'issue_date', parte: 'supplier_name', etiquetaParte: 'Proveedor' },
     run: () => callReport('report_supplier_balances'),
   },
   {
