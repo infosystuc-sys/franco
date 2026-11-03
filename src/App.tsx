@@ -16,6 +16,7 @@ import { WorkOrderPrintBlank } from '@/src/pages/WorkOrderPrintBlank';
 import { InvoicesPending } from '@/src/pages/InvoicesPending';
 import { ComposicionSaldos } from '@/src/pages/ComposicionSaldos';
 import { SaldosInicialesClientes } from '@/src/pages/SaldosInicialesClientes';
+import { ChequesIniciales } from '@/src/pages/ChequesIniciales';
 import { CustomersImport } from '@/src/pages/CustomersImport';
 import { ActualizacionMasiva } from '@/src/pages/ActualizacionMasiva';
 import { CreditNotes } from '@/src/pages/CreditNotes';
@@ -146,6 +147,7 @@ export default function App() {
                     <Route path="/tesoreria/endosar-cheque" element={<EndorseCheck />} />
                     <Route path="/cheques" element={<Checks />} />
                     <Route path="/cheques/nuevo" element={<CheckNew />} />
+                    <Route path="/saldos-iniciales/cheques" element={<ChequesIniciales />} />
                     <Route path="/medios-pago" element={<PaymentMethods />} />
                     <Route path="/bancos" element={<Banks />} />
                     <Route path="/retenciones-pendientes" element={<PendingRetentions />} />

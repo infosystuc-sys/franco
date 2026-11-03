@@ -170,6 +170,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         cards: [
           { icon: FileCheck, label: 'Cheques', path: '/cheques', newPath: '/cheques/nuevo', adminOnly: true },
           { icon: FileSpreadsheet, label: 'Saldos iniciales de clientes', path: '/saldos-iniciales/clientes', adminOnly: true },
+          { icon: FileSpreadsheet, label: 'Carga inicial de cheques', path: '/saldos-iniciales/cheques', adminOnly: true },
           { icon: FileMinus, label: 'NC provisorias', path: '/nc-provisorias', adminOnly: true },
           { icon: Wrench, label: 'Cuentas de mecánicos', path: '/mecanicos', adminOnly: true },
         ],

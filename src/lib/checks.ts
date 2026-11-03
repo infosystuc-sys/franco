@@ -223,6 +223,56 @@ export async function endorseCheck(id: string, supplierId: string, date: string)
   return data as string;
 }
 
+// ===========================================================================
+// Carga inicial: los cheques que había en cartera al empezar a usar la app
+// ===========================================================================
+
+export interface ChequeInicialInput {
+  electronico: boolean;
+  number: string;
+  bankName: string;
+  drawer: string;
+  issueDate: string;
+  dueDate: string;
+  amount: number;
+  notes: string;
+}
+
+/** Los cheques de la carga inicial, para revisarlos y borrar los cargados por error. */
+export async function fetchChequesIniciales(): Promise<ThirdPartyCheck[]> {
+  const { data, error } = await supabase
+    .from('third_party_checks')
+    .select(SELECT)
+    .eq('saldo_inicial', true)
+    .order('due_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapCheck);
+}
+
+/** Carga todos juntos, todo o nada. Devuelve cuántos entraron. */
+export async function cargarChequesIniciales(fecha: string, cheques: ChequeInicialInput[]): Promise<number> {
+  const { data, error } = await supabase.rpc('cargar_cheques_iniciales', {
+    p_fecha: fecha,
+    p_cheques: cheques.map((c) => ({
+      electronico: c.electronico,
+      number: c.number.trim(),
+      bank_name: c.bankName.trim(),
+      drawer: c.drawer.trim() || null,
+      issue_date: c.issueDate || null,
+      due_date: c.dueDate,
+      amount: c.amount,
+      notes: c.notes.trim() || null,
+    })),
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export async function borrarChequeInicial(id: string): Promise<void> {
+  const { error } = await supabase.rpc('borrar_cheque_inicial', { p_check_id: id });
+  if (error) throw error;
+}
+
 /** Traduce errores de base a mensajes accionables para el usuario. */
 export function describeCheckError(message: string): string {
   if (message.includes('third_party_checks_sin_duplicados')) {
@@ -230,6 +280,9 @@ export function describeCheckError(message: string): string {
   }
   if (message.includes('cartera de cheques cargada')) {
     return message;
+  }
+  if (message.includes('saldo_inicial') || message.includes('cargar_cheques_iniciales') || message.includes('borrar_cheque_inicial')) {
+    return 'Falta correr la migración de la carga inicial de cheques (supabase/migrations/20261102_cheques_iniciales.sql).';
   }
   if (message.includes('schema cache') || message.includes('does not exist')) {
     return 'Falta aplicar la migración de cheques en la base (supabase/treasury-checks.sql).';
