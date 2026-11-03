@@ -33,6 +33,7 @@ export async function sendInvoiceByEmail(params: {
   pdfBase64: string;
   subject: string;
   text: string;
+  extras?: { fileName: string; base64: string }[];
 }): Promise<void> {
   const { error } = await supabase.functions.invoke('enviar-factura', {
     body: {
@@ -40,6 +41,7 @@ export async function sendInvoiceByEmail(params: {
       destinatario: params.to,
       nombreArchivo: params.fileName,
       archivoBase64: params.pdfBase64,
+      adjuntosExtra: params.extras?.map((e) => ({ nombreArchivo: e.fileName, archivoBase64: e.base64 })),
       asunto: params.subject,
       texto: params.text,
     },
@@ -53,6 +55,7 @@ export async function sendInvoiceByWhatsapp(params: {
   fileName: string;
   pdfBase64: string;
   caption: string;
+  extras?: { fileName: string; base64: string }[];
 }): Promise<void> {
   const { error } = await supabase.functions.invoke('enviar-factura', {
     body: {
@@ -60,6 +63,7 @@ export async function sendInvoiceByWhatsapp(params: {
       destinatario: params.phone,
       nombreArchivo: params.fileName,
       archivoBase64: params.pdfBase64,
+      adjuntosExtra: params.extras?.map((e) => ({ nombreArchivo: e.fileName, archivoBase64: e.base64 })),
       texto: params.caption,
     },
   });

@@ -467,7 +467,12 @@ export function PaymentOrderNew() {
         values.map(({ key: _key, ...value }) => ({ ...value, amount: Number(value.amount) || 0 })),
         newProvisionalCreditNotes
       );
-      navigate('/pagos');
+      // Pagada por banco, se va a la orden: ahí se sube la constancia de la
+      // transferencia para mandarla con la orden.
+      const porBanco = values.some(
+        (v) => v.kind === 'MEDIO_PAGO' && methods.find((m) => m.id === v.paymentMethodId)?.kind === 'BANCO'
+      );
+      navigate(porBanco ? `/pago/${saved.id}` : '/pagos');
     } catch (err) {
       setError(describePaymentOrderError(getErrorMessage(err)));
       setSaving(false);

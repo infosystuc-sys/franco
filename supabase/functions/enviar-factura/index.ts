@@ -64,6 +64,18 @@ interface CuerpoPedido {
   nombreArchivo: string;
   asunto?: string;
   texto?: string;
+  /**
+   * Otros PDF que viajan con el documento: la constancia del banco en una
+   * orden de pago. Por mail van en el mismo correo; por WhatsApp, cada uno
+   * como un documento más después del principal.
+   */
+  adjuntosExtra?: { nombreArchivo: string; archivoBase64: string }[];
+}
+
+function adjuntosExtraDe(pedido: CuerpoPedido): { nombreArchivo: string; archivoBase64: string }[] {
+  return (Array.isArray(pedido.adjuntosExtra) ? pedido.adjuntosExtra : []).filter(
+    (a) => a && typeof a.archivoBase64 === 'string' && a.archivoBase64 && typeof a.nombreArchivo === 'string'
+  );
 }
 
 function base64ABytes(base64: string): Uint8Array {
@@ -111,6 +123,11 @@ async function enviarPorMail(pedido: CuerpoPedido): Promise<string | null> {
           content: base64ABytes(pedido.archivoBase64),
           encoding: 'binary',
         },
+        ...adjuntosExtraDe(pedido).map((a) => ({
+          filename: a.nombreArchivo,
+          content: base64ABytes(a.archivoBase64),
+          encoding: 'binary' as const,
+        })),
       ],
     });
     return null;
@@ -214,24 +231,33 @@ async function enviarPorWhatsapp(pedido: CuerpoPedido): Promise<string | null> {
   const resuelto = await resolverNumeroWhatsapp(base, pedido.destinatario);
   if (!resuelto.ok) return resuelto.error;
 
-  try {
-    const respuesta = await fetch(`${base}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
-      body: JSON.stringify({
-        number: resuelto.numero,
-        mediatype: 'document',
-        mimetype: 'application/pdf',
-        media: pedido.archivoBase64,
-        fileName: pedido.nombreArchivo,
-        caption: pedido.texto ?? '',
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+  // El documento principal lleva el texto; los adjuntos van detrás, sin texto.
+  const documentos = [
+    { nombreArchivo: pedido.nombreArchivo, archivoBase64: pedido.archivoBase64, texto: pedido.texto ?? '' },
+    ...adjuntosExtraDe(pedido).map((a) => ({ ...a, texto: '' })),
+  ];
 
-    if (!respuesta.ok) {
-      const cuerpo = await respuesta.text();
-      return `Evolution respondió ${respuesta.status}: ${cuerpo.slice(0, 300)}`;
+  try {
+    for (const [i, doc] of documentos.entries()) {
+      const respuesta = await fetch(`${base}/message/sendMedia/${EVOLUTION_INSTANCE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
+        body: JSON.stringify({
+          number: resuelto.numero,
+          mediatype: 'document',
+          mimetype: 'application/pdf',
+          media: doc.archivoBase64,
+          fileName: doc.nombreArchivo,
+          caption: doc.texto,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+
+      if (!respuesta.ok) {
+        const cuerpo = await respuesta.text();
+        const yaSalio = i > 0 ? ` El documento principal ya se mandó; falló ${doc.nombreArchivo}.` : '';
+        return `Evolution respondió ${respuesta.status}: ${cuerpo.slice(0, 300)}${yaSalio}`;
+      }
     }
     return null;
   } catch (e) {

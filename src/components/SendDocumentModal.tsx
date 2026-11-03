@@ -21,6 +21,7 @@ export function SendDocumentModal({
   onClose,
   onSent,
   contactos,
+  adjuntosExtra,
 }: {
   channel: 'email' | 'whatsapp';
   defaultDestino: string | null;
@@ -36,6 +37,11 @@ export function SendDocumentModal({
   onClose: () => void;
   /** Para dejar marcado el comprobante como enviado en su listado. */
   onSent?: () => Promise<void> | void;
+  /**
+   * Otros PDF que viajan con el documento (la constancia del banco en una
+   * orden de pago). Se bajan recién al enviar, como el PDF principal.
+   */
+  adjuntosExtra?: { nombres: string[]; cargar: () => Promise<{ fileName: string; base64: string }[]> };
 }) {
   const isEmail = channel === 'email';
   const [destino, setDestino] = React.useState(defaultDestino ?? '');
@@ -50,10 +56,11 @@ export function SendDocumentModal({
     try {
       const { renderElementToPdfBase64 } = await import('@/src/lib/pdf');
       const pdfBase64 = await renderElementToPdfBase64(documentRef.current);
+      const extras = adjuntosExtra && adjuntosExtra.nombres.length > 0 ? await adjuntosExtra.cargar() : [];
       if (isEmail) {
-        await sendInvoiceByEmail({ to: destino.trim(), fileName, pdfBase64, subject, text });
+        await sendInvoiceByEmail({ to: destino.trim(), fileName, pdfBase64, subject, text, extras });
       } else {
-        await sendInvoiceByWhatsapp({ phone: destino.trim(), fileName, pdfBase64, caption: text });
+        await sendInvoiceByWhatsapp({ phone: destino.trim(), fileName, pdfBase64, caption: text, extras });
       }
       setSent(true);
       // Ya salió: si la marca falla, el envío no se deshace ni se avisa como error.
@@ -121,6 +128,15 @@ export function SendDocumentModal({
                 autoFocus
               />
             </label>
+
+            {adjuntosExtra && adjuntosExtra.nombres.length > 0 && (
+              <div className="mt-3 text-xs text-text-soft">
+                Se adjunta también:
+                <ul className="mt-0.5 list-disc pl-5">
+                  {adjuntosExtra.nombres.map((n, i) => <li key={i} className="break-all">{n}</li>)}
+                </ul>
+              </div>
+            )}
 
             {error && (
               <p className="mt-3 text-xs text-danger">{error}</p>

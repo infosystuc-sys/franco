@@ -1,5 +1,5 @@
 import React from 'react';
-import { XCircle, Printer, Ban, FileCheck, Mail, MessageCircle } from 'lucide-react';
+import { XCircle, Printer, Ban, FileCheck, Mail, MessageCircle, Paperclip, FileText, Trash2, Upload } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { cn, formatDate, formatMoney } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -19,6 +19,15 @@ import {
   type PaymentValue,
 } from '@/src/lib/paymentOrders';
 import { usePlantillasDeEnvio } from '@/src/lib/plantillasMensaje';
+import {
+  deletePaymentOrderAttachment,
+  describeAttachmentError,
+  fetchPaymentOrderAttachments,
+  getPaymentOrderAttachmentUrl,
+  loadAttachmentsAsBase64,
+  uploadPaymentOrderAttachment,
+  type PaymentOrderAttachment,
+} from '@/src/lib/paymentOrderAttachments';
 
 export function PaymentOrderDetails() {
   const { role } = useAuth();
@@ -30,6 +39,26 @@ export function PaymentOrderDetails() {
   const [voiding, setVoiding] = React.useState(false);
   const [sendModal, setSendModal] = React.useState<'email' | 'whatsapp' | null>(null);
   const documentRef = React.useRef<HTMLDivElement>(null);
+  // Las constancias del banco: se muestran acá y viajan con la orden al enviarla.
+  const [adjuntos, setAdjuntos] = React.useState<PaymentOrderAttachment[]>([]);
+  const [adjuntosError, setAdjuntosError] = React.useState<string | null>(null);
+  const [adjuntosListos, setAdjuntosListos] = React.useState(false);
+
+  const cargarAdjuntos = React.useCallback(async () => {
+    if (!id) return;
+    try {
+      setAdjuntos(await fetchPaymentOrderAttachments(id));
+      setAdjuntosError(null);
+    } catch (err) {
+      setAdjuntosError(describeAttachmentError(getErrorMessage(err)));
+    } finally {
+      setAdjuntosListos(true);
+    }
+  }, [id]);
+
+  React.useEffect(() => {
+    cargarAdjuntos();
+  }, [cargarAdjuntos]);
   // Asunto y texto de los envíos, según lo configurado en Configuración.
   const armarMensaje = usePlantillasDeEnvio();
 
@@ -52,7 +81,8 @@ export function PaymentOrderDetails() {
 
   // Los botones del listado llegan acá con la acción en la URL.
   const desdeListado = useAccionDesdeListado({
-    listo: !loading && order?.status === 'REGISTRADA',
+    // Enviar desde el listado espera a las constancias del banco, para no mandar la orden sin ellas.
+    listo: !loading && adjuntosListos && order?.status === 'REGISTRADA',
     listado: '/pagos',
     documentRef,
     nombreArchivo: `${order?.fullNumber ?? 'orden-de-pago'}.pdf`,
@@ -173,6 +203,14 @@ export function PaymentOrderDetails() {
             retenciones o saldo a favor: cancelan comprobante pero no son plata que sale.
           </div>
         )}
+
+        <ComprobantesDelBanco
+          orderId={order.id}
+          adjuntos={adjuntos}
+          error={adjuntosError}
+          editable={!voided}
+          onChange={cargarAdjuntos}
+        />
       </div>
 
       <div ref={documentRef} className="print-document border border-line bg-panel p-6 md:p-8">
@@ -313,6 +351,10 @@ export function PaymentOrderDetails() {
               ? `Adjuntamos la orden de pago ${order.fullNumber} por $ ${formatMoney(order.totalAmount)}.`
               : `Orden de pago ${order.fullNumber} — $ ${formatMoney(order.totalAmount)}`)}
           onSent={() => marcarEnviado('orden_pago', order.id)}
+          adjuntosExtra={{
+            nombres: adjuntos.map((a) => a.fileName),
+            cargar: () => loadAttachmentsAsBase64(adjuntos),
+          }}
           onClose={() => {
             setSendModal(null);
             if (desdeListado.vinoDelListado) desdeListado.volverAlListado();
@@ -352,4 +394,131 @@ function ValueDescription({ value }: { value: PaymentValue }) {
   }
 
   return <span className="text-text-soft">Saldo a favor de pagos anteriores</span>;
+}
+
+/**
+ * Las constancias que emite el banco (transferencia, eCheq), en PDF. Se suben
+ * después de registrar la orden, cuando el banco las da, y se mandan con la
+ * orden al proveedor.
+ */
+function ComprobantesDelBanco({
+  orderId,
+  adjuntos,
+  error: errorDeCarga,
+  editable,
+  onChange,
+}: {
+  orderId: string;
+  adjuntos: PaymentOrderAttachment[];
+  error: string | null;
+  editable: boolean;
+  onChange: () => Promise<void>;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [subiendo, setSubiendo] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function subir(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivos = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (archivos.length === 0) return;
+    setSubiendo(true);
+    setError(null);
+    try {
+      for (const archivo of archivos) await uploadPaymentOrderAttachment(orderId, archivo);
+    } catch (err) {
+      setError(describeAttachmentError(getErrorMessage(err)));
+    } finally {
+      await onChange();
+      setSubiendo(false);
+    }
+  }
+
+  async function ver(a: PaymentOrderAttachment) {
+    // La pestaña se abre antes de pedir la URL: si no, el navegador la bloquea.
+    const ventana = window.open('', '_blank');
+    try {
+      const url = await getPaymentOrderAttachmentUrl(a);
+      if (ventana) ventana.location.href = url;
+      else window.location.href = url;
+    } catch (err) {
+      ventana?.close();
+      setError(describeAttachmentError(getErrorMessage(err)));
+    }
+  }
+
+  async function borrar(a: PaymentOrderAttachment) {
+    if (!window.confirm(`¿Quitar ${a.fileName} de la orden?`)) return;
+    setError(null);
+    try {
+      await deletePaymentOrderAttachment(a);
+    } catch (err) {
+      setError(describeAttachmentError(getErrorMessage(err)));
+    } finally {
+      await onChange();
+    }
+  }
+
+  const mensajeError = error ?? errorDeCarga;
+
+  return (
+    <div className="mb-6 border border-line bg-panel p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-text">
+          <Paperclip size={15} /> Comprobantes del banco
+        </h3>
+        {editable && (
+          <>
+            <Button variant="ghost" type="button" onClick={() => inputRef.current?.click()} disabled={subiendo}>
+              <Upload size={16} /> {subiendo ? 'Subiendo…' : 'Subir PDF'}
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              className="hidden"
+              onChange={subir}
+            />
+          </>
+        )}
+      </div>
+      {mensajeError && <p className="mt-2 text-xs text-danger">{mensajeError}</p>}
+      {adjuntos.length === 0 ? (
+        <p className="mt-2 text-xs text-text-soft">
+          Subí la constancia de la transferencia que emite el banco: se manda adjunta con la orden por mail o WhatsApp.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {adjuntos.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 text-sm">
+              <FileText size={15} className="shrink-0 text-accent-deep" />
+              <button
+                type="button"
+                onClick={() => ver(a)}
+                className="min-w-0 flex-1 truncate text-left text-accent-deep hover:underline"
+                title="Ver el PDF"
+              >
+                {a.fileName}
+              </button>
+              {a.sizeBytes !== null && (
+                <span className="text-xs text-text-faint">{Math.max(1, Math.round(a.sizeBytes / 1024))} KB</span>
+              )}
+              {editable && (
+                <button
+                  type="button"
+                  onClick={() => borrar(a)}
+                  title="Quitar"
+                  aria-label={`Quitar ${a.fileName}`}
+                  className="inline-flex h-7 w-7 items-center justify-center text-text-soft hover:text-danger"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
