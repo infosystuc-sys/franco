@@ -1,5 +1,5 @@
 import React from 'react';
-import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, FileMinus, X } from 'lucide-react';
+import { Save, XCircle, Plus, Trash2, AlertTriangle, Check, Wand2, FileCheck, FileMinus, X, Search } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -112,6 +112,7 @@ export function PaymentOrderNew() {
   const [draftAmount, setDraftAmount] = React.useState(0);
   const [selectedCheckIds, setSelectedCheckIds] = React.useState<Set<string>>(new Set());
   const [checkPickerOpen, setCheckPickerOpen] = React.useState(false);
+  const [checkSearch, setCheckSearch] = React.useState('');
 
   const [addingProvisional, setAddingProvisional] = React.useState(false);
   const [provisionalDescription, setProvisionalDescription] = React.useState('');
@@ -195,6 +196,33 @@ export function PaymentOrderNew() {
     () => walletChecks.filter((c) => !values.some((v) => v.checkId === c.id)),
     [walletChecks, values]
   );
+
+  // La búsqueda de la cartera: cada palabra tiene que aparecer en algún dato
+  // del cheque (número, banco, librador, vencimiento, importe o "eCheq").
+  // "galicia 150000" encuentra el de ese banco por ese importe.
+  const filteredWalletChecks = React.useMemo(() => {
+    const palabras = normalizarBusqueda(checkSearch).split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) return availableWalletChecks;
+    return availableWalletChecks.filter((c) => {
+      const texto = normalizarBusqueda(
+        [
+          c.number,
+          c.bankName,
+          c.drawer ?? '',
+          c.electronico ? 'echeq electronico' : 'cheque fisico',
+          formatDate(c.dueDate),
+          c.dueDate,
+          c.issueDate ? formatDate(c.issueDate) : '',
+          formatMoney(c.amount),
+          String(c.amount),
+          c.notes ?? '',
+        ].join(' ')
+      );
+      // El importe se busca también sin puntos de miles: "150000" encuentra "150.000,00".
+      const sinMiles = texto.replace(/(\d)\.(?=\d{3})/g, '$1');
+      return palabras.every((p) => texto.includes(p) || sinMiles.includes(p));
+    });
+  }, [availableWalletChecks, checkSearch]);
 
   // El desplegable de "Medios de pago" junta en una sola lista los medios
   // reales, retención, saldo a favor y — si hay algo en cartera — cheque
@@ -319,12 +347,14 @@ export function PaymentOrderNew() {
       })),
     ]);
     setSelectedCheckIds(new Set());
+    setCheckSearch('');
     setCheckPickerOpen(false);
   }
 
   function closeCheckPicker() {
     setCheckPickerOpen(false);
     setSelectedCheckIds(new Set());
+    setCheckSearch('');
   }
 
   function handleAutoAllocate() {
@@ -671,7 +701,7 @@ export function PaymentOrderNew() {
       {/* ── Cheques en cartera para endosar: modal, solo al elegir el medio ── */}
       {checkPickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Panel className="max-h-[85vh] w-full max-w-2xl overflow-y-auto p-5">
+          <Panel className="max-h-[85vh] w-full max-w-4xl overflow-y-auto p-5">
           <SectionHeader
             title="Cheques en cartera para endosar"
             actions={
@@ -680,6 +710,16 @@ export function PaymentOrderNew() {
               </button>
             }
           />
+          <div className="relative mb-3">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-faint" />
+            <input
+              autoFocus
+              value={checkSearch}
+              onChange={(e) => setCheckSearch(e.target.value)}
+              placeholder="Buscar por número, banco, librador, vencimiento o importe…"
+              className={cn(inputClass, 'mt-0 w-full pl-9')}
+            />
+          </div>
           <div className="overflow-x-auto overflow-y-hidden rounded-md border border-line">
             <table className="table-stack w-full text-left text-[15px]">
               <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
@@ -687,12 +727,22 @@ export function PaymentOrderNew() {
                   <th className="w-8 px-3 py-1"></th>
                   <th className="px-3 py-1">Número</th>
                   <th className="px-3 py-1">Banco</th>
+                  <th className="px-3 py-1">Librador</th>
                   <th className="px-3 py-1 w-28">Vence</th>
                   <th className="px-3 py-1 w-32 text-right">Importe</th>
                 </tr>
               </thead>
               <tbody>
-                {availableWalletChecks.map((c, idx) => (
+                {filteredWalletChecks.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-4 text-center text-sm text-text-soft">
+                      {availableWalletChecks.length === 0
+                        ? 'No quedan cheques en cartera para endosar.'
+                        : 'Ningún cheque coincide con la búsqueda.'}
+                    </td>
+                  </tr>
+                )}
+                {filteredWalletChecks.map((c, idx) => (
                   <tr
                     key={c.id}
                     className={cn('h-10 cursor-pointer border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}
@@ -712,6 +762,7 @@ export function PaymentOrderNew() {
                       {c.electronico && <span className="ml-1.5 rounded-sm bg-[#2b6cb0]/15 px-1 font-sans text-[11px] font-semibold uppercase text-[#2b6cb0]">eCheq</span>}
                     </td>
                     <td data-label="Banco" className="px-3 py-1">{c.bankName}</td>
+                    <td data-label="Librador" className="px-3 py-1">{c.drawer || '—'}</td>
                     <td data-label="Vence" className="px-3 py-1 text-text-soft">{formatDate(c.dueDate)}</td>
                     <td data-label="Importe" className="px-3 py-1 text-right font-mono">$ {formatMoney(c.amount)}</td>
                   </tr>
@@ -970,4 +1021,9 @@ function Row({ label, value }: { label: string; value: number }) {
       <dd className="font-mono text-text">$ {formatMoney(value)}</dd>
     </div>
   );
+}
+
+/** Minúsculas y sin acentos, para buscar "credicoop" o "Credicóop" igual. */
+function normalizarBusqueda(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
