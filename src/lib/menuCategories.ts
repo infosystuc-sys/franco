@@ -182,6 +182,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           reportCard('saldos-clientes'),
           reportCard('antiguedad-clientes'),
           reportCard('saldos-proveedores'),
+          reportCard('pagos-a-realizar'),
           reportCard('antiguedad-proveedores'),
           reportCard('cheques-cartera'),
         ],

@@ -74,6 +74,12 @@ export interface ReportDefinition {
    * `fecha`) y por cliente o proveedor (la columna `parte`, con su nombre).
    */
   filtraPorFechaYParte?: { fecha: string; parte: string; etiquetaParte: string };
+  /** Cómo se llaman las fechas del período, si no son "Desde" y "Hasta" (y en el membrete, "Período"). */
+  etiquetasPeriodo?: { desde: string; hasta: string; periodo: string };
+  /** El período con el que arranca la pantalla, si no es el mes en curso hasta hoy. */
+  periodoInicial?: () => ReportParams;
+  /** Los grupos arrancan desplegados: el informe se lee comprobante por comprobante. */
+  detalleAbierto?: boolean;
   run: (params: ReportParams) => Promise<Record<string, unknown>[]>;
 }
 
@@ -91,6 +97,47 @@ async function callReport(
 }
 
 const periodArgs = (p: ReportParams) => ({ p_from: p.from, p_to: p.to });
+
+const TIPO_CORTO: Record<string, string> = { FACTURA: 'FC', NOTA_DEBITO: 'ND', NOTA_CREDITO: 'NC' };
+
+/**
+ * Pagos a realizar: los comprobantes de compra con saldo que vencen en el
+ * período, ordenados por proveedor y vencimiento. Se arma acá y no en una
+ * función de la base: es una consulta directa a purchase_invoices, que el
+ * RLS ya limita al admin.
+ */
+async function fetchPagosARealizar(p: ReportParams): Promise<Record<string, unknown>[]> {
+  const { data, error } = await supabase
+    .from('purchase_invoices')
+    .select('supplier_name, doc_type, letter, full_number, issue_date, due_date, total_amount, settled_amount')
+    .eq('status', 'REGISTRADA')
+    .neq('doc_type', 'NOTA_CREDITO')
+    .gte('due_date', p.from)
+    .lte('due_date', p.to)
+    .order('supplier_name')
+    .order('due_date')
+    .order('issue_date');
+  if (error) throw error;
+  const hoy = todayLocal();
+  const dias = (desde: string, hasta: string) =>
+    Math.round((Date.parse(hasta) - Date.parse(desde)) / 86_400_000);
+  return ((data ?? []) as any[])
+    .map((r) => {
+      const total = Number(r.total_amount);
+      const pagado = Number(r.settled_amount);
+      return {
+        supplier_name: r.supplier_name,
+        comprobante: `${TIPO_CORTO[r.doc_type] ?? r.doc_type} ${r.letter} ${r.full_number}`,
+        total_amount: total,
+        issue_date: r.issue_date,
+        due_date: r.due_date,
+        dias_vencido: Math.max(0, dias(r.due_date, hoy)),
+        settled_amount: pagado,
+        a_pagar: Math.round((total - pagado) * 100) / 100,
+      };
+    })
+    .filter((r) => r.a_pagar > 0.004);
+}
 
 // ===========================================================================
 // El catálogo
@@ -224,6 +271,38 @@ export const REPORTS: ReportDefinition[] = [
     ],
     filtraPorFechaYParte: { fecha: 'issue_date', parte: 'supplier_name', etiquetaParte: 'Proveedor' },
     run: () => callReport('report_supplier_balances'),
+  },
+  {
+    id: 'pagos-a-realizar',
+    area: 'CUENTAS_CORRIENTES',
+    name: 'Pagos a realizar',
+    description:
+      'Lo que hay que pagarle a cada proveedor, por fecha de vencimiento: facturas y notas de débito con saldo pendiente.',
+    usesPeriod: true,
+    etiquetasPeriodo: { desde: 'Vencimiento desde', hasta: 'Vencimiento hasta', periodo: 'Vencimientos' },
+    // Desde tres meses atrás (lo vencido sin pagar) hasta fin del mes que viene.
+    periodoInicial: () => {
+      const hoy = new Date();
+      const desde = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
+      const hasta = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { from: iso(desde), to: iso(hasta) };
+    },
+    agruparPor: 'supplier_name',
+    detalleAbierto: true,
+    columns: [
+      { key: 'supplier_name', label: 'Proveedor', width: 30 },
+      { key: 'comprobante', label: 'Comprobante', width: 24 },
+      { key: 'total_amount', label: 'Importe total', format: 'money', width: 15 },
+      { key: 'issue_date', label: 'Fecha', format: 'date', width: 12 },
+      { key: 'due_date', label: 'Vencimiento', format: 'date', width: 12 },
+      { key: 'dias_vencido', label: 'Días vencido', format: 'integer', width: 10 },
+      { key: 'settled_amount', label: 'Pagado', format: 'money', width: 15 },
+      { key: 'a_pagar', label: 'A pagar', format: 'money', total: true, width: 15 },
+    ],
+    filtraPorFechaYParte: { fecha: 'issue_date', parte: 'supplier_name', etiquetaParte: 'Proveedor' },
+    run: fetchPagosARealizar,
   },
   {
     id: 'antiguedad-proveedores',
@@ -535,7 +614,7 @@ export function computeTotals(
 /** Período legible para el encabezado de la planilla. */
 function periodLabel(report: ReportDefinition, params: ReportParams): string {
   if (!report.usesPeriod) return `Al ${formatDate(todayLocal())}`;
-  return `Período: ${formatDate(params.from)} al ${formatDate(params.to)}`;
+  return `${report.etiquetasPeriodo?.periodo ?? 'Período'}: ${formatDate(params.from)} al ${formatDate(params.to)}`;
 }
 
 /**

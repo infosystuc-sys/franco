@@ -1,7 +1,7 @@
 import React from 'react';
-import { XCircle, FileSpreadsheet, Play, Search, Printer, ChevronRight, ChevronDown, Mail, MessageCircle } from 'lucide-react';
+import { XCircle, FileSpreadsheet, FileDown, Play, Search, Printer, ChevronRight, ChevronDown, Mail, MessageCircle } from 'lucide-react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { cn, todayLocal, coincideBusqueda, formatMoney } from '@/src/lib/utils';
+import { cn, todayLocal, coincideBusqueda, formatMoney, formatDate } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
@@ -91,8 +91,8 @@ export function ReportView() {
   const { id } = useParams();
   const report = findReport(id ?? '');
 
-  const [from, setFrom] = React.useState(firstOfMonth());
-  const [to, setTo] = React.useState(todayLocal());
+  const [from, setFrom] = React.useState(() => report?.periodoInicial?.().from ?? firstOfMonth());
+  const [to, setTo] = React.useState(() => report?.periodoInicial?.().to ?? todayLocal());
   const [rows, setRows] = React.useState<Record<string, unknown>[] | null>(null);
   const [running, setRunning] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -194,6 +194,7 @@ export function ReportView() {
   }, [report, grupos, filtered]);
 
   const documentRef = React.useRef<HTMLDivElement>(null);
+  const [pdfEnCurso, setPdfEnCurso] = React.useState(false);
   const [enviando, setEnviando] = React.useState<'email' | 'whatsapp' | null>(null);
   const [contactos, setContactos] = React.useState<ContactoDeEnvio[] | null>(null);
 
@@ -237,11 +238,32 @@ export function ReportView() {
       const data = await report.run(params);
       setRows(data);
       setRanWith(params);
+      if (report.agruparPor && report.detalleAbierto) {
+        const clave = report.agruparPor;
+        setAbiertos(new Set(data.map((r) => String(r[clave] ?? '—'))));
+      }
     } catch (err) {
       setError(describeReportError(getErrorMessage(err)));
       setRows(null);
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handlePdf() {
+    if (!report || !documentRef.current) return;
+    // El membrete con el nombre del informe y el período sale solo en el PDF
+    // (y al imprimir): en pantalla ya está arriba.
+    setPdfEnCurso(true);
+    try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { downloadElementAsPdf } = await import('@/src/lib/pdf');
+      const sufijo = ranWith && report.usesPeriod ? `-${ranWith.from}-al-${ranWith.to}` : `-${todayLocal()}`;
+      await downloadElementAsPdf(documentRef.current, `${report.id}${sufijo}.pdf`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPdfEnCurso(false);
     }
   }
 
@@ -266,6 +288,9 @@ export function ReportView() {
                 <>
                   <Button variant="ghost" type="button" onClick={() => window.print()}>
                     <Printer size={16} /> Imprimir
+                  </Button>
+                  <Button variant="ghost" type="button" onClick={handlePdf} disabled={pdfEnCurso}>
+                    <FileDown size={16} /> {pdfEnCurso ? 'Armando…' : 'PDF'}
                   </Button>
                   <Button variant="secondary" type="button" onClick={handleExport}>
                     <FileSpreadsheet size={16} /> Exportar a Excel
@@ -297,7 +322,7 @@ export function ReportView() {
             {report.usesPeriod ? (
               <>
                 <label className={labelClass}>
-                  Desde
+                  {report.etiquetasPeriodo?.desde ?? 'Desde'}
                   <input
                     type="date"
                     value={from}
@@ -306,7 +331,7 @@ export function ReportView() {
                   />
                 </label>
                 <label className={labelClass}>
-                  Hasta
+                  {report.etiquetasPeriodo?.hasta ?? 'Hasta'}
                   <input
                     type="date"
                     value={to}
@@ -434,6 +459,19 @@ export function ReportView() {
           </div>
 
           <div ref={documentRef} className="bg-panel">
+          {!unCliente && (
+            <div className={pdfEnCurso ? '' : 'hidden print:block'}>
+              <MembreteDelTaller
+                titulo={report.name}
+                lineas={[
+                  ranWith && report.usesPeriod
+                    ? `${report.etiquetasPeriodo?.periodo ?? 'Período'}: ${formatDate(ranWith.from)} al ${formatDate(ranWith.to)}`
+                    : `Al ${new Date().toLocaleDateString('es-AR')}`,
+                  ...(parteElegida ? [parteElegida] : []),
+                ]}
+              />
+            </div>
+          )}
           {unCliente && (
             <MembreteDelTaller
               titulo="Composición de saldo"
