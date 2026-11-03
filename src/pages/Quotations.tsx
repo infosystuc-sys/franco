@@ -30,7 +30,9 @@ const COLUMNAS: ColumnaListado<QuotationListRow>[] = [
   { label: 'Válido hasta', valor: (f) => (f.validUntil ? formatDate(f.validUntil) : '—') },
   // Mandarlo a autorizar también es mandarlo, aunque no pase por el modal.
   { label: 'Enviado', valor: (f) => siNo(!!f.enviadoAt || f.status !== 'EMITIDA') },
-  // Con IVA, como el total del presupuesto que recibe el cliente.
+  // Discriminado como en el presupuesto que recibe el cliente: neto, IVA y total.
+  { label: 'Subtotal', valor: (f) => `$ ${formatMoney(f.total)}`, derecha: true },
+  { label: 'IVA', valor: (f) => `$ ${formatMoney(f.total * VAT_RATE)}`, derecha: true },
   { label: 'Total', valor: (f) => `$ ${formatMoney(f.total * (1 + VAT_RATE))}`, derecha: true },
   {
     label: 'Estado',
