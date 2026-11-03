@@ -388,3 +388,80 @@ export async function fetchSaldosInicialesDe(customerId: string): Promise<SaldoI
     })),
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Proveedores: lo que se les debía al empezar
+// ---------------------------------------------------------------------------
+
+export interface SaldoInicialProveedorInput {
+  supplierId: string;
+  /** "A 0001-00001234" guarda ese número; cualquier otro texto entra como X 0000. */
+  comprobante: string;
+  fecha: string;
+  vencimiento: string;
+  importe: number;
+}
+
+export interface SaldoInicialProveedor {
+  id: string;
+  supplierName: string;
+  comprobante: string;
+  fecha: string;
+  vencimiento: string;
+  importe: number;
+  pagado: number;
+}
+
+/**
+ * Carga las deudas con proveedores de antes de empezar a usar la app. Cada
+ * una entra como comprobante de compra de saldo inicial: queda pendiente en
+ * Pagos y se cancela con una orden de pago. No entra al Libro IVA Compras.
+ * Ver supabase/migrations/20261103_saldos_iniciales_proveedores.sql.
+ */
+export async function cargarSaldosInicialesProveedores(filas: SaldoInicialProveedorInput[]): Promise<number> {
+  const { data, error } = await supabase.rpc('cargar_saldos_iniciales_proveedores', {
+    p_filas: filas.map((f) => ({
+      supplier_id: f.supplierId,
+      comprobante: f.comprobante.trim(),
+      fecha: f.fecha || null,
+      vencimiento: f.vencimiento || null,
+      importe: f.importe,
+    })),
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}
+
+export async function fetchSaldosInicialesProveedores(): Promise<SaldoInicialProveedor[]> {
+  const { data, error } = await supabase
+    .from('purchase_invoices')
+    .select('id, supplier_name, letter, full_number, notes, issue_date, due_date, total_amount, settled_amount')
+    .eq('saldo_inicial', true)
+    .eq('status', 'REGISTRADA')
+    .order('supplier_name')
+    .order('issue_date');
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((r) => ({
+    id: r.id,
+    supplierName: r.supplier_name,
+    // Lo que se tipeó al cargarlo, si no era un número de comprobante.
+    comprobante:
+      typeof r.notes === 'string' && r.notes.startsWith('Saldo inicial — ')
+        ? r.notes.slice('Saldo inicial — '.length)
+        : `${r.letter} ${r.full_number}`,
+    fecha: r.issue_date,
+    vencimiento: r.due_date,
+    importe: Number(r.total_amount),
+    pagado: Number(r.settled_amount),
+  }));
+}
+
+export function describeSaldoInicialProveedorError(message: string): string {
+  if (message.includes('saldo_inicial') || message.includes('cargar_saldos_iniciales_proveedores')) {
+    return 'Falta correr la migración de saldos iniciales de proveedores en Supabase: supabase/migrations/20261103_saldos_iniciales_proveedores.sql.';
+  }
+  if (message.includes('purchase_invoices_sin_duplicados')) {
+    return 'Hay un comprobante repetido para el mismo proveedor (en la carga o ya cargado antes).';
+  }
+  return message;
+}
