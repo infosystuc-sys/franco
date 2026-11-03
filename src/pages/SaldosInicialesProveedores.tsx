@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -12,7 +12,10 @@ import { describePurchaseError, eliminarComprobanteDeCompra } from '@/src/lib/pu
 import {
   cargarSaldosInicialesProveedores,
   describeSaldoInicialProveedorError,
+  descargarPlanillaModeloProveedores,
   fetchSaldosInicialesProveedores,
+  leerPlanillaDeSaldosProveedores,
+  type FilaSaldoInicial,
   type SaldoInicialProveedor,
 } from '@/src/lib/saldosIniciales';
 
@@ -38,6 +41,22 @@ function estaVacia(fila: Fila): boolean {
   return !fila.supplierId && !fila.comprobante.trim() && !fila.importe.trim();
 }
 
+/** El proveedor de una fila de la planilla: por CUIT, y si no, por nombre o razón social. */
+function proveedorDe(fila: FilaSaldoInicial, proveedores: Supplier[]): Supplier | null {
+  const cuit = fila.cuit.replace(/\D/g, '');
+  if (cuit) {
+    const porCuit = proveedores.find((p) => (p.taxId ?? '').replace(/\D/g, '') === cuit);
+    if (porCuit) return porCuit;
+  }
+  const nombre = fila.cliente.trim().toLowerCase();
+  if (!nombre) return null;
+  return (
+    proveedores.find((p) => p.name.trim().toLowerCase() === nombre) ??
+    proveedores.find((p) => (p.legalName ?? '').trim().toLowerCase() === nombre) ??
+    null
+  );
+}
+
 function estaCompleta(fila: Fila, fechaInicio: string): boolean {
   const fecha = fila.fecha || fechaInicio;
   return !!fila.supplierId && !!fecha && importeDe(fila) > 0 && (!fila.vencimiento || fila.vencimiento >= fecha);
@@ -59,6 +78,10 @@ export function SaldosInicialesProveedores() {
   const [borrando, setBorrando] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [aviso, setAviso] = React.useState<string | null>(null);
+  // Lo que la planilla no pudo pasar a la grilla tal cual, para corregirlo a mano.
+  const [problemas, setProblemas] = React.useState<string[]>([]);
+  const [leyendo, setLeyendo] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const recargar = React.useCallback(async () => {
     try {
@@ -108,11 +131,61 @@ export function SaldosInicialesProveedores() {
       );
       setAviso(`Se cargaron ${n} saldo${n === 1 ? '' : 's'}. Ya figuran como pendientes en Pagos.`);
       setFilas([{ ...FILA_VACIA }]);
+      setProblemas([]);
       await recargar();
     } catch (err) {
       setError(describeSaldoInicialProveedorError(getErrorMessage(err)));
     } finally {
       setGuardando(false);
+    }
+  }
+
+  /**
+   * La planilla no se carga directo: llena la grilla, donde se revisa y se
+   * corrige antes de apretar "Cargar saldos". Las filas que se entienden
+   * entran completas; a las otras les falta lo que no se pudo leer.
+   */
+  async function elegirArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLeyendo(true);
+    setError(null);
+    setAviso(null);
+    setProblemas([]);
+    try {
+      const leidas = await leerPlanillaDeSaldosProveedores(file);
+      if (leidas.length === 0) {
+        setError('La planilla no tiene ninguna fila con saldo.');
+        return;
+      }
+      const avisos: string[] = [];
+      const nuevas: Fila[] = leidas.map((l) => {
+        const proveedor = proveedorDe(l, proveedores);
+        const errores = [...l.errores];
+        if (!proveedor && (l.cliente || l.cuit)) {
+          errores.push(`No encontré el proveedor "${l.cliente || l.cuit}": elegilo en la grilla o dalo de alta en Proveedores.`);
+        }
+        if (errores.length > 0) avisos.push(`Fila ${l.filaExcel}: ${errores.join(' ')}`);
+        return {
+          supplierId: proveedor?.id ?? '',
+          comprobante: l.comprobante,
+          fecha: l.fecha === 'INVALIDA' ? '' : l.fecha,
+          vencimiento: l.vencimiento === 'INVALIDA' ? '' : l.vencimiento,
+          importe: l.importe !== null && l.importe > 0 ? String(l.importe) : '',
+        };
+      });
+      // Se suma a lo que ya estaba tipeado, sin la fila vacía del principio.
+      setFilas((actuales) => [...actuales.filter((f) => !estaVacia(f)), ...nuevas]);
+      setProblemas(avisos);
+      setAviso(
+        `Se leyeron ${nuevas.length} fila${nuevas.length === 1 ? '' : 's'} de ${file.name}. ` +
+          'Revisalas en la grilla y apretá "Cargar saldos".'
+      );
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLeyendo(false);
     }
   }
 
@@ -138,6 +211,13 @@ export function SaldosInicialesProveedores() {
         subtitle="Lo que se le debía a cada proveedor al empezar a usar la app."
         actions={
           <>
+            <Button variant="ghost" type="button" onClick={descargarPlanillaModeloProveedores}>
+              <Download size={16} /> Planilla modelo
+            </Button>
+            <Button variant="ghost" type="button" onClick={() => inputRef.current?.click()} disabled={leyendo || guardando}>
+              <Upload size={16} /> {leyendo ? 'Leyendo…' : 'Importar planilla'}
+            </Button>
+            <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={elegirArchivo} />
             <Link to="/pagos">
               <Button variant="ghost" type="button"><X size={16} /> Ir a Pagos</Button>
             </Link>
@@ -152,6 +232,17 @@ export function SaldosInicialesProveedores() {
       {aviso && (
         <div className="mb-4 flex items-center gap-2 rounded-md border border-line-strong bg-panel-alt px-4 py-3 text-sm text-text">
           <CheckCircle2 size={16} className="text-state-ok" /> {aviso}
+        </div>
+      )}
+
+      {problemas.length > 0 && (
+        <div className="mb-4 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">
+          <p className="mb-1 flex items-center gap-2 font-semibold">
+            <AlertTriangle size={16} /> Filas de la planilla para revisar en la grilla:
+          </p>
+          <ul className="list-disc space-y-0.5 pl-6 text-[13px]">
+            {problemas.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
         </div>
       )}
 

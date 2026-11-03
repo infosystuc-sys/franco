@@ -64,7 +64,8 @@ const sinAcentos = (s: string) =>
 
 /** Qué títulos de columna se reconocen para cada dato. */
 const SINONIMOS: Record<(typeof COLUMNAS)[number], string[]> = {
-  Cliente: ['cliente', 'razon social', 'nombre'],
+  // "Proveedor": la misma planilla sirve para los saldos de proveedores.
+  Cliente: ['cliente', 'proveedor', 'razon social', 'nombre'],
   CUIT: ['cuit', 'cuil', 'dni', 'documento', 'nro doc'],
   Comprobante: ['comprobante', 'referencia', 'numero', 'nro', 'factura'],
   Fecha: ['fecha', 'emision'],
@@ -464,4 +465,39 @@ export function describeSaldoInicialProveedorError(message: string): string {
     return 'Hay un comprobante repetido para el mismo proveedor (en la carga o ya cargado antes).';
   }
   return message;
+}
+
+const COLUMNAS_PROVEEDORES = ['Proveedor', 'CUIT', 'Comprobante', 'Fecha', 'Vencimiento', 'Importe'] as const;
+
+/** La planilla modelo de proveedores: lo que se le debe a cada uno, en positivo. */
+export function descargarPlanillaModeloProveedores(): void {
+  const hoja = XLSX.utils.aoa_to_sheet([
+    [...COLUMNAS_PROVEEDORES],
+    ['Repuestos El Ejemplo SA', '30-71234567-8', 'A 0003-00012345', '20/09/2026', '20/10/2026', 250000],
+    ['Tornería López', '', 'Saldo cuenta corriente', '01/10/2026', '', 48000],
+  ]);
+  hoja['!cols'] = [{ wch: 32 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+  const libro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(libro, hoja, 'Saldos iniciales');
+  XLSX.writeFile(libro, 'saldos-iniciales-proveedores.xlsx');
+}
+
+/**
+ * Lee la planilla de saldos de proveedores con el mismo lector que la de
+ * clientes (columna "Proveedor" en vez de "Cliente"). Lo que se le debe va en
+ * positivo; si la planilla trae todas las deudas en negativo —como una
+ * composición exportada con las deudas en el Haber— se dan vuelta.
+ */
+export async function leerPlanillaDeSaldosProveedores(file: File): Promise<FilaSaldoInicial[]> {
+  const filas = await leerPlanillaDeSaldos(file);
+  const importes = filas.map((f) => f.importe).filter((n): n is number => n !== null && Math.abs(n) >= 0.005);
+  const todasNegativas = importes.length > 0 && importes.every((n) => n < 0);
+  return filas.map((f) => {
+    const importe = todasNegativas && f.importe !== null ? -f.importe : f.importe;
+    const errores = f.errores.map((e) => e.replace('Falta el cliente.', 'Falta el proveedor.'));
+    if (importe !== null && importe < 0) {
+      errores.push('Importe negativo: acá se cargan solo deudas con el proveedor.');
+    }
+    return { ...f, importe, errores };
+  });
 }
