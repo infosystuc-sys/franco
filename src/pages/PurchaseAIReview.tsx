@@ -1526,7 +1526,7 @@ Registralo desde Pagos.`
             name: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
             legalName: String((draft.rawExtraction as any)?.valores?.proveedor_razon_social ?? '').trim(),
             taxId: String((draft.rawExtraction as any)?.valores?.proveedor_cuit ?? '').replace(/\D/g, ''),
-            ...(nuevoOcasional && { occasional: true, paymentTermsDays: 0 }),
+            ...(nuevoOcasional && { occasional: true, purchaseCondition: 'CONTADO' as const, paymentTermsDays: 0 }),
           }}
           onClose={() => { setShowNewSupplier(false); setAltaPendiente(null); setNuevoOcasional(false); }}
           onSaved={(created) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Save, XCircle, AlertTriangle, Package, Boxes } from 'lucide-react';
+import { Plus, Save, XCircle, AlertTriangle, Package, Boxes, PackagePlus } from 'lucide-react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn, formatMoney, todayLocal } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
@@ -36,6 +36,8 @@ import {
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
 import { SupplierModal } from '@/src/components/SupplierModal';
+import { ArticleModal } from '@/src/components/ArticleModal';
+import { fetchDefaultMarkup } from '@/src/lib/priceLists';
 import { ReferenciaNotaDeCredito, type ModoNotaDeCredito } from '@/src/components/purchase/ReferenciaNotaDeCredito';
 
 const EMPTY_LINE: PurchaseLine = {
@@ -77,6 +79,9 @@ export function PurchaseNew() {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showPicker, setShowPicker] = React.useState(false);
+  // Alta de un artículo que no está en el catálogo: se crea y entra como renglón.
+  const [altaDeArticulo, setAltaDeArticulo] = React.useState(false);
+  const [defaultMarkup, setDefaultMarkup] = React.useState<number | null>(null);
 
   // ── Encabezado
   const [supplierId, setSupplierId] = React.useState('');
@@ -216,6 +221,18 @@ export function PurchaseNew() {
       },
     ]);
     setShowPicker(false);
+  }
+
+  async function abrirAltaDeArticulo() {
+    // El margen general propone el precio de venta del artículo nuevo.
+    if (defaultMarkup === null) {
+      try {
+        setDefaultMarkup(await fetchDefaultMarkup());
+      } catch {
+        setDefaultMarkup(0);
+      }
+    }
+    setAltaDeArticulo(true);
   }
 
   function addFootTax(taxRateId: string) {
@@ -556,9 +573,14 @@ export function PurchaseNew() {
           title={isArticles ? 'Artículos' : 'Conceptos'}
           actions={
             isArticles ? (
-              <Button type="button" onClick={() => setShowPicker(true)} className="px-3">
-                <Package size={16} /> Agregar artículo
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="ghost" onClick={abrirAltaDeArticulo} className="px-3">
+                  <PackagePlus size={16} /> Nuevo artículo
+                </Button>
+                <Button type="button" onClick={() => setShowPicker(true)} className="px-3">
+                  <Package size={16} /> Agregar artículo
+                </Button>
+              </div>
             ) : (
               <Button type="button" variant="ghost" onClick={addConceptLine} className="px-3">
                 <Plus size={16} /> Agregar renglón
@@ -725,6 +747,20 @@ export function PurchaseNew() {
         </div>
       </Panel>
 
+      {altaDeArticulo && defaultMarkup !== null && (
+        <ArticleModal
+          article={null}
+          suppliers={suppliers}
+          catalogo={articles}
+          defaultMarkup={defaultMarkup}
+          onClose={() => setAltaDeArticulo(false)}
+          onSaved={(creado) => {
+            setArticles((current) => [...current, creado]);
+            addArticle(creado);
+            setAltaDeArticulo(false);
+          }}
+        />
+      )}
       {showPicker && (
         <PurchaseArticlePicker
           articles={articles}
@@ -735,7 +771,7 @@ export function PurchaseNew() {
       {altaOcasional && (
         <SupplierModal
           supplier={null}
-          inicial={{ occasional: true, paymentTermsDays: 0 }}
+          inicial={{ occasional: true, purchaseCondition: 'CONTADO', paymentTermsDays: 0 }}
           onClose={() => setAltaOcasional(false)}
           onSaved={(created) => {
             setSuppliers((current) => [...current, created]);
