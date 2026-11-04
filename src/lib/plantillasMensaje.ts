@@ -86,6 +86,8 @@ export const PLANTILLAS: DefinicionPlantilla[] = [
       V('cliente', 'Nombre del cliente'),
       V('numero', 'Número del presupuesto'),
       V('componente', 'Trabajo a realizar'),
+      V('subtotal', 'Subtotal sin IVA'),
+      V('iva', 'IVA'),
       V('total', 'Total con IVA'),
       V('vencimiento', 'Válido hasta'),
       V('link', 'Link para verlo y aceptarlo o rechazarlo'),
@@ -111,7 +113,7 @@ export const PLANTILLAS: DefinicionPlantilla[] = [
       ['recibo', 'Recibo', DEL_COMPROBANTE],
       ['nota_credito', 'Nota de crédito', DEL_COMPROBANTE],
       ['remito', 'Remito', DEL_COMPROBANTE.slice(0, 2)],
-      ['presupuesto', 'Presupuesto', DEL_COMPROBANTE],
+      ['presupuesto', 'Presupuesto', [...DEL_COMPROBANTE, V('subtotal', 'Subtotal sin IVA'), V('iva', 'IVA')]],
       ['orden_pago', 'Orden de pago', DEL_COMPROBANTE],
     ] as [string, string, VariablePlantilla[]][]
   ).flatMap(([base, nombre, variables]) => [

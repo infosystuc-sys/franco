@@ -230,7 +230,7 @@ export function QuotationDetails() {
     montoDeDescuento(items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0), descuento);
   const itemsIva = itemsTotal * QUOTATION_IVA_RATE;
 
-  const mensaje = sendModal ? armarMensaje('presupuesto', sendModal, { numero: quotation.number, total: formatMoney(itemsTotal + itemsIva), cliente: quotation.customer?.name }) : null;
+  const mensaje = sendModal ? armarMensaje('presupuesto', sendModal, { numero: quotation.number, subtotal: formatMoney(itemsTotal), iva: formatMoney(itemsIva), total: formatMoney(itemsTotal + itemsIva), cliente: quotation.customer?.name }) : null;
 
   return (
     <div className="w-full space-y-6">
@@ -514,8 +514,8 @@ export function QuotationDetails() {
           documentRef={documentRef}
           subject={mensaje?.asunto || `Presupuesto ${quotation.number}`}
           text={mensaje?.texto || (sendModal === 'email'
-              ? `Adjuntamos el presupuesto ${quotation.number} por $ ${formatMoney(itemsTotal + itemsIva)}.`
-              : `Presupuesto ${quotation.number} — $ ${formatMoney(itemsTotal + itemsIva)}`)}
+              ? `Adjuntamos el presupuesto ${quotation.number}.\n\nSubtotal: $ ${formatMoney(itemsTotal)}\nIVA 21%: $ ${formatMoney(itemsIva)}\nTotal: $ ${formatMoney(itemsTotal + itemsIva)}`
+              : `Presupuesto ${quotation.number}\nSubtotal: $ ${formatMoney(itemsTotal)}\nIVA 21%: $ ${formatMoney(itemsIva)}\nTotal: $ ${formatMoney(itemsTotal + itemsIva)}`)}
           onSent={() => marcarEnviado('presupuesto', quotation.id)}
           onClose={() => { setSendModal(null); volverAlListado(); }}
         />
