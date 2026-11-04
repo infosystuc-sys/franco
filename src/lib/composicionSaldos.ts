@@ -132,6 +132,11 @@ export interface Bloque {
   cuit: string | null;
   saldoAnterior: number;
   totalSaldo: number;
+  /**
+   * Con "vence hasta": lo vencido a esa fecha menos los créditos (notas de
+   * crédito y pagos a cuenta sin imputar). Null sin ese filtro.
+   */
+  aPagar: number | null;
   renglones: Renglon[];
 }
 
@@ -141,6 +146,8 @@ export interface Filtros {
   /** Texto: parte del nombre o del CUIT. */
   parte: string;
   modo: 'pendientes' | 'todos';
+  /** yyyy-mm-dd; vacío = sin filtro. Deja solo lo que vence hasta ese día, más los créditos. */
+  venceHasta?: string;
 }
 
 const redondear = (n: number) => Math.round(n * 100) / 100;
@@ -159,6 +166,7 @@ function rutaDe(lado: Lado, m: Movimiento): string | null {
 
 interface Item {
   fecha: string;
+  vencimiento: string;
   pendiente: number;
   aCuenta: boolean;
   renglones: Renglon[];
@@ -236,6 +244,7 @@ export function armarComposicion(lado: Lado, movimientos: Movimiento[], filtros:
       ];
       items.push({
         fecha: m.fecha ?? '',
+        vencimiento: m.vencimiento ?? m.fecha ?? '',
         pendiente: redondear(m.importe + apps.reduce((s, a) => s + a.importe, 0)),
         aCuenta: m.tipo === 'A_CUENTA',
         renglones,
@@ -252,10 +261,17 @@ export function armarComposicion(lado: Lado, movimientos: Movimiento[], filtros:
       const aCuentaSuma = redondear(aCuenta.reduce((s, i) => s + i.pendiente, 0));
       visibles = delPeriodo.filter((i) => (i.aCuenta ? Math.abs(aCuentaSuma) >= 0.005 : Math.abs(i.pendiente) >= 0.005));
     }
+    // Vence hasta: lo que vence hasta ese día, y los créditos sin imputar
+    // (notas de crédito, pagos a cuenta), que se descuentan vengan cuando vengan.
+    const venceHasta = filtros.venceHasta ?? '';
+    const entra = (i: Item) => !venceHasta || i.pendiente < 0 || i.vencimiento <= venceHasta;
+    visibles = visibles.filter(entra);
     visibles = [...visibles].sort((a, b) => a.fecha.localeCompare(b.fecha));
 
     const totalSaldo = redondear(saldoAnterior + delPeriodo.reduce((s, i) => s + i.pendiente, 0));
+    const aPagar = venceHasta ? redondear(items.filter(entra).reduce((s, i) => s + i.pendiente, 0)) : null;
 
+    if (aPagar !== null && visibles.length === 0 && Math.abs(aPagar) < 0.005) continue;
     if (visibles.length === 0 && Math.abs(saldoAnterior) < 0.005 && Math.abs(totalSaldo) < 0.005) continue;
     if (filtros.modo === 'pendientes' && Math.abs(totalSaldo) < 0.005 && visibles.length === 0) continue;
 
@@ -265,6 +281,7 @@ export function armarComposicion(lado: Lado, movimientos: Movimiento[], filtros:
       cuit,
       saldoAnterior,
       totalSaldo,
+      aPagar,
       renglones: visibles.flatMap((i) => i.renglones),
     });
   }
@@ -281,7 +298,12 @@ function fechaAR(f: string | null): string {
 }
 
 /** Las filas planas de la composición: para el portapapeles y el Excel. */
-export function filasParaExportar(bloques: Bloque[], desde: string): (string | number | null)[][] {
+export function filasParaExportar(
+  bloques: Bloque[],
+  desde: string,
+  venceHasta = '',
+  etiquetaAPagar = 'A pagar'
+): (string | number | null)[][] {
   const filas: (string | number | null)[][] = [];
   for (const b of bloques) {
     filas.push([`${b.nombre}${b.cuit ? ` (${b.cuit})` : ''}`]);
@@ -300,6 +322,9 @@ export function filasParaExportar(bloques: Bloque[], desde: string): (string | n
       ]);
     }
     filas.push(['Total saldo', null, null, null, null, null, null, b.totalSaldo]);
+    if (b.aPagar !== null) {
+      filas.push([`${etiquetaAPagar} al ${fechaAR(venceHasta)}`, null, null, null, null, null, null, b.aPagar]);
+    }
     filas.push([]);
   }
   return filas;

@@ -433,8 +433,16 @@ export function PaymentOrderNew() {
       problems.push(`${doc.fullNumber} tiene $ ${formatMoney(doc.pending)} pendientes.`);
     }
   }
+  // Una NC provisoria a medio cargar, o cargada sin importe a imputar, se
+  // perdía en silencio al guardar: la orden salía sin el descuento.
+  if (addingProvisional && (provisionalDescription.trim() || provisionalAmount > 0)) {
+    problems.push('Tocá "Agregar" en la NC provisoria, o cancelala.');
+  }
   for (const row of provisionalRows) {
     const amount = Number(allocations[row.key]) || 0;
+    if (amount === 0 && row.isDraft) {
+      problems.push(`La NC provisoria "${row.description}" no tiene importe a imputar: cargalo o quitala.`);
+    }
     if (amount === 0) continue;
     if (amount > 0) problems.push(`${row.fullNumber} resta: cargala en negativo.`);
     if (Math.abs(amount) > row.pending) {

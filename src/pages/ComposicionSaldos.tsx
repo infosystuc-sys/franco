@@ -26,9 +26,10 @@ const botonBase =
 const botonGris = 'bg-[#b3b3b3] hover:bg-[#9e9e9e]';
 const botonAmarillo = 'bg-accent hover:bg-accent-hover';
 
-const TEXTOS: Record<Lado, { titulo: string; parte: string; partes: string; accion: string; ruta: (id: string) => string }> = {
+const TEXTOS: Record<Lado, { titulo: string; parte: string; partes: string; accion: string; aPagar: string; ruta: (id: string) => string }> = {
   clientes: {
     titulo: 'Composición de saldos de clientes',
+    aPagar: 'A cobrar',
     parte: 'Cliente',
     partes: 'clientes',
     accion: 'Cobrar',
@@ -36,6 +37,7 @@ const TEXTOS: Record<Lado, { titulo: string; parte: string; partes: string; acci
   },
   proveedores: {
     titulo: 'Composición de saldos de proveedores',
+    aPagar: 'A pagar',
     parte: 'Proveedor',
     partes: 'proveedores',
     accion: 'Pagar',
@@ -57,6 +59,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   const [desde, setDesde] = React.useState('');
   const [parte, setParte] = React.useState('');
   const [modo, setModo] = React.useState<'pendientes' | 'todos'>('pendientes');
+  const [venceHasta, setVenceHasta] = React.useState('');
 
   const [movimientos, setMovimientos] = React.useState<Movimiento[]>([]);
   const [datosDeContacto, setDatosDeContacto] = React.useState<Map<string, ContactoDeLaParte>>(new Map());
@@ -88,10 +91,11 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   }, [lado]);
 
   const bloques = React.useMemo(
-    () => armarComposicion(lado, movimientos, { desde, parte, modo }),
-    [lado, movimientos, desde, parte, modo]
+    () => armarComposicion(lado, movimientos, { desde, parte, modo, venceHasta }),
+    [lado, movimientos, desde, parte, modo, venceHasta]
   );
   const total = bloques.reduce((s, b) => s + b.totalSaldo, 0);
+  const totalAPagar = bloques.reduce((s, b) => s + (b.aPagar ?? 0), 0);
   const nombres = React.useMemo(
     () => [...new Set(movimientos.map((m) => m.nombre))].sort((a, b) => a.localeCompare(b)),
     [movimientos]
@@ -99,10 +103,12 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
-  const periodo = `${desde ? `del ${formatDate(desde)} ` : ''}al ${formatDate(hasta)}`;
+  const periodo =
+    `${desde ? `del ${formatDate(desde)} ` : ''}al ${formatDate(hasta)}` +
+    (venceHasta ? ` — vencimientos hasta el ${formatDate(venceHasta)}` : '');
 
   async function copiar() {
-    const texto = filasParaExportar(bloques, desde)
+    const texto = filasParaExportar(bloques, desde, venceHasta, t.aPagar)
       .map((f) => f.map((c) => (c === null || c === undefined ? '' : typeof c === 'number' ? c.toFixed(2).replace('.', ',') : c)).join('\t'))
       .join('\n');
     try {
@@ -114,7 +120,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
   }
 
   function excel() {
-    const hoja = XLSX.utils.aoa_to_sheet([[t.titulo], [periodo], [], ...filasParaExportar(bloques, desde)]);
+    const hoja = XLSX.utils.aoa_to_sheet([[t.titulo], [periodo], [], ...filasParaExportar(bloques, desde, venceHasta, t.aPagar)]);
     hoja['!cols'] = [36, 12, 12, 34, 14, 16, 16, 16].map((wch) => ({ wch }));
     for (const ref of Object.keys(hoja)) {
       const celda = hoja[ref];
@@ -218,6 +224,16 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
               className="h-9 rounded-md border border-line bg-panel px-2 text-sm font-normal normal-case text-text focus:border-accent-deep focus:outline-none"
             />
           </label>
+          <label className="flex flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+            Vence hasta
+            <input
+              type="date"
+              value={venceHasta}
+              onChange={(e) => setVenceHasta(e.target.value)}
+              title="Solo lo que vence hasta ese día, menos las notas de crédito y los pagos a cuenta sin imputar"
+              className="h-9 rounded-md border border-line bg-panel px-2 text-sm font-normal normal-case text-text focus:border-accent-deep focus:outline-none"
+            />
+          </label>
           <label className="flex min-w-[16rem] flex-1 flex-col gap-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             {t.parte}
             <input
@@ -242,10 +258,10 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
               <option value="todos">Todos, incluidos los cancelados</option>
             </select>
           </label>
-          {(desde || parte || modo !== 'pendientes' || hasta !== todayLocal()) && (
+          {(desde || parte || venceHasta || modo !== 'pendientes' || hasta !== todayLocal()) && (
             <button
               type="button"
-              onClick={() => { setDesde(''); setHasta(todayLocal()); setParte(''); setModo('pendientes'); }}
+              onClick={() => { setDesde(''); setHasta(todayLocal()); setParte(''); setModo('pendientes'); setVenceHasta(''); }}
               className="h-9 text-[13px] font-semibold text-accent-deep hover:underline"
             >
               Limpiar filtros
@@ -254,6 +270,13 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
           <span className="ml-auto self-center text-right text-text-soft">
             {bloques.length} {bloques.length === 1 ? t.parte.toLowerCase() : t.partes} · Saldo{' '}
             <strong className="text-text">$ {formatMoney(total)}</strong>
+            {venceHasta && (
+              <>
+                <br />
+                {t.aPagar} al {formatDate(venceHasta)}{' '}
+                <strong className="text-text">$ {formatMoney(totalAPagar)}</strong>
+              </>
+            )}
           </span>
         </div>
 
@@ -284,7 +307,7 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
             ]}
           />
           {bloques.map((b) => (
-            <BloqueDeSaldo key={b.parteId} bloque={b} desde={desde} lado={lado} contacto={datosDeContacto.get(b.parteId)} />
+            <BloqueDeSaldo key={b.parteId} bloque={b} desde={desde} venceHasta={venceHasta} lado={lado} contacto={datosDeContacto.get(b.parteId)} />
           ))}
         </div>
       )}
@@ -316,11 +339,13 @@ export function ComposicionSaldos({ lado }: { lado: Lado }) {
 function BloqueDeSaldo({
   bloque,
   desde: d,
+  venceHasta,
   lado: l,
   contacto,
 }: {
   bloque: Bloque;
   desde: string;
+  venceHasta: string;
   lado: Lado;
   contacto?: ContactoDeLaParte;
 }) {
@@ -348,6 +373,11 @@ function BloqueDeSaldo({
         <div className="text-right text-[14px] text-text-soft">
           {d && <p>Saldo anterior a {formatDate(d)} $ {formatMoney(bloque.saldoAnterior)}</p>}
           <p className="font-semibold text-text">Total saldo $ {formatMoney(bloque.totalSaldo)}</p>
+          {bloque.aPagar !== null && (
+            <p className="mt-1 font-bold text-[#d9480f]">
+              {t.aPagar} al {formatDate(venceHasta)} $ {formatMoney(bloque.aPagar)}
+            </p>
+          )}
         </div>
       </div>
 

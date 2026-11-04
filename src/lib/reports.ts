@@ -107,36 +107,92 @@ const TIPO_CORTO: Record<string, string> = { FACTURA: 'FC', NOTA_DEBITO: 'ND', N
  * RLS ya limita al admin.
  */
 async function fetchPagosARealizar(p: ReportParams): Promise<Record<string, unknown>[]> {
-  const { data, error } = await supabase
-    .from('purchase_invoices')
-    .select('supplier_name, doc_type, letter, full_number, issue_date, due_date, total_amount, settled_amount')
-    .eq('status', 'REGISTRADA')
-    .neq('doc_type', 'NOTA_CREDITO')
-    .gte('due_date', p.from)
-    .lte('due_date', p.to)
-    .order('supplier_name')
-    .order('due_date')
-    .order('issue_date');
-  if (error) throw error;
+  // Lo que vence en el período, y los créditos sin imputar (notas de crédito
+  // y pagos a cuenta), que se descuentan vengan cuando vengan: son plata que
+  // ya no hay que poner.
+  const [deudas, notas, ordenes, usado] = await Promise.all([
+    supabase
+      .from('purchase_invoices')
+      .select('supplier_name, doc_type, letter, full_number, issue_date, due_date, total_amount, settled_amount')
+      .eq('status', 'REGISTRADA')
+      .neq('doc_type', 'NOTA_CREDITO')
+      .gte('due_date', p.from)
+      .lte('due_date', p.to),
+    supabase
+      .from('purchase_invoices')
+      .select('supplier_name, doc_type, letter, full_number, issue_date, due_date, total_amount, settled_amount')
+      .eq('status', 'REGISTRADA')
+      .eq('doc_type', 'NOTA_CREDITO'),
+    supabase
+      .from('payment_orders')
+      .select('supplier_name, on_account_amount')
+      .eq('status', 'REGISTRADA')
+      .gt('on_account_amount', 0),
+    supabase
+      .from('payment_order_values')
+      .select('amount, orden:payment_orders!inner(supplier_name, status)')
+      .eq('kind', 'SALDO_A_FAVOR')
+      .eq('orden.status', 'REGISTRADA'),
+  ]);
+  if (deudas.error) throw deudas.error;
+  if (notas.error) throw notas.error;
+  if (ordenes.error) throw ordenes.error;
+  if (usado.error) throw usado.error;
+
   const hoy = todayLocal();
   const dias = (desde: string, hasta: string) =>
     Math.round((Date.parse(hasta) - Date.parse(desde)) / 86_400_000);
-  return ((data ?? []) as any[])
+  const redondear = (n: number) => Math.round(n * 100) / 100;
+
+  const filas: Record<string, unknown>[] = [...((deudas.data ?? []) as any[]), ...((notas.data ?? []) as any[])]
     .map((r) => {
       const total = Number(r.total_amount);
       const pagado = Number(r.settled_amount);
+      const signo = r.doc_type === 'NOTA_CREDITO' ? -1 : 1;
       return {
         supplier_name: r.supplier_name,
         comprobante: `${TIPO_CORTO[r.doc_type] ?? r.doc_type} ${r.letter} ${r.full_number}`,
-        total_amount: total,
+        total_amount: signo * total,
         issue_date: r.issue_date,
         due_date: r.due_date,
-        dias_vencido: Math.max(0, dias(r.due_date, hoy)),
-        settled_amount: pagado,
-        a_pagar: Math.round((total - pagado) * 100) / 100,
+        dias_vencido: signo > 0 ? Math.max(0, dias(r.due_date, hoy)) : 0,
+        settled_amount: signo * pagado,
+        a_pagar: redondear(signo * (total - pagado)),
       };
     })
-    .filter((r) => r.a_pagar > 0.004);
+    .filter((r) => Math.abs(r.a_pagar) > 0.004);
+
+  // Pago a cuenta: lo que quedó a cuenta en las órdenes menos lo ya usado
+  // como saldo a favor (igual que supplier_credit en la base).
+  const aCuenta = new Map<string, number>();
+  for (const o of (ordenes.data ?? []) as any[]) {
+    aCuenta.set(o.supplier_name, (aCuenta.get(o.supplier_name) ?? 0) + Number(o.on_account_amount));
+  }
+  for (const v of (usado.data ?? []) as any[]) {
+    const proveedor = v.orden?.supplier_name;
+    aCuenta.set(proveedor, (aCuenta.get(proveedor) ?? 0) - Number(v.amount));
+  }
+  for (const [proveedor, importe] of aCuenta) {
+    const credito = redondear(importe);
+    if (credito <= 0.004) continue;
+    filas.push({
+      supplier_name: proveedor,
+      comprobante: 'Pago a cuenta',
+      total_amount: -credito,
+      issue_date: null,
+      due_date: null,
+      dias_vencido: 0,
+      settled_amount: 0,
+      a_pagar: -credito,
+    });
+  }
+
+  return filas.sort(
+    (a, b) =>
+      String(a.supplier_name).localeCompare(String(b.supplier_name)) ||
+      String(a.due_date ?? '').localeCompare(String(b.due_date ?? '')) ||
+      String(a.issue_date ?? '').localeCompare(String(b.issue_date ?? ''))
+  );
 }
 
 // ===========================================================================
@@ -277,7 +333,7 @@ export const REPORTS: ReportDefinition[] = [
     area: 'CUENTAS_CORRIENTES',
     name: 'Pagos a realizar',
     description:
-      'Lo que hay que pagarle a cada proveedor, por fecha de vencimiento: facturas y notas de débito con saldo pendiente.',
+      'Lo que hay que pagarle a cada proveedor, por fecha de vencimiento: facturas y notas de débito con saldo pendiente, menos las notas de crédito y los pagos a cuenta sin imputar.',
     usesPeriod: true,
     etiquetasPeriodo: { desde: 'Vencimiento desde', hasta: 'Vencimiento hasta', periodo: 'Vencimientos' },
     // Desde tres meses atrás (lo vencido sin pagar) hasta fin del mes que viene.
