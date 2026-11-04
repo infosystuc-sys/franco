@@ -381,13 +381,13 @@ export function InvoiceDetails() {
       {/* El ticket de cambio reemplaza al comprobante en la hoja: es lo único
           que se quiere imprimir cuando se lo pide. */}
       {desdeListado.accion === 'ticket' ? (
-        <TicketDeCambio invoice={invoice} logo={logo} />
+        <TicketDeCambio invoice={invoice} logo={invoice.invoiceType === 'X' ? null : logo} />
       ) : (
         // data-hojas-separadas: la factura y el remito van cada uno en su
         // hoja, al imprimir y en el PDF que se manda.
         <div ref={documentRef} data-hojas-separadas>
           <InvoiceDocument invoice={invoice} logo={logo} />
-          {remito && <RemitoDocument remito={remito} logo={logo} hojaNueva />}
+          {remito && <RemitoDocument remito={remito} logo={invoice.invoiceType === 'X' ? null : logo} hojaNueva />}
         </div>
       )}
 
@@ -423,8 +423,12 @@ function TicketDeCambio({ invoice, logo }: { invoice: InvoiceDetail; logo?: stri
     <div className="print-document mx-auto max-w-md border border-line bg-panel p-6">
       <div className="border-b-2 border-ink pb-3 text-center">
         {logo && <img src={logo} alt="" className="mx-auto mb-2 max-h-14 object-contain" />}
-        <p className="font-display text-lg font-medium uppercase">{invoice.issuerLegalName}</p>
-        {invoice.issuerAddress && <p className="text-[13px] text-text-soft">{invoice.issuerAddress}</p>}
+        {invoice.invoiceType !== 'X' && (
+          <>
+            <p className="font-display text-lg font-medium uppercase">{invoice.issuerLegalName}</p>
+            {invoice.issuerAddress && <p className="text-[13px] text-text-soft">{invoice.issuerAddress}</p>}
+          </>
+        )}
         <p className="mt-2 font-display text-xl uppercase tracking-[0.1em]">Ticket de cambio</p>
       </div>
 
@@ -743,9 +747,10 @@ export function InvoiceDocument({
         </div>
       )}
 
-      {/* Cabecera: emisor · letra · datos del comprobante */}
+      {/* Cabecera: emisor · letra · datos del comprobante. La X sale sin
+          membrete ni datos del taller: es un papel interno. */}
       <div className="grid grid-cols-1 gap-4 border-b-2 border-ink pb-5 sm:grid-cols-[1fr_auto_1fr]">
-        <div>
+        {invoice.invoiceType === 'X' ? <div /> : <div>
           {logo && (
             <img
               src={logo}
@@ -767,7 +772,7 @@ export function InvoiceDocument({
               <dd>Inicio de actividades {formatDate(invoice.issuerActivityStartDate)}</dd>
             )}
           </dl>
-        </div>
+        </div>}
 
         {/* El recuadro de la letra, como en el comprobante impreso argentino.
             La X no lleva código de comprobante: no es un tipo de ARCA. */}
