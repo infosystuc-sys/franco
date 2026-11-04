@@ -16,8 +16,17 @@ export interface SupplierArticle {
   isPreferred: boolean;
 }
 
+export type PurchaseCondition = 'CONTADO' | 'CUENTA_CORRIENTE';
+
+export const PURCHASE_CONDITION_LABELS: Record<PurchaseCondition, string> = {
+  CONTADO: 'Contado',
+  CUENTA_CORRIENTE: 'Cuenta corriente',
+};
+
 export interface Supplier extends FiscalEntity {
   articles: SupplierArticle[];
+  /** Cómo se le compra. La carga de compras con IA arranca con esto. */
+  purchaseCondition: PurchaseCondition;
   /** Plazo de pago en dias. Propone el vencimiento al cargar una compra. 0 = contado. */
   paymentTermsDays: number;
   /** Prefijo de 2 letras para los artículos que se dan de alta solos al importar su lista. */
@@ -46,6 +55,7 @@ export interface Supplier extends FiscalEntity {
  * proveedor impone el suyo.
  */
 export interface SupplierInput extends FiscalEntityInput {
+  purchaseCondition: PurchaseCondition;
   paymentTermsDays: number;
   codePrefix: string | null;
   factoryCodePrefix: string[];
@@ -55,6 +65,7 @@ export interface SupplierInput extends FiscalEntityInput {
 function mapSupplier(row: any): Supplier {
   return {
     ...mapFiscalEntity(row),
+    purchaseCondition: row.purchase_condition === 'CONTADO' ? 'CONTADO' : 'CUENTA_CORRIENTE',
     paymentTermsDays: Number(row.payment_terms_days ?? 30),
     codePrefix: row.code_prefix ?? null,
     factoryCodePrefix: row.factory_code_prefix ?? [],
@@ -78,7 +89,8 @@ const SELECT_WITH_ARTICLES =
 function toRow(input: SupplierInput) {
   return {
     ...fiscalEntityToRow(input),
-    payment_terms_days: input.paymentTermsDays,
+    purchase_condition: input.purchaseCondition,
+    payment_terms_days: input.purchaseCondition === 'CONTADO' ? 0 : input.paymentTermsDays,
     code_prefix: input.codePrefix,
     // Vacío viaja como null: es lo que la base entiende por "sin prefijo".
     factory_code_prefix: input.factoryCodePrefix.length ? input.factoryCodePrefix : null,

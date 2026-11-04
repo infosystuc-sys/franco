@@ -12,6 +12,8 @@ import {
   createSupplier,
   describeSupplierError,
   updateSupplier,
+  PURCHASE_CONDITION_LABELS,
+  type PurchaseCondition,
   type Supplier,
   type SupplierInput,
 } from '@/src/lib/suppliers';
@@ -52,6 +54,7 @@ export function SupplierModal({
     supplier
       ? {
           ...fiscalEntityToForm(supplier),
+          purchaseCondition: supplier.purchaseCondition,
           paymentTermsDays: supplier.paymentTermsDays,
           codePrefix: supplier.codePrefix,
           factoryCodePrefix: supplier.factoryCodePrefix,
@@ -60,6 +63,7 @@ export function SupplierModal({
       : {
           ...EMPTY_FISCAL_FORM,
           taxCondition: 'RESPONSABLE_INSCRIPTO',
+          purchaseCondition: 'CUENTA_CORRIENTE',
           paymentTermsDays: 30,
           codePrefix: null,
           factoryCodePrefix: [],
@@ -154,21 +158,44 @@ export function SupplierModal({
             </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
-                Plazo de pago (días)
-                <input
-                  type="number"
-                  min="0"
-                  max="365"
-                  value={form.paymentTermsDays}
-                  onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
-                  className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
-                />
+                Condición de compra
+                <select
+                  value={form.purchaseCondition}
+                  onChange={(e) => {
+                    const purchaseCondition = e.target.value as PurchaseCondition;
+                    patch({
+                      purchaseCondition,
+                      // Pasar a cuenta corriente con plazo 0 dejaría la factura vencida el mismo día.
+                      ...(purchaseCondition === 'CUENTA_CORRIENTE' && form.paymentTermsDays === 0 && { paymentTermsDays: 30 }),
+                    });
+                  }}
+                  className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm normal-case focus:border-accent-deep focus:outline-none"
+                >
+                  <option value="CUENTA_CORRIENTE">{PURCHASE_CONDITION_LABELS.CUENTA_CORRIENTE}</option>
+                  <option value="CONTADO">{PURCHASE_CONDITION_LABELS.CONTADO}</option>
+                </select>
                 <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
-                  {form.paymentTermsDays === 0
-                    ? 'Contado: la factura vence el mismo día que se emite.'
-                    : `Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
+                  {form.purchaseCondition === 'CONTADO'
+                    ? 'Se le paga en el momento: la carga con IA registra el pago al guardar la compra.'
+                    : 'Sus facturas quedan en la cuenta del proveedor para pagar desde Pagos.'}
                 </span>
               </label>
+              {form.purchaseCondition === 'CUENTA_CORRIENTE' && (
+                <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
+                  Plazo de pago (días)
+                  <input
+                    type="number"
+                    min="0"
+                    max="365"
+                    value={form.paymentTermsDays}
+                    onChange={(e) => patch({ paymentTermsDays: Number(e.target.value) })}
+                    className="mt-1 w-full border border-line bg-panel px-3 py-2 font-mono text-sm normal-case focus:border-accent-deep focus:outline-none"
+                  />
+                  <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
+                    {`Las facturas de este proveedor van a proponer vencimiento a ${form.paymentTermsDays} días.`}
+                  </span>
+                </label>
+              )}
               <label className="block text-xs font-bold uppercase tracking-wider text-text-soft">
                 Prefijo de código
                 <input

@@ -357,10 +357,11 @@ export function PurchaseAIReview() {
   // Lo que no se aplicó no lleva chip de confianza: lleva el aviso de que hay
   // que completarlo a mano.
   const [applied, setApplied] = React.useState<Record<string, boolean>>({});
-  // Condición de compra. Un ticket sacado con la cámara casi siempre se pagó
-  // en el momento: arranca en contado y al guardar se registra la orden de
-  // pago con el medio elegido. Lo que llega por correo es de proveedores con
-  // cuenta corriente: arranca ahí.
+  // Condición de compra. La dice la ficha del proveedor (ver el efecto que
+  // sigue a `supplier`). Sin proveedor reconocido: un ticket sacado con la
+  // cámara casi siempre se pagó en el momento y arranca en contado; lo que
+  // llega por correo es de proveedores con cuenta corriente y arranca ahí.
+  // En contado, al guardar se registra la orden de pago con el medio elegido.
   const [condicion, setCondicion] = React.useState<'CONTADO' | 'CUENTA_CORRIENTE'>('CONTADO');
   const [medioDePagoId, setMedioDePagoId] = React.useState('');
   const [mediosDePago, setMediosDePago] = React.useState<PaymentMethod[]>([]);
@@ -586,6 +587,12 @@ export function PurchaseAIReview() {
   }, [role, id]);
 
   const supplier = suppliers.find((s) => s.id === supplierId) ?? null;
+
+  // Al reconocer o elegir el proveedor, la condición pasa a ser la de su
+  // ficha. Se puede cambiar a mano para esta compra.
+  React.useEffect(() => {
+    if (supplier) setCondicion(supplier.purchaseCondition);
+  }, [supplier?.id]);
   // La nota de crédito no se paga: no tiene condición de compra.
   const esContado = condicion === 'CONTADO' && docType !== 'NOTA_CREDITO';
   const vatRates = React.useMemo(() => rates.filter((r) => r.kind === 'IVA'), [rates]);
