@@ -22,6 +22,7 @@ import { formatCuit, TAX_CONDITION_LABELS } from '@/src/lib/customers';
 import {
   conElUsuarioIncluido,
   fetchEmpleadoDelUsuario,
+  fetchMecanicos,
   fetchOperarios,
   type Employee,
 } from '@/src/lib/employees';
@@ -164,6 +165,8 @@ export function WorkOrderDetails() {
   const [changingStatus, setChangingStatus] = useState(false);
   const [deshaciendo, setDeshaciendo] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // Los mecánicos no son empleados: se cargan en Cuentas de mecánicos.
+  const [mecanicos, setMecanicos] = useState<Employee[]>([]);
   const [assigningEmployee, setAssigningEmployee] = useState(false);
   const [invoice, setInvoice] = useState<WorkOrderInvoiceRef | null>(null);
   const [statuses, setStatuses] = useState<WorkOrderStatusDef[]>([]);
@@ -319,9 +322,11 @@ export function WorkOrderDetails() {
     // si tomó la orden desde la recepción, el desplegable tiene que poder
     // mostrarlo. Sin él, el select quedaría con un valor que no existe entre
     // sus opciones y el navegador lo dibuja en blanco.
-    Promise.all([fetchOperarios(), fetchEmpleadoDelUsuario(session?.user?.id)])
-      .then(([operarios, propio]) => {
-        if (!cancelled) setEmployees(conElUsuarioIncluido(operarios, propio));
+    Promise.all([fetchOperarios(), fetchEmpleadoDelUsuario(session?.user?.id), fetchMecanicos(true)])
+      .then(([operarios, propio, mecs]) => {
+        if (cancelled) return;
+        setEmployees(conElUsuarioIncluido(operarios, propio));
+        setMecanicos(mecs);
       })
       .catch(() => {/* si falla, el selector queda vacío y se puede reintentar recargando */});
     return () => {
@@ -1193,13 +1198,18 @@ export function WorkOrderDetails() {
                 className="w-full rounded border border-line bg-panel px-2 py-1.5 text-sm focus:border-accent-deep focus:outline-none"
               >
                 <option value="">Sin mecánico</option>
-                {order.mechanic && !employees.some((e) => e.id === order.mechanic?.id) && (
+                {order.mechanic && !mecanicos.some((e) => e.id === order.mechanic?.id) && (
                   <option value={order.mechanic.id}>{order.mechanic.name}</option>
                 )}
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>{employee.name}</option>
+                {mecanicos.map((mecanico) => (
+                  <option key={mecanico.id} value={mecanico.id}>{mecanico.name}</option>
                 ))}
               </select>
+            )}
+            {!locked && mecanicos.length === 0 && (
+              <Link to="/mecanicos" className="mt-1.5 block text-xs font-semibold text-accent-deep hover:underline">
+                No hay mecánicos cargados: dalos de alta en Cuentas de mecánicos
+              </Link>
             )}
             {order.overbillAmount > 0 && (
               <span className="mt-1.5 block text-xs text-accent-deep">

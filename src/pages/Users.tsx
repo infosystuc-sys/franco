@@ -53,7 +53,8 @@ export function Users() {
     setLoading(true);
     setError(null);
     try {
-      setEmployees(await fetchEmployees());
+      // Los mecánicos sin usuario no son empleados: se ven en Cuentas de mecánicos.
+      setEmployees((await fetchEmployees()).filter((e) => !(e.esMecanico && !e.profileId)));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

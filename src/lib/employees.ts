@@ -35,6 +35,8 @@ export interface Employee {
   workplace: Workplace | null;
   /** Costo por hora, para el margen bruto por OT. null = no aporta costo de mano de obra. */
   hourlyCost: number | null;
+  /** Mecánico de las OT: cobra comisión. Puede no tener usuario. */
+  esMecanico: boolean;
 }
 
 /**
@@ -108,11 +110,12 @@ function mapEmployee(row: any): Employee {
     email: row.profile?.email ?? null,
     cargo: (row.profile?.position as Cargo) ?? null,
     workplace: (row.workplace as Workplace) ?? null,
-    hourlyCost: row.hourly_cost !== null ? Number(row.hourly_cost) : null,
+    hourlyCost: row.hourly_cost !== null && row.hourly_cost !== undefined ? Number(row.hourly_cost) : null,
+    esMecanico: !!row.es_mecanico,
   };
 }
 
-const SELECT = 'id, name, role, phone, active, profile_id, workplace, hourly_cost, profile:profiles(email, position)';
+const SELECT = 'id, name, role, phone, active, profile_id, workplace, hourly_cost, es_mecanico, profile:profiles(email, position)';
 
 export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
   let query = supabase.from('employees').select(SELECT).order('name');
@@ -127,12 +130,50 @@ export async function fetchEmployees(onlyActive = false): Promise<Employee[]> {
 export async function fetchOperarios(): Promise<Employee[]> {
   const { data, error } = await supabase
     .from('employees')
-    .select('id, name, role, phone, active, profile_id, workplace, hourly_cost, profile:profiles!inner(email, position)')
+    .select('id, name, role, phone, active, profile_id, workplace, hourly_cost, es_mecanico, profile:profiles!inner(email, position)')
     .eq('active', true)
     .eq('profile.position', 'operario')
     .order('name');
   if (error) throw error;
   return (data ?? []).map(mapEmployee);
+}
+
+// ---------------------------------------------------------------------------
+// Mecánicos
+// ---------------------------------------------------------------------------
+// No son empleados: no entran al sistema, cobran comisión por las OT que
+// hacen. Viven en employees marcados es_mecanico (ver
+// 20261104_mecanicos_sin_usuario.sql) y se cargan desde Cuentas de mecánicos.
+
+export interface MecanicoInput {
+  name: string;
+  phone: string;
+  notes: string;
+  active: boolean;
+}
+
+/** Los mecánicos, para elegir en la OT (solo activos) o para la pantalla de cuentas (todos). */
+export async function fetchMecanicos(onlyActive = false): Promise<Employee[]> {
+  let query = supabase.from('employees').select(SELECT).eq('es_mecanico', true).order('name');
+  if (onlyActive) query = query.eq('active', true);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map(mapEmployee);
+}
+
+export async function guardarMecanico(id: string | null, input: MecanicoInput): Promise<void> {
+  const row = {
+    name: input.name.trim(),
+    phone: input.phone.trim() || null,
+    // role es el texto libre del puesto: acá, lo que haga falta anotar.
+    role: input.notes.trim() || 'Mecánico',
+    active: input.active,
+    es_mecanico: true,
+  };
+  const { error } = id
+    ? await supabase.from('employees').update(row).eq('id', id)
+    : await supabase.from('employees').insert(row);
+  if (error) throw error;
 }
 
 export async function updateEmployee(id: string, input: EmployeeInput): Promise<Employee> {
