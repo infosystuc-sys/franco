@@ -260,6 +260,9 @@ export function PaymentOrderDetails() {
                         <>{PURCHASE_DOC_TYPE_SHORT[a.docType]} {a.letter}</>
                       )}{' '}
                       {a.fullNumber}
+                      {a.description && (
+                        <span className="block font-sans text-[12px] text-text-soft">{a.description}</span>
+                      )}
                     </td>
                     <td
                       className={cn(

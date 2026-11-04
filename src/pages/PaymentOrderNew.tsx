@@ -358,8 +358,19 @@ export function PaymentOrderNew() {
   }
 
   function handleAutoAllocate() {
-    const auto = autoAllocate(docs, totalValues);
-    setAllocations(Object.fromEntries(Object.entries(auto).map(([id, a]) => [id, String(a)])));
+    // Las NC provisorias se respetan: lo que descuentan se suma a lo que
+    // pagan los valores para cancelar facturas. Una nueva va siempre entera.
+    const provisionales = Object.fromEntries(
+      provisionalRows
+        .map((row) => [row.key, row.isDraft ? -row.pending : Number(allocations[row.key]) || 0] as const)
+        .filter(([, amount]) => amount !== 0)
+    );
+    const descuento = -Object.values(provisionales).reduce((sum, a) => sum + a, 0);
+    const auto = autoAllocate(docs, round2(totalValues + descuento));
+    setAllocations({
+      ...Object.fromEntries(Object.entries(auto).map(([id, a]) => [id, String(a)])),
+      ...Object.fromEntries(Object.entries(provisionales).map(([key, a]) => [key, String(a)])),
+    });
     setError(null);
   }
 

@@ -54,6 +54,8 @@ export interface PaymentAllocation {
   provisionalCreditNoteId: string | null;
   /** "NCP-00000007" para una provisoria, sin letra. */
   fullNumber: string;
+  /** El motivo de una NC provisoria ("Descuento pronto pago 5%"). */
+  description: string | null;
   docType: PurchaseDocType;
   letter: string;
   amount: number;
@@ -125,6 +127,7 @@ function mapOrder(row: any): PaymentOrder {
       purchaseInvoiceId: a.purchase_invoice_id,
       provisionalCreditNoteId: a.provisional_credit_note_id,
       fullNumber: a.doc?.full_number ?? a.provisional?.full_number ?? '—',
+      description: a.provisional?.description ?? null,
       docType: a.doc?.doc_type ?? 'NOTA_CREDITO',
       letter: a.doc?.letter ?? '',
       amount: Number(a.amount),
