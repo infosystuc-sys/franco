@@ -74,6 +74,8 @@ export interface ReportDefinition {
    * `fecha`) y por cliente o proveedor (la columna `parte`, con su nombre).
    */
   filtraPorFechaYParte?: { fecha: string; parte: string; etiquetaParte: string };
+  /** Se acota a uno o varios valores de una columna (el medio de pago, en el libro de caja). */
+  filtraPorColumna?: { columna: string; etiqueta: string };
   /** Cómo se llaman las fechas del período, si no son "Desde" y "Hasta" (y en el membrete, "Período"). */
   etiquetasPeriodo?: { desde: string; hasta: string; periodo: string };
   /** El período con el que arranca la pantalla, si no es el mes en curso hasta hoy. */
@@ -516,8 +518,9 @@ export const REPORTS: ReportDefinition[] = [
     id: 'libro-caja',
     area: 'STOCK_TESORERIA',
     name: 'Libro de caja',
-    description: 'Movimientos de tesorería del período, una fila por partida.',
+    description: 'Movimientos de tesorería del período, una fila por partida. Se puede acotar a uno o varios medios de pago.',
     usesPeriod: true,
+    filtraPorColumna: { columna: 'medio', etiqueta: 'Medio de pago' },
     columns: [
       { key: 'movement_date', label: 'Fecha', format: 'date', width: 12 },
       { key: 'comprobante', label: 'Comprobante', width: 14 },

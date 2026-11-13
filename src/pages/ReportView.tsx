@@ -55,7 +55,7 @@ function ChipsDeFiltro({
   return (
     <div>
       <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-text-soft">{titulo}</span>
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         {opciones.map((o) => {
           const prendido = elegidos.includes(o.valor);
           return (
@@ -108,6 +108,14 @@ export function ReportView() {
   const [fechaDesde, setFechaDesde] = React.useState('');
   const [fechaHasta, setFechaHasta] = React.useState('');
   const [parteElegida, setParteElegida] = React.useState('');
+  // Valores elegidos de la columna que filtra el informe (medios de pago). Vacío = todos.
+  const [valoresElegidos, setValoresElegidos] = React.useState<string[]>([]);
+
+  const valoresPresentes = React.useMemo(() => {
+    const columna = report?.filtraPorColumna?.columna;
+    if (!columna || !rows) return [];
+    return [...new Set(rows.map((r) => String(r[columna] ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [rows, report]);
 
   const partesPresentes = React.useMemo(() => {
     const columna = report?.filtraPorFechaYParte?.parte;
@@ -132,6 +140,7 @@ export function ReportView() {
     setClases([]);
     setOrden(null);
     setParteElegida('');
+    setValoresElegidos([]);
   }, [rows]);
 
   const filtradas = React.useMemo(() => {
@@ -143,6 +152,8 @@ export function ReportView() {
         if (letras.length > 0 && !letras.includes(letra)) return false;
         if (clases.length > 0 && !clases.includes(clase)) return false;
       }
+      const fc = report?.filtraPorColumna;
+      if (fc && valoresElegidos.length > 0 && !valoresElegidos.includes(String(row[fc.columna] ?? ''))) return false;
       const fp = report?.filtraPorFechaYParte;
       if (fp) {
         if (parteElegida && String(row[fp.parte] ?? '') !== parteElegida) return false;
@@ -155,7 +166,7 @@ export function ReportView() {
       }
       return !term || coincideBusqueda(term, Object.values(row));
     });
-  }, [rows, search, letras, clases, report, fechaDesde, fechaHasta, parteElegida]);
+  }, [rows, search, letras, clases, report, fechaDesde, fechaHasta, parteElegida, valoresElegidos]);
 
   // Orden por columna: un click en el título ordena, otro invierte, otro
   // vuelve al orden del informe. Lo que se imprime y se exporta sale así.
@@ -371,6 +382,15 @@ export function ReportView() {
               </>
             )}
 
+            {report.filtraPorColumna && valoresPresentes.length > 1 && (
+              <ChipsDeFiltro
+                titulo={report.filtraPorColumna.etiqueta}
+                opciones={valoresPresentes.map((v) => ({ valor: v, etiqueta: v }))}
+                elegidos={valoresElegidos}
+                onChange={setValoresElegidos}
+              />
+            )}
+
             {report.filtraPorFechaYParte && rows && rows.length > 0 && (
               <>
                 <label className={labelClass}>
@@ -468,6 +488,9 @@ export function ReportView() {
                     ? `${report.etiquetasPeriodo?.periodo ?? 'Período'}: ${formatDate(ranWith.from)} al ${formatDate(ranWith.to)}`
                     : `Al ${new Date().toLocaleDateString('es-AR')}`,
                   ...(parteElegida ? [parteElegida] : []),
+                  ...(report.filtraPorColumna && valoresElegidos.length > 0
+                    ? [`${report.filtraPorColumna.etiqueta}: ${valoresElegidos.join(', ')}`]
+                    : []),
                 ]}
               />
             </div>
