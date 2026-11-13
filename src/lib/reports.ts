@@ -74,8 +74,17 @@ export interface ReportDefinition {
    * `fecha`) y por cliente o proveedor (la columna `parte`, con su nombre).
    */
   filtraPorFechaYParte?: { fecha: string; parte: string; etiquetaParte: string };
-  /** Se acota a uno o varios valores de una columna (el medio de pago, en el libro de caja). */
-  filtraPorColumna?: { columna: string; etiqueta: string };
+  /**
+   * Se acota a uno o varios valores de ciertas columnas (el medio de pago y el
+   * concepto, en el libro de caja).
+   */
+  filtraPorColumnas?: { columna: string; etiqueta: string }[];
+  /**
+   * Resume las filas ya filtradas (por mes, por proveedor...). Así el filtro
+   * por tipo de comprobante se aplica comprobante por comprobante y el
+   * resumen sale de lo que quedó.
+   */
+  resumir?: (filas: Record<string, unknown>[]) => Record<string, unknown>[];
   /** Cómo se llaman las fechas del período, si no son "Desde" y "Hasta" (y en el membrete, "Período"). */
   etiquetasPeriodo?: { desde: string; hasta: string; periodo: string };
   /** El período con el que arranca la pantalla, si no es el mes en curso hasta hoy. */
@@ -198,6 +207,145 @@ async function fetchPagosARealizar(p: ReportParams): Promise<Record<string, unkn
 }
 
 // ===========================================================================
+// Resúmenes armados acá, sobre el detalle comprobante por comprobante
+// ===========================================================================
+
+/** "A 0001-00000012" → "FACTURA A"; "NC B 0001-..." → "NOTA DE CREDITO B". */
+function tipoDeVenta(comprobante: unknown): string {
+  const c = String(comprobante ?? '').trim();
+  if (c.startsWith('NC ')) return `NOTA DE CREDITO ${c.charAt(3)}`;
+  return `FACTURA ${c.charAt(0)}`;
+}
+
+async function ventasConTipo(p: ReportParams): Promise<Record<string, unknown>[]> {
+  const filas = await callReport('report_sales_by_period', periodArgs(p));
+  return filas.map((f) => ({ ...f, tipo: tipoDeVenta(f.comprobante) }));
+}
+
+/** Compras del período, comprobante por comprobante (del Libro IVA Compras). */
+async function comprasDelPeriodo(p: ReportParams): Promise<Record<string, unknown>[]> {
+  const filas = await callReport('report_vat_purchases', periodArgs(p));
+  return filas.map((f) => ({
+    ...f,
+    neto: Number(f.neto_gravado ?? 0) + Number(f.neto_exento ?? 0) + Number(f.neto_no_gravado ?? 0),
+  }));
+}
+
+/**
+ * Suma columnas agrupando por una clave. `orden` decide cómo salen: por la
+ * clave (meses) o por un importe, de mayor a menor (rankings).
+ */
+function resumirPor(
+  filas: Record<string, unknown>[],
+  clave: (f: Record<string, unknown>) => string,
+  base: (f: Record<string, unknown>) => Record<string, unknown>,
+  sumas: string[],
+  orden: { porClave: true } | { porImporte: string }
+): Record<string, unknown>[] {
+  const grupos = new Map<string, Record<string, unknown>>();
+  for (const f of filas) {
+    const k = clave(f);
+    let g = grupos.get(k);
+    if (!g) {
+      g = { ...base(f), comprobantes: 0, _clave: k };
+      for (const s of sumas) g[s] = 0;
+      grupos.set(k, g);
+    }
+    g.comprobantes = Number(g.comprobantes) + 1;
+    for (const s of sumas) g[s] = Number(g[s]) + Number(f[s] ?? 0);
+  }
+  const lista = [...grupos.values()];
+  if ('porClave' in orden) lista.sort((a, b) => String(a._clave).localeCompare(String(b._clave)));
+  else lista.sort((a, b) => Number(b[orden.porImporte]) - Number(a[orden.porImporte]));
+  return lista;
+}
+
+/** "2026-08-14" → clave "2026-08" (ordena bien entre años) y período "08/2026". */
+function porMes(fecha: string, sumas: string[]) {
+  return (filas: Record<string, unknown>[]) =>
+    resumirPor(
+      filas,
+      (f) => String(f[fecha] ?? '').slice(0, 7),
+      (f) => {
+        const [anio, mes] = String(f[fecha] ?? '').slice(0, 7).split('-');
+        return { periodo: `${mes}/${anio}` };
+      },
+      sumas,
+      { porClave: true }
+    );
+}
+
+/**
+ * Los renglones de las compras del período, con el signo de la nota de
+ * crédito ya aplicado. De a mil: es el tope de cada consulta.
+ */
+async function renglonesDeCompra(p: ReportParams, kind: 'ARTICULOS' | 'CONCEPTOS'): Promise<Record<string, unknown>[]> {
+  const filas: Record<string, unknown>[] = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await supabase
+      .from('purchase_invoice_items')
+      .select(
+        `code, description, quantity, net_amount, purchase_invoice_id,
+         concept:expense_concepts(name),
+         compra:purchase_invoices!inner(doc_type, letter, status, issue_date, kind, supplier_name)`
+      )
+      .eq('compra.status', 'REGISTRADA')
+      .eq('compra.kind', kind)
+      .gte('compra.issue_date', p.from)
+      .lte('compra.issue_date', p.to)
+      .order('id')
+      .range(desde, desde + 999);
+    if (error) throw error;
+    for (const r of (data ?? []) as any[]) {
+      const signo = r.compra.doc_type === 'NOTA_CREDITO' ? -1 : 1;
+      filas.push({
+        code: r.code || '—',
+        description: r.description,
+        concepto: r.concept?.name ?? 'Sin concepto',
+        supplier_name: r.compra.supplier_name,
+        issue_date: r.compra.issue_date,
+        tipo: `${r.compra.doc_type === 'FACTURA' ? 'FACTURA' : r.compra.doc_type === 'NOTA_CREDITO' ? 'NOTA DE CREDITO' : 'NOTA DE DEBITO'} ${r.compra.letter}`,
+        quantity: Number(r.quantity) * signo,
+        net_amount: Number(r.net_amount) * signo,
+        comprobante_id: r.purchase_invoice_id,
+      });
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return filas;
+}
+
+/** Agrupa renglones contando comprobantes distintos, no renglones. */
+function resumirRenglones(clave: (f: Record<string, unknown>) => string, base: (f: Record<string, unknown>) => Record<string, unknown>) {
+  return (filas: Record<string, unknown>[]) => {
+    const grupos = new Map<string, Record<string, unknown> & { _ids: Set<unknown> }>();
+    for (const f of filas) {
+      const k = clave(f);
+      let g = grupos.get(k);
+      if (!g) {
+        g = { ...base(f), quantity: 0, net_amount: 0, comprobantes: 0, _ids: new Set() };
+        grupos.set(k, g);
+      }
+      g.quantity = Number(g.quantity) + Number(f.quantity ?? 0);
+      g.net_amount = Number(g.net_amount) + Number(f.net_amount ?? 0);
+      g._ids.add(f.comprobante_id);
+      g.comprobantes = g._ids.size;
+    }
+    return [...grupos.values()]
+      .map(({ _ids, ...resto }) => resto)
+      .sort((a, b) => Number(b.net_amount) - Number(a.net_amount));
+  };
+}
+
+/** Lo que salió de caja en el período (del libro de caja), por concepto. */
+async function egresosDelPeriodo(p: ReportParams): Promise<Record<string, unknown>[]> {
+  const filas = await callReport('report_cash_book', periodArgs(p));
+  return filas
+    .filter((f) => Number(f.egreso ?? 0) !== 0)
+    .map((f) => ({ ...f, concepto: f.concepto || 'Sin concepto' }));
+}
+
+// ===========================================================================
 // El catálogo
 // ===========================================================================
 
@@ -206,8 +354,9 @@ export const REPORTS: ReportDefinition[] = [
     id: 'ventas-periodo',
     area: 'COMERCIAL',
     name: 'Ventas por período',
-    description: 'Todas las facturas emitidas en el período, comprobante por comprobante.',
+    description: 'Todas las facturas emitidas en el período, comprobante por comprobante. Se puede acotar por letra y tipo de comprobante.',
     usesPeriod: true,
+    filtraPorTipo: true,
     columns: [
       { key: 'issue_date', label: 'Fecha', format: 'date', width: 12 },
       { key: 'comprobante', label: 'Comprobante', width: 22 },
@@ -219,7 +368,7 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'paid_amount', label: 'Cobrado', format: 'money', total: true, width: 14 },
       { key: 'balance', label: 'Saldo', format: 'money', total: true, width: 14 },
     ],
-    run: (p) => callReport('report_sales_by_period', periodArgs(p)),
+    run: ventasConTipo,
   },
   {
     id: 'ranking-clientes',
@@ -257,8 +406,10 @@ export const REPORTS: ReportDefinition[] = [
     id: 'ventas-mensual',
     area: 'COMERCIAL',
     name: 'Comparativo mensual',
-    description: 'Facturación mes a mes dentro del período elegido.',
+    description: 'Facturación mes a mes dentro del período elegido. Se puede acotar por letra y tipo de comprobante.',
     usesPeriod: true,
+    filtraPorTipo: true,
+    resumir: porMes('issue_date', ['net_amount', 'vat_amount', 'total_amount']),
     columns: [
       { key: 'periodo', label: 'Período', width: 12 },
       { key: 'comprobantes', label: 'Comprob.', format: 'integer', total: true, width: 10 },
@@ -266,7 +417,109 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'vat_amount', label: 'IVA', format: 'money', total: true, width: 16 },
       { key: 'total_amount', label: 'Total', format: 'money', total: true, width: 16 },
     ],
-    run: (p) => callReport('report_monthly_sales', periodArgs(p)),
+    run: ventasConTipo,
+  },
+
+  // ── Compras: los mismos que ventas, del lado de los proveedores ──
+  {
+    id: 'compras-periodo',
+    area: 'COMERCIAL',
+    name: 'Compras por período',
+    description: 'Todos los comprobantes de compra del período, uno por uno. Las notas de crédito restan. Se puede acotar por letra y tipo de comprobante.',
+    usesPeriod: true,
+    filtraPorTipo: true,
+    columns: [
+      { key: 'issue_date', label: 'Fecha', format: 'date', width: 12 },
+      { key: 'tipo', label: 'Tipo', width: 18 },
+      { key: 'comprobante', label: 'Comprobante', width: 18 },
+      { key: 'razon_social', label: 'Proveedor', width: 30 },
+      { key: 'cuit', label: 'CUIT', width: 14 },
+      { key: 'neto', label: 'Neto', format: 'money', total: true, width: 14 },
+      { key: 'iva', label: 'IVA', format: 'money', total: true, width: 14 },
+      { key: 'percepciones', label: 'Percepciones', format: 'money', total: true, width: 14 },
+      { key: 'total', label: 'Total', format: 'money', total: true, width: 14 },
+    ],
+    run: comprasDelPeriodo,
+  },
+  {
+    id: 'ranking-proveedores',
+    area: 'COMERCIAL',
+    name: 'Ranking de proveedores',
+    description: 'Cuánto se le compró a cada proveedor en el período, de mayor a menor.',
+    usesPeriod: true,
+    filtraPorTipo: true,
+    resumir: (filas) =>
+      resumirPor(
+        filas,
+        (f) => String(f.razon_social ?? '—'),
+        (f) => ({ razon_social: f.razon_social, cuit: f.cuit }),
+        ['neto', 'iva', 'total'],
+        { porImporte: 'total' }
+      ),
+    columns: [
+      { key: 'razon_social', label: 'Proveedor', width: 34 },
+      { key: 'cuit', label: 'CUIT', width: 14 },
+      { key: 'comprobantes', label: 'Comprob.', format: 'integer', total: true, width: 10 },
+      { key: 'neto', label: 'Neto', format: 'money', total: true, width: 16 },
+      { key: 'iva', label: 'IVA', format: 'money', total: true, width: 16 },
+      { key: 'total', label: 'Total', format: 'money', total: true, width: 16 },
+    ],
+    run: comprasDelPeriodo,
+  },
+  {
+    id: 'articulos-comprados',
+    area: 'COMERCIAL',
+    name: 'Artículos más comprados',
+    description: 'Sale de los renglones de las compras de artículos del período. Las notas de crédito restan.',
+    usesPeriod: true,
+    filtraPorTipo: true,
+    resumir: resumirRenglones(
+      (f) => `${f.code}|${f.description}`,
+      (f) => ({ code: f.code, description: f.description })
+    ),
+    columns: [
+      { key: 'code', label: 'Código', width: 14 },
+      { key: 'description', label: 'Descripción', width: 40 },
+      { key: 'quantity', label: 'Cantidad', format: 'number', total: true, width: 12 },
+      { key: 'net_amount', label: 'Neto comprado', format: 'money', total: true, width: 16 },
+      { key: 'comprobantes', label: 'Comprob.', format: 'integer', total: true, width: 10 },
+    ],
+    run: (p) => renglonesDeCompra(p, 'ARTICULOS'),
+  },
+  {
+    id: 'compras-por-concepto',
+    area: 'COMERCIAL',
+    name: 'Gastos por concepto (compras)',
+    description: 'Las facturas de conceptos del período (luz, fletes, honorarios...), sumadas por concepto.',
+    usesPeriod: true,
+    filtraPorTipo: true,
+    resumir: resumirRenglones(
+      (f) => String(f.concepto),
+      (f) => ({ concepto: f.concepto })
+    ),
+    columns: [
+      { key: 'concepto', label: 'Concepto', width: 34 },
+      { key: 'comprobantes', label: 'Comprob.', format: 'integer', total: true, width: 10 },
+      { key: 'net_amount', label: 'Neto', format: 'money', total: true, width: 16 },
+    ],
+    run: (p) => renglonesDeCompra(p, 'CONCEPTOS'),
+  },
+  {
+    id: 'compras-mensual',
+    area: 'COMERCIAL',
+    name: 'Comparativo mensual de compras',
+    description: 'Compras mes a mes dentro del período elegido. Se puede acotar por letra y tipo de comprobante.',
+    usesPeriod: true,
+    filtraPorTipo: true,
+    resumir: porMes('issue_date', ['neto', 'iva', 'total']),
+    columns: [
+      { key: 'periodo', label: 'Período', width: 12 },
+      { key: 'comprobantes', label: 'Comprob.', format: 'integer', total: true, width: 10 },
+      { key: 'neto', label: 'Neto', format: 'money', total: true, width: 16 },
+      { key: 'iva', label: 'IVA', format: 'money', total: true, width: 16 },
+      { key: 'total', label: 'Total', format: 'money', total: true, width: 16 },
+    ],
+    run: comprasDelPeriodo,
   },
 
   {
@@ -518,9 +771,12 @@ export const REPORTS: ReportDefinition[] = [
     id: 'libro-caja',
     area: 'STOCK_TESORERIA',
     name: 'Libro de caja',
-    description: 'Movimientos de tesorería del período, una fila por partida. Se puede acotar a uno o varios medios de pago.',
+    description: 'Movimientos de tesorería del período, una fila por partida. Se puede acotar por medio de pago y por concepto.',
     usesPeriod: true,
-    filtraPorColumna: { columna: 'medio', etiqueta: 'Medio de pago' },
+    filtraPorColumnas: [
+      { columna: 'medio', etiqueta: 'Medio de pago' },
+      { columna: 'concepto', etiqueta: 'Concepto' },
+    ],
     columns: [
       { key: 'movement_date', label: 'Fecha', format: 'date', width: 12 },
       { key: 'comprobante', label: 'Comprobante', width: 14 },
@@ -533,6 +789,29 @@ export const REPORTS: ReportDefinition[] = [
       { key: 'egreso', label: 'Egreso', format: 'money', total: true, width: 14 },
     ],
     run: (p) => callReport('report_cash_book', periodArgs(p)),
+  },
+  {
+    id: 'egresos-por-concepto',
+    area: 'STOCK_TESORERIA',
+    name: 'Egresos por concepto',
+    description:
+      'Lo que salió de caja en el período, agrupado por concepto: retiros de los socios, gastos sin factura, etc. Se puede acotar por concepto y por medio de pago.',
+    usesPeriod: true,
+    agruparPor: 'concepto',
+    filtraPorColumnas: [
+      { columna: 'concepto', etiqueta: 'Concepto' },
+      { columna: 'medio', etiqueta: 'Medio de pago' },
+    ],
+    columns: [
+      { key: 'concepto', label: 'Concepto', width: 22 },
+      { key: 'movement_date', label: 'Fecha', format: 'date', width: 12 },
+      { key: 'comprobante', label: 'Comprobante', width: 14 },
+      { key: 'detalle', label: 'Detalle', width: 30 },
+      { key: 'beneficiario', label: 'Beneficiario', width: 20 },
+      { key: 'medio', label: 'Medio', width: 18 },
+      { key: 'egreso', label: 'Egreso', format: 'money', total: true, width: 14 },
+    ],
+    run: egresosDelPeriodo,
   },
   {
     id: 'arqueo',

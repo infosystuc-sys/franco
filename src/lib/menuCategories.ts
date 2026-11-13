@@ -143,7 +143,10 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'comprobantes',
         cards: [
           { icon: ShoppingCart, label: 'Compras', path: '/compras', newPath: '/compras/nueva/articulos', adminOnly: true, rutas: ['/compra'] },
-          { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', newPath: '/compras-ia/nueva/articulos', adminOnly: true },
+          { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', newPath: '/compras-ia/nueva/articulos', adminOnly: true, rutas: ['/compras-ia/nueva/conceptos'] },
+          // Acceso directo: la factura de conceptos (luz, flete, honorarios)
+          // leída con IA, sin pasar por la pantalla de Compras con IA.
+          { icon: Sparkles, label: 'Conceptos con IA', path: '/compras-ia/nueva/conceptos', adminOnly: true },
         ],
       },
       {
@@ -152,7 +155,14 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       },
       {
         color: 'informes',
-        cards: [reportCard('libro-iva-compras')],
+        cards: [
+          reportCard('compras-periodo'),
+          reportCard('ranking-proveedores'),
+          reportCard('articulos-comprados'),
+          reportCard('compras-por-concepto'),
+          reportCard('compras-mensual'),
+          reportCard('libro-iva-compras'),
+        ],
       },
     ],
   },
@@ -174,10 +184,8 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'operaciones',
         cards: [
-          { icon: FileCheck, label: 'Cheques', path: '/cheques', newPath: '/cheques/nuevo', adminOnly: true },
           { icon: FileSpreadsheet, label: 'Saldos iniciales de clientes', path: '/saldos-iniciales/clientes', adminOnly: true },
           { icon: FileSpreadsheet, label: 'Saldos iniciales de proveedores', path: '/saldos-iniciales/proveedores', adminOnly: true },
-          { icon: FileSpreadsheet, label: 'Carga inicial de cheques', path: '/saldos-iniciales/cheques', adminOnly: true },
           { icon: FileMinus, label: 'NC provisorias', path: '/nc-provisorias', adminOnly: true },
           { icon: Wrench, label: 'Cuentas de mecánicos', path: '/mecanicos', adminOnly: true },
         ],
@@ -190,7 +198,6 @@ export const MENU_CATEGORIES: MenuCategory[] = [
           reportCard('saldos-proveedores'),
           reportCard('pagos-a-realizar'),
           reportCard('antiguedad-proveedores'),
-          reportCard('cheques-cartera'),
         ],
       },
     ],
@@ -224,14 +231,16 @@ export const MENU_CATEGORIES: MenuCategory[] = [
         color: 'operaciones',
         cards: [
           { icon: Wallet, label: 'Tesorería', path: '/tesoreria', adminOnly: true },
+          { icon: FileCheck, label: 'Cheques', path: '/cheques', newPath: '/cheques/nuevo', adminOnly: true },
           { icon: ArrowRightLeft, label: 'Endosar cheques', path: '/tesoreria/endosar-cheque', adminOnly: true },
+          { icon: FileSpreadsheet, label: 'Carga inicial de cheques', path: '/saldos-iniciales/cheques', adminOnly: true },
           { icon: Landmark, label: 'Medios de pago', path: '/medios-pago', newPath: '/medios-pago?nuevo=1', adminOnly: true },
           { icon: Landmark, label: 'Bancos', path: '/bancos', newPath: '/bancos?nuevo=1', adminOnly: true },
         ],
       },
       {
         color: 'informes',
-        cards: [reportCard('libro-caja'), reportCard('arqueo')],
+        cards: [reportCard('libro-caja'), reportCard('egresos-por-concepto'), reportCard('arqueo'), reportCard('cheques-cartera')],
       },
     ],
   },

@@ -108,13 +108,18 @@ export function ReportView() {
   const [fechaDesde, setFechaDesde] = React.useState('');
   const [fechaHasta, setFechaHasta] = React.useState('');
   const [parteElegida, setParteElegida] = React.useState('');
-  // Valores elegidos de la columna que filtra el informe (medios de pago). Vacío = todos.
-  const [valoresElegidos, setValoresElegidos] = React.useState<string[]>([]);
+  // Valores elegidos en cada columna que filtra el informe (medio de pago,
+  // concepto). Sin valores en una columna = todos.
+  const [valoresElegidos, setValoresElegidos] = React.useState<Record<string, string[]>>({});
 
   const valoresPresentes = React.useMemo(() => {
-    const columna = report?.filtraPorColumna?.columna;
-    if (!columna || !rows) return [];
-    return [...new Set(rows.map((r) => String(r[columna] ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const presentes: Record<string, string[]> = {};
+    for (const { columna } of report?.filtraPorColumnas ?? []) {
+      presentes[columna] = rows
+        ? [...new Set(rows.map((r) => String(r[columna] ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+        : [];
+    }
+    return presentes;
   }, [rows, report]);
 
   const partesPresentes = React.useMemo(() => {
@@ -140,7 +145,7 @@ export function ReportView() {
     setClases([]);
     setOrden(null);
     setParteElegida('');
-    setValoresElegidos([]);
+    setValoresElegidos({});
   }, [rows]);
 
   const filtradas = React.useMemo(() => {
@@ -152,8 +157,10 @@ export function ReportView() {
         if (letras.length > 0 && !letras.includes(letra)) return false;
         if (clases.length > 0 && !clases.includes(clase)) return false;
       }
-      const fc = report?.filtraPorColumna;
-      if (fc && valoresElegidos.length > 0 && !valoresElegidos.includes(String(row[fc.columna] ?? ''))) return false;
+      for (const { columna } of report?.filtraPorColumnas ?? []) {
+        const elegidos = valoresElegidos[columna] ?? [];
+        if (elegidos.length > 0 && !elegidos.includes(String(row[columna] ?? ''))) return false;
+      }
       const fp = report?.filtraPorFechaYParte;
       if (fp) {
         if (parteElegida && String(row[fp.parte] ?? '') !== parteElegida) return false;
@@ -171,9 +178,15 @@ export function ReportView() {
   // Orden por columna: un click en el título ordena, otro invierte, otro
   // vuelve al orden del informe. Lo que se imprime y se exporta sale así.
   const [orden, setOrden] = React.useState<Orden | null>(null);
+  // Los informes que resumen (por mes, por proveedor) lo hacen sobre lo ya
+  // filtrado: el filtro por tipo actúa comprobante por comprobante.
+  const resumidas = React.useMemo(
+    () => (report?.resumir ? report.resumir(filtradas) : filtradas),
+    [filtradas, report]
+  );
   const filtered = React.useMemo(
-    () => ordenarFilas(filtradas, orden, (row, columna) => row[columna]),
-    [filtradas, orden]
+    () => ordenarFilas(resumidas, orden, (row, columna) => row[columna]),
+    [resumidas, orden]
   );
 
   // Los totales se calculan sobre lo FILTRADO, no sobre todo: si alguien
@@ -382,13 +395,16 @@ export function ReportView() {
               </>
             )}
 
-            {report.filtraPorColumna && valoresPresentes.length > 1 && (
-              <ChipsDeFiltro
-                titulo={report.filtraPorColumna.etiqueta}
-                opciones={valoresPresentes.map((v) => ({ valor: v, etiqueta: v }))}
-                elegidos={valoresElegidos}
-                onChange={setValoresElegidos}
-              />
+            {(report.filtraPorColumnas ?? []).map(({ columna, etiqueta }) =>
+              (valoresPresentes[columna] ?? []).length > 1 ? (
+                <ChipsDeFiltro
+                  key={columna}
+                  titulo={etiqueta}
+                  opciones={valoresPresentes[columna].map((v) => ({ valor: v, etiqueta: v }))}
+                  elegidos={valoresElegidos[columna] ?? []}
+                  onChange={(elegidos) => setValoresElegidos((actual) => ({ ...actual, [columna]: elegidos }))}
+                />
+              ) : null
             )}
 
             {report.filtraPorFechaYParte && rows && rows.length > 0 && (
@@ -446,7 +462,7 @@ export function ReportView() {
       )}
 
       {rows !== null && (
-        <div className="print-document">
+        <div className="print-document informe-impreso">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-xs text-text-soft">
             <span>
               {grupos && (
@@ -488,8 +504,16 @@ export function ReportView() {
                     ? `${report.etiquetasPeriodo?.periodo ?? 'Período'}: ${formatDate(ranWith.from)} al ${formatDate(ranWith.to)}`
                     : `Al ${new Date().toLocaleDateString('es-AR')}`,
                   ...(parteElegida ? [parteElegida] : []),
-                  ...(report.filtraPorColumna && valoresElegidos.length > 0
-                    ? [`${report.filtraPorColumna.etiqueta}: ${valoresElegidos.join(', ')}`]
+                  ...(report.filtraPorColumnas ?? [])
+                    .filter(({ columna }) => (valoresElegidos[columna] ?? []).length > 0)
+                    .map(({ columna, etiqueta }) => `${etiqueta}: ${valoresElegidos[columna].join(', ')}`),
+                  ...(report.filtraPorTipo && (letras.length > 0 || clases.length > 0)
+                    ? [
+                        `Comprobantes: ${[
+                          clases.length > 0 ? clases.map(nombreDeClase).join(', ') : 'todos',
+                          letras.length > 0 ? `letra ${letras.join(', ')}` : '',
+                        ].filter(Boolean).join(' — ')}`,
+                      ]
                     : []),
                 ]}
               />

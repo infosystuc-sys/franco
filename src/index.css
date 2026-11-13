@@ -328,6 +328,35 @@
     size: A4;
     margin: 14mm;
   }
+
+  /*
+    Los informes son listados largos: la tabla se parte entre hojas (si no, la
+    regla de arriba la manda entera a la segunda y la primera sale en blanco),
+    y va con letra más chica y sin el recorte de pantalla, para que entren
+    todas las columnas en el ancho de la hoja.
+  */
+  .informe-impreso table {
+    break-inside: auto;
+    font-size: 10.5px !important;
+  }
+  .informe-impreso thead {
+    display: table-header-group;
+  }
+  .informe-impreso th,
+  .informe-impreso td {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    height: auto !important;
+  }
+  .informe-impreso th {
+    font-size: 9.5px !important;
+  }
+  .informe-impreso td.font-mono {
+    white-space: nowrap;
+  }
+  .informe-impreso .overflow-x-auto {
+    overflow: visible !important;
+  }
 }
 
 /* Sin las flechitas de subir/bajar en los campos numéricos (cantidades,
