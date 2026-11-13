@@ -6,7 +6,7 @@ import { useAuth } from '@/src/lib/auth';
 import { ItemsEditor } from '@/src/components/ItemsEditor';
 import { SelectorDeSector } from '@/src/components/SelectorDeSector';
 import { ContactoDelCliente } from '@/src/components/ContactoDelCliente';
-import { setWorkOrderSector, setWorkOrderDescuento } from '@/src/lib/workOrders';
+import { setWorkOrderSector, setWorkOrderDescuento, totalConDescuento } from '@/src/lib/workOrders';
 import { descuentoDe } from '@/src/components/DescuentoEditor';
 import { SendDocumentModal } from '@/src/components/SendDocumentModal';
 import { WorkOrderBlankDocument } from '@/src/components/WorkOrderBlankDocument';
@@ -746,6 +746,10 @@ export function WorkOrderDetails() {
     return pasos;
   })();
   const currentTotal = order.items.reduce((sum, i) => sum + i.subtotal, 0);
+  // Lo que paga el cliente: con el descuento de la orden. Es lo que se compara
+  // con el presupuesto, así que cambiar solo el descuento también pide
+  // autorización (y le llega al cliente el monto nuevo).
+  const totalAlCliente = totalConDescuento(currentTotal, order.discountPercent, order.discountFixed);
   // Una orden sin renglones y con presupuesto es una que todavía espera la
   // respuesta del cliente: los renglones se copian recién al aceptar. Sin esta
   // condición, toda orden recién cotizada avisaría que su monto ($0) difiere
@@ -753,11 +757,11 @@ export function WorkOrderDetails() {
   const esperandoRespuesta = order.items.length === 0;
   const priceDiffers =
     !esperandoRespuesta &&
-    order.quotedTotal !== null && Math.abs(currentTotal - order.quotedTotal) > 0.005;
+    order.quotedTotal !== null && Math.abs(totalAlCliente - order.quotedTotal) > 0.005;
   const priceAuthCoversCurrent =
     order.priceAuth.status === 'AUTORIZADO' &&
     order.priceAuth.requestedTotal !== null &&
-    Math.abs(order.priceAuth.requestedTotal - currentTotal) < 0.005;
+    Math.abs(order.priceAuth.requestedTotal - totalAlCliente) < 0.005;
 
   return (
     <div className="w-full">
@@ -942,7 +946,7 @@ export function WorkOrderDetails() {
           <span className="flex items-start gap-2 text-text">
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-state-wait" />
             <span>
-              El monto de la OT ({formatMoney(currentTotal)}) difiere del presupuesto original
+              El monto de la OT ({formatMoney(totalAlCliente)}) difiere del presupuesto original
               ({formatMoney(order.quotedTotal)}).
               {order.priceAuth.status === 'PENDIENTE' && (
                 <>
@@ -1384,11 +1388,14 @@ export function WorkOrderDetails() {
               (html2canvas no fotografía lo que está oculto con display:none). */}
           <div aria-hidden className="pointer-events-none fixed left-[-10000px] top-0 w-[900px]">
             <div ref={papelesRef} data-hojas-separadas>
-              {/* Con 8 renglones en blanco la orden entra justo en una hoja; con los 18
-                  de la versión para imprimir se iría a una segunda. */}
+              {/* Al cliente le va la orden con sus trabajos, no el papel en
+                  blanco del taller. Si todavía no tiene renglones (espera la
+                  respuesta del presupuesto) va solo el presupuesto. */}
+              {(items.length > 0 || !cotizacionEnvio) && (
               <WorkOrderBlankDocument
-                filas={8}
                 taller={tallerEnvio}
+                renglones={items.filter((i) => i.description.trim() || i.code.trim())}
+                descuento={descuento}
                 order={{
                   number: order.number,
                   component: order.component,
@@ -1413,6 +1420,7 @@ export function WorkOrderDetails() {
                   engineModel: order.vehicle?.engine_model ?? null,
                 }}
               />
+              )}
               {cotizacionEnvio && (
                 <QuotationDocument
                   taller={tallerEnvio}
@@ -1436,11 +1444,17 @@ export function WorkOrderDetails() {
             })()}
             fileName={`${order.number}.pdf`}
             documentRef={papelesRef}
-            subject={`Orden de trabajo ${order.number}${cotizacionEnvio ? ` y presupuesto ${cotizacionEnvio.number}` : ''}`}
+            subject={
+              cotizacionEnvio && items.length === 0
+                ? `Presupuesto ${cotizacionEnvio.number} (orden ${order.number})`
+                : `Orden de trabajo ${order.number}${cotizacionEnvio ? ` y presupuesto ${cotizacionEnvio.number}` : ''}`
+            }
             text={
-              cotizacionEnvio
-                ? `Le enviamos la orden de trabajo ${order.number} y el presupuesto ${cotizacionEnvio.number}.`
-                : `Le enviamos la orden de trabajo ${order.number}.`
+              cotizacionEnvio && items.length === 0
+                ? `Le enviamos el presupuesto ${cotizacionEnvio.number} de la orden ${order.number}.`
+                : cotizacionEnvio
+                  ? `Le enviamos la orden de trabajo ${order.number} y el presupuesto ${cotizacionEnvio.number}.`
+                  : `Le enviamos la orden de trabajo ${order.number}.`
             }
             onSent={() => cotizacionEnvio ? marcarEnviado('presupuesto', cotizacionEnvio.id) : undefined}
             onClose={() => setEnvio(null)}

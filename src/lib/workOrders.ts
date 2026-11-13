@@ -406,18 +406,30 @@ function faltaColumna(error: { code?: string; message?: string } | null): boolea
  * El RLS de work_orders ya filtra solo: un operario recibe únicamente sus
  * propias órdenes, sin que esta función tenga que saberlo.
  */
+/**
+ * La suma de los renglones menos el descuento (porcentaje o monto fijo). Es lo
+ * que se compara entre la OT y su presupuesto para saber si el precio cambió:
+ * cambiar solo el descuento también cambia lo que paga el cliente.
+ */
+export function totalConDescuento(bruto: number, percent: unknown, fixed: unknown): number {
+  const p = percent === null || percent === undefined ? 0 : Number(percent);
+  const f = fixed === null || fixed === undefined ? 0 : Number(fixed);
+  const descuento = p > 0 ? Math.round(bruto * p) / 100 : f > 0 ? f : 0;
+  return Math.round((bruto - descuento) * 100) / 100;
+}
+
 export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   const consulta = (extra: string) =>
     supabase
       .from('work_orders')
       .select(
       `id, number, component, public_token, created_at, etiquetas,${extra}
-       price_auth_status, price_auth_requested_total,
+       price_auth_status, price_auth_requested_total, discount_percent, discount_fixed,
        status:work_order_statuses(id, label, color, is_terminal, frees_yard),
        customer:customers(name),
        vehicle:vehicles(brand, model, license_plate, reference_number, kind),
        employee:employees!work_orders_employee_id_fkey(name),
-       quotation:quotations!work_orders_quotation_id_fkey(number, items:quotation_items(subtotal)),
+       quotation:quotations!work_orders_quotation_id_fkey(number, discount_percent, discount_fixed, items:quotation_items(subtotal)),
        items:work_order_items(subtotal),
        invoice:invoices!invoices_work_order_id_fkey(id, full_number, status, revertida_por_nc)`
       )
@@ -435,10 +447,21 @@ export async function fetchAllWorkOrders(): Promise<WorkOrderRow[]> {
   return filas.map((row: any) => {
     const quotation = row.quotation;
     const quotedTotal = quotation
-      ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
+      ? totalConDescuento(
+          (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0),
+          quotation.discount_percent,
+          quotation.discount_fixed
+        )
       : null;
-    const currentTotal = (row.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0);
-    const priceDiffers = quotedTotal !== null && Math.abs(currentTotal - quotedTotal) > 0.005;
+    const renglones = row.items ?? [];
+    const currentTotal = totalConDescuento(
+      renglones.reduce((sum: number, i: any) => sum + Number(i.subtotal), 0),
+      row.discount_percent,
+      row.discount_fixed
+    );
+    // Sin renglones, la orden todavía espera la respuesta del presupuesto.
+    const priceDiffers =
+      renglones.length > 0 && quotedTotal !== null && Math.abs(currentTotal - quotedTotal) > 0.005;
     const priceAuthCoversCurrent =
       row.price_auth_status === 'AUTORIZADO' &&
       row.price_auth_requested_total !== null &&
@@ -755,7 +778,7 @@ export interface WorkOrderDetail {
   /** Id de esa cotización, para poder mandarla a autorizar desde acá. */
   quotationId: string | null;
   quotationStatus: string | null;
-  /** Total de la cotización que le dio origen. Null si la OT no nació de una. */
+  /** Total de la cotización que le dio origen, con su descuento. Null si la OT no nació de una. */
   quotedTotal: number | null;
   priceAuth: {
     status: PriceAuthStatus | null;
@@ -796,7 +819,7 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
        employee:employees!work_orders_employee_id_fkey(id, name),
        mechanic:employees!work_orders_mechanic_id_fkey(id, name),
        overbill_amount,
-       quotation:quotations!work_orders_quotation_id_fkey(id, number, status, items:quotation_items(subtotal)),
+       quotation:quotations!work_orders_quotation_id_fkey(id, number, status, discount_percent, discount_fixed, items:quotation_items(subtotal)),
        items:work_order_items(id, article_id, code, description, quantity, unit_price, subtotal),
        photos:work_order_photos(id, storage_path, created_at),
        received_parts:work_order_received_parts(id, name, serial_number)`
@@ -828,7 +851,11 @@ export async function fetchWorkOrderByNumber(number: string): Promise<WorkOrderD
     quotationId: quotation?.id ?? null,
     quotationStatus: quotation?.status ?? null,
     quotedTotal: quotation
-      ? (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0)
+      ? totalConDescuento(
+          (quotation.items ?? []).reduce((sum: number, i: any) => sum + Number(i.subtotal), 0),
+          quotation.discount_percent,
+          quotation.discount_fixed
+        )
       : null,
     priceAuth: {
       status: (data as any).price_auth_status,

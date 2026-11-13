@@ -1,4 +1,5 @@
-import { formatDate } from '@/src/lib/utils';
+import { formatDate, formatMoney } from '@/src/lib/utils';
+import { montoDeDescuento, type Descuento } from '@/src/lib/invoices';
 import { formatCuit, TAX_CONDITION_LABELS, type TaxCondition } from '@/src/lib/fiscal';
 import { formatAddress, type TallerHeader } from '@/src/lib/companySettings';
 import logoPorDefecto from '@/src/assets/logo-luciano-diesel.png';
@@ -23,6 +24,14 @@ export interface WorkOrderBlankData {
   engineModel: string | null;
 }
 
+/** Un renglón ya cargado de la orden, para la versión que se le manda al cliente. */
+export interface WorkOrderDocumentLine {
+  code: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 /**
  * La orden en papel, para cuando el mostrador o el taller trabajan sin la
  * pantalla a mano: se completa el detalle a lápiz y se carga después.
@@ -40,12 +49,24 @@ export function WorkOrderBlankDocument({
   order,
   taller,
   filas = 18,
+  renglones,
+  descuento,
 }: {
   order: WorkOrderBlankData;
   taller: TallerHeader | null;
   /** Cuántos renglones en blanco entran cómodos en una hoja A4. */
   filas?: number;
+  /**
+   * Los trabajos ya cargados. Con esto la orden deja de ser el papel en blanco
+   * para completar a mano y sale con su detalle: es la versión que se le manda
+   * al cliente por mail o WhatsApp.
+   */
+  renglones?: WorkOrderDocumentLine[];
+  descuento?: Descuento | null;
 }) {
+  const completa = renglones !== undefined;
+  const bruto = (renglones ?? []).reduce((s, r) => s + r.quantity * r.unitPrice, 0);
+  const montoDescuento = montoDeDescuento(bruto, descuento);
   const vehiculo = [order.vehicleBrand, order.vehicleModel].filter(Boolean).join(' ') || '';
   const motor = [order.engineBrand, order.engineModel].filter(Boolean).join(' ');
   const domicilioTaller = taller ? formatAddress(taller) : '';
@@ -81,12 +102,14 @@ export function WorkOrderBlankDocument({
             Orden de trabajo
           </h3>
           <p className="mt-1 font-mono text-xl font-semibold text-text">{order.number}</p>
-          <dl className="mt-2 space-y-0.5 text-[15px] text-text-soft">
-            {/* La fecha de recepción se completa a mano: no se sabe todavía
-                cuándo va a entrar el vehículo cuando esto se imprime. */}
-            <dd>Fecha de ingreso: ______ / ______ / __________</dd>
-            <dd>Hora: ______ : ______</dd>
-          </dl>
+          {!completa && (
+            <dl className="mt-2 space-y-0.5 text-[15px] text-text-soft">
+              {/* La fecha de recepción se completa a mano: no se sabe todavía
+                  cuándo va a entrar el vehículo cuando esto se imprime. */}
+              <dd>Fecha de ingreso: ______ / ______ / __________</dd>
+              <dd>Hora: ______ : ______</dd>
+            </dl>
+          )}
         </div>
       </div>
 
@@ -118,7 +141,64 @@ export function WorkOrderBlankDocument({
         {order.component && <Campo label="Trabajo a realizar" value={order.component} />}
       </div>
 
-      {/* Renglones en blanco: lo único que todavía no existe. */}
+      {completa ? (
+        <div className="overflow-x-auto py-4">
+          <table className="w-full table-fixed text-left text-[15px]">
+            <thead className="border-b-2 border-line-strong text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+              <tr>
+                <th className="w-24 py-2 pr-2">Código</th>
+                <th className="py-2 pr-2">Descripción</th>
+                <th className="w-16 py-2 pr-2 text-right">Cant.</th>
+                <th className="w-32 py-2 pr-2 text-right">P. unitario</th>
+                <th className="w-32 py-2 text-right">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {renglones!.length === 0 && (
+                <tr className="border-b border-line">
+                  <td colSpan={5} className="py-3 text-center text-text-faint">
+                    Todavía no hay trabajos cargados en esta orden.
+                  </td>
+                </tr>
+              )}
+              {renglones!.map((r, idx) => (
+                <tr key={idx} className="border-b border-line align-top">
+                  <td className="py-1.5 pr-2 font-mono text-[13px]">{r.code}</td>
+                  <td className="py-1.5 pr-2">{r.description}</td>
+                  <td className="py-1.5 pr-2 text-right">{r.quantity}</td>
+                  <td className="py-1.5 pr-2 text-right font-mono">$ {formatMoney(r.unitPrice)}</td>
+                  <td className="py-1.5 text-right font-mono">$ {formatMoney(r.quantity * r.unitPrice)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {renglones!.length > 0 && (
+            <dl className="ml-auto mt-3 w-full max-w-xs space-y-1 text-[15px]">
+              {montoDescuento > 0 && (
+                <>
+                  <div className="flex justify-between text-text-soft">
+                    <dt>Subtotal</dt>
+                    <dd className="font-mono">$ {formatMoney(bruto)}</dd>
+                  </div>
+                  <div className="flex justify-between text-text-soft">
+                    <dt>
+                      Descuento
+                      {descuento?.tipo === 'PORCENTAJE' ? ` (${descuento.valor}%)` : ''}
+                    </dt>
+                    <dd className="font-mono">− $ {formatMoney(montoDescuento)}</dd>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between border-t border-line-strong pt-1 font-semibold text-text">
+                <dt>Total</dt>
+                <dd className="font-mono">$ {formatMoney(bruto - montoDescuento)}</dd>
+              </div>
+              <p className="text-right text-[12px] text-text-faint">Importes sin IVA.</p>
+            </dl>
+          )}
+        </div>
+      ) : (
+      /* Renglones en blanco: lo único que todavía no existe. */
       <div className="overflow-x-auto py-4">
         <table className="w-full table-fixed text-left text-[15px]">
           <thead className="border-b-2 border-line-strong text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
@@ -141,6 +221,7 @@ export function WorkOrderBlankDocument({
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Observaciones y firma, a mano. */}
       <div className="mt-2 grid grid-cols-1 gap-6 border-t border-line pt-4 sm:grid-cols-2">
