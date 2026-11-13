@@ -23,12 +23,14 @@ export function CategoryRail({
 }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { role } = useAuth();
+  const { role, modulos } = useAuth();
   const isAdmin = role === 'admin';
   const isContador = role === 'contador';
 
-  const categories = visibleCategories(isAdmin);
-  const directLinks = MENU_DIRECT_LINKS.filter((link) => isAdmin || !link.adminOnly);
+  const categories = visibleCategories(isAdmin, modulos);
+  const directLinks = MENU_DIRECT_LINKS.filter(
+    (link) => (isAdmin || !link.adminOnly) && (!modulos || modulos.includes(link.path))
+  );
 
   // En "/" la categoría activa es la elegida por query; en cualquier otra
   // pantalla, la que contiene la ruta actual — así el riel acompaña la

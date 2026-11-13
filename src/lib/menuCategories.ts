@@ -66,6 +66,12 @@ export interface MenuCard {
   /** Ruta directa de alta, si el módulo tiene una pantalla propia para crear (no un modal). */
   newPath?: string;
   adminOnly?: boolean;
+  /**
+   * Otras pantallas que son parte del mismo módulo: el detalle de un
+   * comprobante (/factura/:id), su alta en otra ruta. Sirve para los permisos:
+   * quien tiene el módulo entra también a estas.
+   */
+  rutas?: string[];
 }
 
 export interface MenuSection {
@@ -96,15 +102,15 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', newPath: '/cotizaciones/nueva', adminOnly: true },
+          { icon: FileText, label: 'Cotizaciones', path: '/cotizaciones', newPath: '/cotizaciones/nueva', adminOnly: true, rutas: ['/cotizacion'] },
           // El + no abre una orden: lleva a cargar el vehículo. Antes de abrir la OT
           // hay que tener el equipo dado de alta, y es el paso que más se repite.
-          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo?destino=ot' },
+          { icon: Wrench, label: 'Órdenes de trabajo', path: '/ordenes', newPath: '/vehiculos/nuevo?destino=ot', rutas: ['/orden'] },
           { icon: CalendarClock, label: 'Disponibilidad del taller', path: '/disponibilidad-taller', adminOnly: true },
-          { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true },
-          { icon: ClipboardList, label: 'Órdenes para facturar', path: '/facturas/pendientes', adminOnly: true },
-          { icon: FileMinus, label: 'Notas de crédito', path: '/notas-credito', newPath: '/notas-credito/nueva', adminOnly: true },
-          { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true },
+          { icon: Receipt, label: 'Facturación', path: '/facturas', newPath: '/facturas/nueva', adminOnly: true, rutas: ['/factura', '/facturar'] },
+          { icon: ClipboardList, label: 'Órdenes para facturar', path: '/facturas/pendientes', adminOnly: true, rutas: ['/facturar'] },
+          { icon: FileMinus, label: 'Notas de crédito', path: '/notas-credito', newPath: '/notas-credito/nueva', adminOnly: true, rutas: ['/nota-credito'] },
+          { icon: Truck, label: 'Remitos', path: '/remitos', newPath: '/remitos/nuevo', adminOnly: true, rutas: ['/remito'] },
         ],
       },
       {
@@ -136,7 +142,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: ShoppingCart, label: 'Compras', path: '/compras', newPath: '/compras/nueva/articulos', adminOnly: true },
+          { icon: ShoppingCart, label: 'Compras', path: '/compras', newPath: '/compras/nueva/articulos', adminOnly: true, rutas: ['/compra'] },
           { icon: Sparkles, label: 'Compras con IA', path: '/compras-ia', newPath: '/compras-ia/nueva/articulos', adminOnly: true },
         ],
       },
@@ -158,9 +164,9 @@ export const MENU_CATEGORIES: MenuCategory[] = [
       {
         color: 'comprobantes',
         cards: [
-          { icon: HandCoins, label: 'Cobranzas', path: '/cobranzas', newPath: '/cobranzas/nueva', adminOnly: true },
+          { icon: HandCoins, label: 'Cobranzas', path: '/cobranzas', newPath: '/cobranzas/nueva', adminOnly: true, rutas: ['/recibo'] },
           { icon: Users, label: 'Cuenta corriente de clientes', path: '/cuenta-corriente-clientes', adminOnly: true },
-          { icon: Banknote, label: 'Pagos', path: '/pagos', newPath: '/pagos/nueva', adminOnly: true },
+          { icon: Banknote, label: 'Pagos', path: '/pagos', newPath: '/pagos/nueva', adminOnly: true, rutas: ['/pago'] },
           { icon: Factory, label: 'Cuenta corriente de proveedores', path: '/cuenta-corriente-proveedores', adminOnly: true },
           { icon: Link2, label: 'Imputación de comprobantes', path: '/imputaciones', adminOnly: true },
         ],
@@ -262,28 +268,85 @@ export const MENU_DIRECT_LINKS: MenuCard[] = [
   { icon: Settings, label: 'Configuración', path: '/configuracion', adminOnly: true },
 ];
 
-export function visibleCategories(isAdmin: boolean): MenuCategory[] {
+/**
+ * Módulos a los que entra un usuario: null es todo el sistema; una lista, solo
+ * esas tarjetas (por su ruta). Ver profiles.modulos.
+ */
+export type Modulos = string[] | null;
+
+export function visibleCategories(isAdmin: boolean, modulos: Modulos = null): MenuCategory[] {
   return MENU_CATEGORIES.map((category) => ({
     ...category,
     sections: category.sections
       .map((section) => ({
         ...section,
-        cards: section.cards.filter((card) => isAdmin || !card.adminOnly),
+        cards: section.cards.filter((card) => (isAdmin || !card.adminOnly) && (!modulos || modulos.includes(card.path))),
       }))
       .filter((section) => section.cards.length > 0),
   })).filter((category) => category.sections.length > 0);
 }
 
-export function allCards(isAdmin: boolean): MenuCard[] {
-  return visibleCategories(isAdmin).flatMap((category) => category.sections.flatMap((section) => section.cards));
+export function allCards(isAdmin: boolean, modulos: Modulos = null): MenuCard[] {
+  return visibleCategories(isAdmin, modulos).flatMap((category) => category.sections.flatMap((section) => section.cards));
 }
 
 /** De qué color es la tarjeta de esta ruta, para pintar la sección "Favoritos" con el color de origen de cada una. */
-export function sectionColorForPath(path: string, isAdmin: boolean): SectionColor | undefined {
-  for (const category of visibleCategories(isAdmin)) {
+export function sectionColorForPath(path: string, isAdmin: boolean, modulos: Modulos = null): SectionColor | undefined {
+  for (const category of visibleCategories(isAdmin, modulos)) {
     for (const section of category.sections) {
       if (section.cards.some((card) => card.path === path)) return section.color;
     }
   }
   return undefined;
+}
+
+// ===========================================================================
+// Permisos por módulo
+// ===========================================================================
+
+/** Los informes que no tienen tarjeta en el menú: también se habilitan uno por uno. */
+const INFORMES_SIN_TARJETA: MenuCard[] = ['rentabilidad-ot', 'precios-desactualizados'].map(reportCard);
+
+/** Todo lo que se puede habilitar, agrupado como en el menú, para la pantalla de Usuarios. */
+export function catalogoDeModulos(): { grupo: string; modulos: MenuCard[] }[] {
+  return [
+    ...MENU_CATEGORIES.map((category) => ({
+      grupo: category.label,
+      modulos: category.sections.flatMap((section) => section.cards),
+    })),
+    { grupo: 'Otros informes', modulos: INFORMES_SIN_TARJETA },
+    { grupo: 'Sistema', modulos: MENU_DIRECT_LINKS },
+  ];
+}
+
+/** Las rutas que abre una tarjeta: la suya, la del alta y las de sus detalles. */
+function rutasDe(card: MenuCard): string[] {
+  const rutas = [card.path, ...(card.rutas ?? [])];
+  if (card.newPath) rutas.push(card.newPath.split('?')[0]);
+  // La lista de informes se ve si hay al menos uno habilitado.
+  if (card.path.startsWith('/informe/')) rutas.push('/informes');
+  return rutas;
+}
+
+/** Cuántos caracteres de la ruta cubre la tarjeta (0 si no la cubre). */
+function cubre(card: MenuCard, pathname: string): number {
+  return Math.max(
+    0,
+    ...rutasDe(card)
+      .filter((r) => pathname === r || pathname.startsWith(r + '/'))
+      .map((r) => r.length)
+  );
+}
+
+/**
+ * Si la pantalla está dentro de los módulos del usuario. Manda la tarjeta que
+ * cubre la ruta más precisa: /facturas/pendientes es "Órdenes para facturar",
+ * no "Facturación". Una ruta que no es de ningún módulo (el inicio) es libre.
+ */
+export function rutaPermitida(pathname: string, modulos: Modulos): boolean {
+  if (!modulos) return true;
+  const todas = catalogoDeModulos().flatMap((g) => g.modulos);
+  const mejor = Math.max(0, ...todas.map((card) => cubre(card, pathname)));
+  if (mejor === 0) return true;
+  return todas.some((card) => modulos.includes(card.path) && cubre(card, pathname) === mejor);
 }

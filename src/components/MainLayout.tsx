@@ -1,6 +1,9 @@
 import React from 'react';
-import { useLocation, useNavigationType } from 'react-router-dom';
+import { Link, useLocation, useNavigationType } from 'react-router-dom';
+import { Lock } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
+import { useAuth } from '@/src/lib/auth';
+import { rutaPermitida } from '@/src/lib/menuCategories';
 import { CategoryRail } from './CategoryRail';
 import { TopNavBar } from './TopNavBar';
 import logo from '@/src/assets/logo-luciano-diesel.png';
@@ -29,6 +32,10 @@ export function esPantallaDeCarga(pathname: string): boolean {
 export function MainLayout({ children }: MainLayoutProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const location = useLocation();
+  const { role, modulos } = useAuth();
+  // Los permisos por módulo son de los admins con acceso acotado: escribir la
+  // dirección a mano no abre una pantalla que no tiene habilitada.
+  const permitida = role !== 'admin' || rutaPermitida(location.pathname, modulos);
 
   /*
     La barra arranca contraída siempre, sin importar cómo haya quedado la vez
@@ -95,7 +102,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         )}
         style={{ marginTop: 'calc(3.5rem + var(--safe-top))' }}
       >
-        {children}
+        {permitida ? children : <SinAcceso />}
       </main>
 
       <footer
@@ -115,6 +122,21 @@ export function MainLayout({ children }: MainLayoutProps) {
           </span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function SinAcceso() {
+  return (
+    <div className="mx-auto mt-16 max-w-md border border-line bg-panel p-6 text-center">
+      <Lock size={22} className="mx-auto mb-3 text-text-soft" />
+      <p className="font-semibold text-text">No tenés acceso a esta pantalla.</p>
+      <p className="mt-1 text-sm text-text-soft">
+        Si la necesitás, pedile a quien administra el sistema que te la habilite en Usuarios.
+      </p>
+      <Link to="/" className="mt-4 inline-block text-sm font-semibold text-accent-deep hover:underline">
+        Volver al inicio
+      </Link>
     </div>
   );
 }

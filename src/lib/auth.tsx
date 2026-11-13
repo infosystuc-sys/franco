@@ -1,12 +1,15 @@
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
+import type { Modulos } from '@/src/lib/menuCategories';
 
 export type UserRole = 'admin' | 'operario' | 'contador';
 
 interface AuthState {
   session: Session | null;
   role: UserRole | null;
+  /** Módulos habilitados para un admin: null es todo el sistema. Ver profiles.modulos. */
+  modulos: Modulos;
   /** Permiso de pantalla: ver el listado histórico de comprobantes (Facturación, Cobranzas, Pagos, Compras, Tesorería). No es una guarda de datos, ver profiles-can-view-history.sql. */
   /** true hasta que el usuario cambie la contraseña inicial (1234) que se le asigna al crearlo. */
   mustChangePassword: boolean;
@@ -21,6 +24,7 @@ const AuthContext = React.createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState<Session | null>(null);
   const [role, setRole] = React.useState<UserRole | null>(null);
+  const [modulos, setModulos] = React.useState<Modulos>(null);
   const [mustChangePassword, setMustChangePassword] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
@@ -37,13 +41,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function loadRole(userId: string) {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from('profiles')
-        .select('role, must_change_password')
+        .select('role, must_change_password, modulos')
         .eq('id', userId)
         .maybeSingle();
+      // Sin la migración de permisos la columna no existe: se entra igual, con todo.
+      if (error) {
+        ({ data } = await supabase
+          .from('profiles')
+          .select('role, must_change_password')
+          .eq('id', userId)
+          .maybeSingle());
+      }
       if (cancelled) return;
       setRole((data?.role as UserRole) ?? null);
+      setModulos(((data as { modulos?: string[] | null } | null)?.modulos as Modulos) ?? null);
       setMustChangePassword(data?.must_change_password ?? false);
     }
 
@@ -66,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadRole(newSession.user.id).finally(() => !cancelled && setLoading(false));
       } else {
         setRole(null);
+        setModulos(null);
         setMustChangePassword(false);
       }
     });
@@ -88,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, role, mustChangePassword, markPasswordChanged, loading, signOut }}
+      value={{ session, role, modulos, mustChangePassword, markPasswordChanged, loading, signOut }}
     >
       {children}
     </AuthContext.Provider>

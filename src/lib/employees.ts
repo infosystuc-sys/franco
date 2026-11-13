@@ -228,6 +228,28 @@ export async function darAcceso(
   return data as { usuario: string };
 }
 
+/**
+ * Los módulos habilitados de cada usuario, por perfil: null es todo el
+ * sistema. Va aparte del listado de empleados para que, si la migración de
+ * permisos todavía no corrió, el resto de la app no se entere.
+ */
+export async function fetchModulosDeUsuarios(): Promise<Map<string, string[] | null>> {
+  const { data, error } = await supabase.from('profiles').select('id, modulos');
+  if (error) return new Map();
+  return new Map(((data ?? []) as { id: string; modulos: string[] | null }[]).map((r) => [r.id, r.modulos]));
+}
+
+/** Qué módulos ve un usuario (null: todo el sistema). Solo lo puede hacer quien tiene acceso total. */
+export async function definirModulos(employeeId: string, modulos: string[] | null): Promise<void> {
+  const { error } = await supabase.rpc('definir_modulos', { p_employee_id: employeeId, p_modulos: modulos });
+  if (error) {
+    if (/definir_modulos|schema cache/i.test(error.message)) {
+      throw new Error('Falta correr la migración 20261113_permisos_por_modulo.sql en Supabase.');
+    }
+    throw error;
+  }
+}
+
 /** Cambia la contraseña de un usuario que ya tiene acceso creado. */
 export async function cambiarClave(employeeId: string, password: string): Promise<void> {
   const { error } = await supabase.functions.invoke('gestionar-empleado', {

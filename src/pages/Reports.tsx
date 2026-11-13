@@ -11,7 +11,7 @@ import { AREA_LABELS, AREAS, REPORTS, type ReportArea } from '@/src/lib/reports'
  * ("Composición de saldos") no alcanza para elegir sin abrirlo.
  */
 export function Reports() {
-  const { role } = useAuth();
+  const { role, modulos } = useAuth();
   if (role !== 'admin' && role !== 'contador') return <Navigate to="/" replace />;
 
   // El contador solo ve el área impositiva — el resto del catálogo (comercial,
@@ -26,8 +26,9 @@ export function Reports() {
       />
 
       {areas.map((area) => {
-        const reports = REPORTS.filter((r) => r.area === area);
-        if (reports.length === 0) return <PendingArea key={area} area={area} />;
+        // Con permisos por módulo, solo los informes habilitados.
+        const reports = REPORTS.filter((r) => r.area === area && (!modulos || modulos.includes(`/informe/${r.id}`)));
+        if (reports.length === 0) return modulos ? null : <PendingArea key={area} area={area} />;
 
         return (
           <section key={area}>

@@ -22,12 +22,12 @@ import {
  * hace falta un estado aparte que se pueda desincronizar entre los dos.
  */
 export function MenuHome() {
-  const { role } = useAuth();
+  const { role, modulos } = useAuth();
   const isAdmin = role === 'admin';
   const [searchParams] = useSearchParams();
   const [favorites, setFavorites] = React.useState<string[]>(() => getFavorites());
 
-  const categories = visibleCategories(isAdmin);
+  const categories = visibleCategories(isAdmin, modulos);
   const requested = searchParams.get('cat');
   // Siempre arranca en Favoritos. Sin favoritos marcados la pantalla explica
   // cómo marcarlos, que es mejor punto de partida que soltar al usuario en
@@ -39,7 +39,7 @@ export function MenuHome() {
   }
 
   if (activeKey === 'favoritos') {
-    const favoriteCards = allCards(isAdmin).filter((card) => favorites.includes(card.path));
+    const favoriteCards = allCards(isAdmin, modulos).filter((card) => favorites.includes(card.path));
     return (
       <div className="w-full">
         <CategoryTitle icon={Star} label="Favoritos" />
@@ -50,7 +50,7 @@ export function MenuHome() {
           </Panel>
         ) : (
           <CardGrid
-            cards={favoriteCards.map((card) => ({ card, color: sectionColorForPath(card.path, isAdmin) ?? 'padrones' }))}
+            cards={favoriteCards.map((card) => ({ card, color: sectionColorForPath(card.path, isAdmin, modulos) ?? 'padrones' }))}
             favorites={favorites}
             onToggleFavorite={handleToggleFavorite}
           />

@@ -10,9 +10,11 @@ import {
   cambiarClave,
   crearUsuario,
   darAcceso,
+  definirModulos,
   deleteEmployee,
   describeEmployeeError,
   fetchEmployees,
+  fetchModulosDeUsuarios,
   updateEmployee,
   CARGO_LABELS,
   CARGOS,
@@ -23,14 +25,19 @@ import {
   type NewUserInput,
   type Workplace,
 } from '@/src/lib/employees';
+import { catalogoDeModulos, type Modulos } from '@/src/lib/menuCategories';
 
 const EMPTY_FORM: EmployeeInput = { name: '', role: '', phone: '', active: true, hourlyCost: null };
 
 export function Users() {
-  const { role } = useAuth();
+  const { role, modulos: misModulos } = useAuth();
   const isAdmin = role === 'admin';
+  // Los permisos los define solo quien entra a todo el sistema: si no, uno
+  // con acceso a Usuarios podría habilitarse a sí mismo lo que no tiene.
+  const defineModulos = isAdmin && !misModulos;
 
   const [employees, setEmployees] = React.useState<Employee[]>([]);
+  const [modulosPorPerfil, setModulosPorPerfil] = React.useState<Map<string, string[] | null>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
@@ -54,7 +61,9 @@ export function Users() {
     setError(null);
     try {
       // Los mecánicos sin usuario no son empleados: se ven en Cuentas de mecánicos.
-      setEmployees((await fetchEmployees()).filter((e) => !(e.esMecanico && !e.profileId)));
+      const [lista, modulos] = await Promise.all([fetchEmployees(), fetchModulosDeUsuarios()]);
+      setEmployees(lista.filter((e) => !(e.esMecanico && !e.profileId)));
+      setModulosPorPerfil(modulos);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -166,6 +175,11 @@ export function Users() {
                   </td>
                   <td data-label="Cargo" className="p-3 text-text-soft">
                     {employee.cargo ? CARGO_LABELS[employee.cargo] : <span className="text-text-faint">—</span>}
+                    {employee.cargo === 'administrativo' && employee.profileId && modulosPorPerfil.get(employee.profileId) && (
+                      <span className="block text-[12px] text-text-faint">
+                        {modulosPorPerfil.get(employee.profileId)!.length} módulos
+                      </span>
+                    )}
                   </td>
                   <td data-label="Lugar" className="p-3 text-text-soft">
                     {employee.workplace ?? <span className="text-text-faint">—</span>}
@@ -196,6 +210,10 @@ export function Users() {
       {editing && (
         <UserModal
           employee={editing === 'new' ? null : editing}
+          modulosIniciales={
+            editing !== 'new' && editing.profileId ? modulosPorPerfil.get(editing.profileId) ?? null : null
+          }
+          defineModulos={defineModulos}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -236,7 +254,11 @@ function CargoFields({
         <span className="mt-1 block text-[12px] font-normal normal-case text-text-soft">
           {cargo === 'contador'
             ? 'Contador tiene su propio acceso: de solo lectura, exclusivo a los informes impositivos.'
-            : 'Administrativo y dueño acceden por igual a todo el sistema — el cargo es solo la etiqueta.'}
+            : cargo === 'administrativo'
+              ? 'Administrativo: se le eligen los módulos que puede usar (o todo el sistema).'
+              : cargo === 'dueño'
+                ? 'Dueño: entra a todo el sistema.'
+                : 'Operario: ve las órdenes de trabajo de su lugar.'}
         </span>
       </Label>
 
@@ -263,13 +285,99 @@ function CargoFields({
   );
 }
 
+/**
+ * Qué pantallas ve un administrativo: todo el sistema, o solo los módulos
+ * tildados. El dueño ve todo siempre; operario y contador tienen su propio
+ * acceso fijo.
+ */
+function ModulosFields({
+  total,
+  onTotalChange,
+  seleccion,
+  onSeleccionChange,
+}: {
+  total: boolean;
+  onTotalChange: (total: boolean) => void;
+  seleccion: string[];
+  onSeleccionChange: (seleccion: string[]) => void;
+}) {
+  const grupos = React.useMemo(() => catalogoDeModulos(), []);
+
+  function alternar(path: string) {
+    onSeleccionChange(seleccion.includes(path) ? seleccion.filter((x) => x !== path) : [...seleccion, path]);
+  }
+
+  function alternarGrupo(paths: string[]) {
+    const todos = paths.every((x) => seleccion.includes(x));
+    onSeleccionChange(todos ? seleccion.filter((x) => !paths.includes(x)) : [...new Set([...seleccion, ...paths])]);
+  }
+
+  return (
+    <div className="space-y-2">
+      <span className="block text-xs font-bold uppercase tracking-wider text-text-soft">Qué puede usar</span>
+      <div className="flex flex-wrap gap-4 text-sm text-text">
+        <label className="flex items-center gap-2">
+          <input type="radio" checked={total} onChange={() => onTotalChange(true)} className="accent-accent-deep" />
+          Todo el sistema
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" checked={!total} onChange={() => onTotalChange(false)} className="accent-accent-deep" />
+          Solo los módulos elegidos
+        </label>
+      </div>
+      {!total && (
+        <div className="max-h-72 space-y-3 overflow-y-auto border border-line p-3">
+          {grupos.map(({ grupo, modulos }) => {
+            const paths = modulos.map((m) => m.path);
+            const todos = paths.every((x) => seleccion.includes(x));
+            return (
+              <div key={grupo}>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[13px] font-semibold text-text">{grupo}</span>
+                  <button
+                    type="button"
+                    onClick={() => alternarGrupo(paths)}
+                    className="text-[12px] font-semibold text-accent-deep hover:underline"
+                  >
+                    {todos ? 'Ninguno' : 'Todos'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+                  {modulos.map((m) => (
+                    <label key={m.path} className="flex items-center gap-2 text-[13px] text-text-soft">
+                      <input
+                        type="checkbox"
+                        checked={seleccion.includes(m.path)}
+                        onChange={() => alternar(m.path)}
+                        className="h-3.5 w-3.5 accent-accent-deep"
+                      />
+                      {m.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-[12px] font-normal normal-case text-text-soft">
+        Lo que no tiene habilitado no le aparece en el menú, y si entra por un link le dice que no tiene acceso.
+      </p>
+    </div>
+  );
+}
+
 function UserModal({
   employee,
+  modulosIniciales,
+  defineModulos,
   onClose,
   onSaved,
   onAccessChanged,
 }: {
   employee: Employee | null;
+  modulosIniciales: Modulos;
+  defineModulos: boolean;
   onClose: () => void;
   onSaved: () => void;
   onAccessChanged: () => void;
@@ -317,6 +425,14 @@ function UserModal({
   const [workplace, setWorkplace] = React.useState<Workplace | null>(employee?.workplace ?? null);
   const [cargoDraft, setCargoDraft] = React.useState<Cargo>(employee?.cargo ?? 'operario');
   const [workplaceDraft, setWorkplaceDraft] = React.useState<Workplace | ''>(employee?.workplace ?? '');
+
+  // Módulos: solo para el administrativo (el dueño ve todo).
+  const [accesoTotal, setAccesoTotal] = React.useState(!modulosIniciales);
+  const [seleccion, setSeleccion] = React.useState<string[]>(modulosIniciales ?? []);
+  const cargoElegido = employee ? cargoDraft : newCargo;
+  const muestraModulos = defineModulos && cargoElegido === 'administrativo' && (!employee || hasAccess);
+  /** Lo que se guarda: null es todo el sistema. */
+  const modulosElegidos: Modulos = cargoElegido === 'administrativo' && !accesoTotal ? seleccion : null;
 
   async function handleGrantAccess() {
     if (!employee) return;
@@ -373,6 +489,10 @@ function UserModal({
       setError('El nombre es obligatorio.');
       return;
     }
+    if (muestraModulos && modulosElegidos && modulosElegidos.length === 0) {
+      setError('Elegí al menos un módulo, o dale acceso a todo el sistema.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -387,6 +507,9 @@ function UserModal({
           if (cargoDraft !== cargo || lugarElegido !== workplace) {
             await cambiarCargo(employee.id, cargoDraft, lugarElegido);
           }
+          if (defineModulos && JSON.stringify(modulosElegidos) !== JSON.stringify(modulosIniciales)) {
+            await definirModulos(employee.id, modulosElegidos);
+          }
         }
         onSaved();
       } else {
@@ -396,7 +519,19 @@ function UserModal({
           workplace: newCargo === 'operario' ? (newWorkplace || null) : null,
         };
         const { usuario } = await crearUsuario(input);
-        setCreatedSummary(`Usuario creado: ${usuario} / contraseña inicial 1234. Anotalo — se lo tenés que dar al empleado, y se la va a pedir cambiar en el primer ingreso.`);
+        let aviso = '';
+        if (muestraModulos && modulosElegidos) {
+          // El alta no devuelve el id: se lo busca por su email de acceso.
+          const email = usuario.includes('@') ? usuario : `${usuario}@taller.local`;
+          const creado = (await fetchEmployees()).find((x) => x.email?.toLowerCase() === email.toLowerCase());
+          try {
+            if (!creado) throw new Error('no se encontró el usuario recién creado');
+            await definirModulos(creado.id, modulosElegidos);
+          } catch (err) {
+            aviso = ` OJO: no se pudieron guardar sus módulos (${getErrorMessage(err)}): por ahora entra a todo. Editalo para elegirlos.`;
+          }
+        }
+        setCreatedSummary(`Usuario creado: ${usuario} / contraseña inicial 1234. Anotalo — se lo tenés que dar al empleado, y se la va a pedir cambiar en el primer ingreso.${aviso}`);
       }
     } catch (err) {
       setError(describeEmployeeError(getErrorMessage(err)));
@@ -497,6 +632,14 @@ function UserModal({
                 workplace={newWorkplace}
                 onWorkplaceChange={setNewWorkplace}
               />
+              {muestraModulos && (
+                <ModulosFields
+                  total={accesoTotal}
+                  onTotalChange={setAccesoTotal}
+                  seleccion={seleccion}
+                  onSeleccionChange={setSeleccion}
+                />
+              )}
               <p className="text-[12px] font-normal normal-case text-text-soft">
                 El usuario y la contraseña inicial (1234) los arma el sistema. Se muestran al terminar de crear.
               </p>
@@ -576,6 +719,15 @@ function UserModal({
                       </Label>
                     )}
                   </div>
+
+                  {muestraModulos && (
+                    <ModulosFields
+                      total={accesoTotal}
+                      onTotalChange={setAccesoTotal}
+                      seleccion={seleccion}
+                      onSeleccionChange={setSeleccion}
+                    />
+                  )}
 
                   {changeSuccess && <p className="text-xs text-state-done">Contraseña actualizada.</p>}
                   {!showChangePassword ? (
