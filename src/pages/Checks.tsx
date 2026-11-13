@@ -1,11 +1,12 @@
 import React from 'react';
 import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
-import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban, Pencil, Trash2 } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
+import { inputClass, labelClass } from '@/src/components/FiscalFields';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import {
@@ -20,7 +21,9 @@ import {
   creditCheck,
   depositCheck,
   describeCheckError,
+  eliminarCheque,
   fetchChecks,
+  modificarCheque,
   isInWallet,
   rejectCheck,
   type CheckStatus,
@@ -45,6 +48,7 @@ export function Checks() {
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<CheckStatus | ''>('');
   const [tipoFilter, setTipoFilter] = React.useState<'' | 'fisico' | 'electronico'>('');
+  const [editando, setEditando] = React.useState<ThirdPartyCheck | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -167,6 +171,16 @@ export function Checks() {
       return;
     }
     run(() => rejectCheck(check.id, reason, todayLocal()));
+  }
+
+  function handleEliminar(check: ThirdPartyCheck) {
+    const ok = window.confirm(
+      `¿Eliminar el cheque ${check.number} de ${check.bankName} por $ ${formatMoney(check.amount)}?\n\n` +
+        'Se anula el ingreso a la cartera que generó y el cheque desaparece del listado. ' +
+        'Si entró con una cobranza, hay que anular esa cobranza.'
+    );
+    if (!ok) return;
+    run(() => eliminarCheque(check.id));
   }
 
   return (
@@ -362,6 +376,14 @@ export function Checks() {
                             Rechazar
                           </ActionButton>
                         )}
+                        <ActionButton onClick={() => setEditando(check)} disabled={busy} icon={Pencil}>
+                          Modificar
+                        </ActionButton>
+                        {check.status === 'EN_CARTERA' && (
+                          <ActionButton onClick={() => handleEliminar(check)} disabled={busy} icon={Trash2} danger>
+                            Eliminar
+                          </ActionButton>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -375,6 +397,146 @@ export function Checks() {
         El depósito no mueve plata: el valor sigue contando en la cartera hasta
         que el banco acredita, que es cuando el riesgo desaparece de verdad.
       </p>
+
+      {editando && (
+        <ModificarChequeModal
+          check={editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => {
+            setEditando(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Corregir un cheque mal cargado. Los datos del papel se corrigen siempre; el
+ * importe, mientras siga en cartera (la base rehace su ingreso de caja). Si
+ * entró con una cobranza, el importe se corrige anulando la cobranza.
+ */
+function ModificarChequeModal({
+  check,
+  onClose,
+  onSaved,
+}: {
+  check: ThirdPartyCheck;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = React.useState({
+    electronico: check.electronico,
+    number: check.number,
+    bankName: check.bankName,
+    drawer: check.drawer ?? '',
+    issueDate: check.issueDate ?? '',
+    dueDate: check.dueDate,
+    amount: String(check.amount),
+    notes: check.notes ?? '',
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const importeEditable = check.status === 'EN_CARTERA';
+  const patch = (cambios: Partial<typeof form>) => setForm((f) => ({ ...f, ...cambios }));
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = Number(form.amount.replace(',', '.'));
+    if (!form.number.trim() || !form.bankName.trim() || !form.dueDate) {
+      setError('Número, banco y fecha de cobro son obligatorios.');
+      return;
+    }
+    if (!(amount > 0)) {
+      setError('El importe tiene que ser mayor a cero.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await modificarCheque(check.id, { ...form, amount });
+      onSaved();
+    } catch (err) {
+      setError(describeCheckError(getErrorMessage(err)));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Panel className="max-h-[90vh] w-full max-w-xl overflow-y-auto p-5">
+        <form onSubmit={guardar} className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-text">Modificar cheque {check.number}</h3>
+          {error && <div className="border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger">{error}</div>}
+
+          <div className="flex gap-4 text-sm text-text">
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={!form.electronico} onChange={() => patch({ electronico: false })} className="accent-accent-deep" />
+              Físico
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={form.electronico} onChange={() => patch({ electronico: true })} className="accent-accent-deep" />
+              Electrónico (eCheq)
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className={labelClass}>
+              Número
+              <input value={form.number} onChange={(e) => patch({ number: e.target.value })} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Banco
+              <input value={form.bankName} onChange={(e) => patch({ bankName: e.target.value })} className={inputClass} />
+            </label>
+            <label className={cn(labelClass, 'sm:col-span-2')}>
+              Librador
+              <input value={form.drawer} onChange={(e) => patch({ drawer: e.target.value })} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Fecha de emisión
+              <input type="date" value={form.issueDate} onChange={(e) => patch({ issueDate: e.target.value })} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Fecha de cobro
+              <input type="date" value={form.dueDate} onChange={(e) => patch({ dueDate: e.target.value })} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Importe
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.amount}
+                onChange={(e) => patch({ amount: e.target.value })}
+                disabled={!importeEditable}
+                className={cn(inputClass, 'text-right disabled:opacity-60')}
+              />
+            </label>
+            <label className={cn(labelClass, 'sm:col-span-2')}>
+              Observaciones
+              <input value={form.notes} onChange={(e) => patch({ notes: e.target.value })} className={inputClass} />
+            </label>
+          </div>
+
+          <p className="text-[12px] text-text-soft">
+            {importeEditable
+              ? 'Si cambiás el importe se anula el ingreso a la cartera y se registra otro con el importe correcto. ' +
+                'Si el cheque entró con una cobranza, el importe se corrige anulando esa cobranza.'
+              : 'El cheque ya no está en cartera: se pueden corregir sus datos, pero no el importe.'}
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </div>
+        </form>
+      </Panel>
     </div>
   );
 }

@@ -273,6 +273,48 @@ export async function borrarChequeInicial(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ===========================================================================
+// Corregir o eliminar un cheque cargado
+// ===========================================================================
+
+export interface CheckEdit {
+  electronico: boolean;
+  number: string;
+  bankName: string;
+  drawer: string;
+  issueDate: string;
+  dueDate: string;
+  amount: number;
+  notes: string;
+}
+
+/**
+ * Corrige los datos de un cheque. El importe solo cambia si sigue en cartera y
+ * no entró con una cobranza: la base rehace su ingreso de caja.
+ */
+export async function modificarCheque(id: string, datos: CheckEdit): Promise<void> {
+  const { error } = await supabase.rpc('modificar_cheque', {
+    p_check_id: id,
+    p_datos: {
+      electronico: datos.electronico,
+      number: datos.number.trim(),
+      bank_name: datos.bankName.trim(),
+      drawer: datos.drawer.trim() || null,
+      issue_date: datos.issueDate || null,
+      due_date: datos.dueDate,
+      amount: datos.amount,
+      notes: datos.notes.trim() || null,
+    },
+  });
+  if (error) throw error;
+}
+
+/** Elimina un cheque en cartera cargado por error: se anula su ingreso de caja. */
+export async function eliminarCheque(id: string): Promise<void> {
+  const { error } = await supabase.rpc('eliminar_cheque', { p_check_id: id });
+  if (error) throw error;
+}
+
 /** Traduce errores de base a mensajes accionables para el usuario. */
 export function describeCheckError(message: string): string {
   if (message.includes('third_party_checks_sin_duplicados')) {
@@ -280,6 +322,9 @@ export function describeCheckError(message: string): string {
   }
   if (message.includes('cartera de cheques cargada')) {
     return message;
+  }
+  if (/modificar_cheque|eliminar_cheque/.test(message)) {
+    return 'Falta correr la migración 20261113_modificar_y_eliminar_cheques.sql en Supabase.';
   }
   if (message.includes('saldo_inicial') || message.includes('cargar_cheques_iniciales') || message.includes('borrar_cheque_inicial')) {
     return 'Falta correr la migración de la carga inicial de cheques (supabase/migrations/20261102_cheques_iniciales.sql).';
