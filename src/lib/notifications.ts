@@ -1,6 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 
-export type NotificationKind = 'LINK_SEGUIMIENTO' | 'CAMBIO_ESTADO' | 'COTIZACION' | 'FACTURA' | 'RETENCION_PENDIENTE';
+export type NotificationKind = 'LINK_SEGUIMIENTO' | 'CAMBIO_ESTADO' | 'COTIZACION' | 'FACTURA' | 'RETENCION_PENDIENTE' | 'RECORDATORIO';
 export type NotificationStatus = 'PENDIENTE' | 'ENVIADO' | 'FALLIDO' | 'DESCARTADO';
 
 export const KIND_LABELS: Record<NotificationKind, string> = {
@@ -9,6 +9,7 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   COTIZACION: 'Presupuesto',
   FACTURA: 'Factura',
   RETENCION_PENDIENTE: 'Reclamo de retención',
+  RECORDATORIO: 'Recordatorio',
 };
 
 export const STATUS_LABELS: Record<NotificationStatus, string> = {

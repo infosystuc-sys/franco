@@ -61,7 +61,7 @@ export function PlantillasMensajes() {
       .catch((err) => setError(getErrorMessage(err)));
   }, []);
 
-  const grupos = ['Automáticos por WhatsApp', 'Envío de comprobantes'] as const;
+  const grupos = ['Automáticos por WhatsApp', 'Recordatorios automáticos', 'Envío de comprobantes'] as const;
 
   return (
     <Panel className="space-y-4 p-5">

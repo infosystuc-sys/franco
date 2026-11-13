@@ -16,7 +16,7 @@ export interface VariablePlantilla {
 
 export interface DefinicionPlantilla {
   clave: string;
-  grupo: 'Automáticos por WhatsApp' | 'Envío de comprobantes';
+  grupo: 'Automáticos por WhatsApp' | 'Recordatorios automáticos' | 'Envío de comprobantes';
   titulo: string;
   descripcion: string;
   canal: 'whatsapp' | 'mail';
@@ -105,6 +105,46 @@ export const PLANTILLAS: DefinicionPlantilla[] = [
       V('fecha', 'Fecha del recibo'),
       V('impuesto', 'Impuesto retenido'),
       V('importe', 'Importe retenido'),
+    ],
+  },
+  {
+    clave: 'recordatorio_cotizacion',
+    grupo: 'Recordatorios automáticos',
+    titulo: 'Presupuesto sin respuesta',
+    descripcion: 'Sale solo, si está prendido en "Recordatorios automáticos".',
+    canal: 'whatsapp',
+    variables: [
+      V('cliente', 'Nombre del cliente'),
+      V('numero', 'Número del presupuesto'),
+      V('componente', 'Trabajo a realizar'),
+      V('total', 'Total con IVA'),
+      V('vencimiento', 'Válido hasta'),
+      V('link', 'Link para verlo y aceptarlo o rechazarlo'),
+    ],
+  },
+  {
+    clave: 'recordatorio_terminado',
+    grupo: 'Recordatorios automáticos',
+    titulo: 'Trabajo terminado sin retirar',
+    descripcion: 'Sale solo, si está prendido en "Recordatorios automáticos".',
+    canal: 'whatsapp',
+    variables: [
+      V('cliente', 'Nombre del cliente'),
+      V('orden', 'Número de la orden'),
+      V('vehiculo', 'Marca, modelo y patente'),
+      V('componente', 'Trabajo realizado'),
+    ],
+  },
+  {
+    clave: 'recordatorio_saldo',
+    grupo: 'Recordatorios automáticos',
+    titulo: 'Saldo vencido en cuenta corriente',
+    descripcion: 'Sale solo, si está prendido en "Recordatorios automáticos".',
+    canal: 'whatsapp',
+    variables: [
+      V('cliente', 'Nombre del cliente'),
+      V('saldo', 'Saldo total de la cuenta'),
+      V('vencido', 'Lo que está vencido'),
     ],
   },
   ...(
