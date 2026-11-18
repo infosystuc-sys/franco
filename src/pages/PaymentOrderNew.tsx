@@ -30,6 +30,8 @@ import {
   type ProvisionalCreditNote,
 } from '@/src/lib/paymentOrders';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
+import { NumeroInput } from '@/src/components/NumeroInput';
+import { leerNumero } from '@/src/lib/numeros';
 import { PaymentMethodModal } from '@/src/pages/PaymentMethods';
 
 interface DraftValue extends PaymentValueInput {
@@ -56,6 +58,16 @@ interface DraftProvisional {
   tempKey: string;
   description: string;
   amount: number;
+  /** Descuento por pronto pago: el porcentaje sobre las facturas elegidas. Se recalcula si cambian. */
+  percent: number | null;
+  /** La descripción la armó el sistema: se rehace junto con el importe. */
+  autoDescription: boolean;
+}
+
+/** El motivo de la NC provisoria por pronto pago, con las facturas que descuenta. */
+function motivoProntoPago(percent: number, facturas: string[]): string {
+  const pct = String(percent).replace('.', ',');
+  return `Descuento ${pct}% pronto pago` + (facturas.length > 0 ? ` s/ ${facturas.join(', ')}` : '');
 }
 
 /** Comprobante real y NC provisoria (nueva o reutilizada) en una sola fila para la tabla. */
@@ -117,6 +129,10 @@ export function PaymentOrderNew() {
   const [addingProvisional, setAddingProvisional] = React.useState(false);
   const [provisionalDescription, setProvisionalDescription] = React.useState('');
   const [provisionalAmount, setProvisionalAmount] = React.useState(0);
+  const [provisionalPercent, setProvisionalPercent] = React.useState<number | null>(null);
+  const [descripcionTocada, setDescripcionTocada] = React.useState(false);
+  const [numeroInternoCheque, setNumeroInternoCheque] = React.useState('');
+  const [avisoCheque, setAvisoCheque] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (role !== 'admin') return;
@@ -178,6 +194,64 @@ export function PaymentOrderNew() {
     [allocations]
   );
 
+  // Las facturas que se están pagando (las tildadas, o con importe a imputar):
+  // sobre ellas se calcula el descuento por pronto pago.
+  const facturasElegidas = React.useMemo(
+    () => docs.filter((d) => d.docType !== 'NOTA_CREDITO' && (Number(allocations[d.id]) || 0) > 0),
+    [docs, allocations]
+  );
+  const baseDescuento = React.useMemo(
+    () => round2(facturasElegidas.reduce((sum, d) => sum + (Number(allocations[d.id]) || 0), 0)),
+    [facturasElegidas, allocations]
+  );
+  const descuentoProvisorias = React.useMemo(
+    () =>
+      round2(
+        Object.entries(allocations)
+          .filter(([key]) => key.startsWith('draft:') || availableProvisionals.some((p) => p.id === key))
+          .reduce((sum, [, a]) => sum + (Number(a) || 0), 0)
+      ),
+    [allocations, availableProvisionals]
+  );
+  const notasDeCreditoElegidas = React.useMemo(
+    () =>
+      round2(
+        docs
+          .filter((d) => d.docType === 'NOTA_CREDITO')
+          .reduce((sum, d) => sum + (Number(allocations[d.id]) || 0), 0)
+      ),
+    [docs, allocations]
+  );
+
+  // Una NC por porcentaje sigue a las facturas elegidas: si se tilda o se
+  // destilda una, el descuento se recalcula solo.
+  React.useEffect(() => {
+    const numeros = facturasElegidas.map((d) => `${d.letter} ${d.fullNumber}`);
+    setDraftProvisionals((current) => {
+      let cambio = false;
+      const next = current.map((p) => {
+        if (p.percent === null) return p;
+        const amount = round2((baseDescuento * p.percent) / 100);
+        const description = p.autoDescription ? motivoProntoPago(p.percent, numeros) : p.description;
+        if (amount === p.amount && description === p.description) return p;
+        cambio = true;
+        return { ...p, amount, description };
+      });
+      if (!cambio) return current;
+      setAllocations((alloc) => {
+        const a = { ...alloc };
+        next.forEach((p) => {
+          if (p.percent !== null) {
+            if (p.amount > 0) a[`draft:${p.tempKey}`] = String(-p.amount);
+            else delete a[`draft:${p.tempKey}`];
+          }
+        });
+        return a;
+      });
+      return next;
+    });
+  }, [baseDescuento, facturasElegidas]);
+
   const creditUsed = React.useMemo(
     () =>
       round2(
@@ -206,6 +280,7 @@ export function PaymentOrderNew() {
     return availableWalletChecks.filter((c) => {
       const texto = normalizarBusqueda(
         [
+          c.numeroInterno !== null ? `#${c.numeroInterno}` : '',
           c.number,
           c.bankName,
           c.drawer ?? '',
@@ -375,16 +450,84 @@ export function PaymentOrderNew() {
   }
 
   function handleAddProvisional() {
-    if (!provisionalDescription.trim() || provisionalAmount <= 0) return;
+    const description =
+      provisionalDescription.trim() ||
+      (provisionalPercent ? motivoProntoPago(provisionalPercent, facturasElegidas.map((d) => `${d.letter} ${d.fullNumber}`)) : '');
+    if (!description || provisionalAmount <= 0) return;
     const tempKey = `prov-${nextProvKey++}`;
     setDraftProvisionals((current) => [
       ...current,
-      { tempKey, description: provisionalDescription.trim(), amount: round2(provisionalAmount) },
+      {
+        tempKey,
+        description,
+        amount: round2(provisionalAmount),
+        percent: provisionalPercent,
+        autoDescription: provisionalPercent !== null && !descripcionTocada,
+      },
     ]);
     setAllocations((current) => ({ ...current, [`draft:${tempKey}`]: String(-round2(provisionalAmount)) }));
+    cerrarProvisional();
+  }
+
+  function cerrarProvisional() {
     setAddingProvisional(false);
     setProvisionalDescription('');
     setProvisionalAmount(0);
+    setProvisionalPercent(null);
+    setDescripcionTocada(false);
+  }
+
+  /** El porcentaje calcula el importe sobre las facturas elegidas y arma el motivo. */
+  function cambiarPorcentaje(pct: number | null) {
+    setProvisionalPercent(pct);
+    if (pct === null) return;
+    setProvisionalAmount(round2((baseDescuento * pct) / 100));
+    if (!descripcionTocada) {
+      setProvisionalDescription(motivoProntoPago(pct, facturasElegidas.map((d) => `${d.letter} ${d.fullNumber}`)));
+    }
+  }
+
+  /** Tildar un comprobante lo imputa entero; destildarlo lo saca. */
+  function alternarComprobante(doc: OpenPurchaseDoc) {
+    setAllocations((current) => {
+      const next = { ...current };
+      if (Number(next[doc.id]) || 0) delete next[doc.id];
+      else next[doc.id] = String(round2(signOfDoc(doc.docType) * doc.pending));
+      return next;
+    });
+  }
+
+  function alternarTodas() {
+    const todasElegidas = docs.length > 0 && docs.every((d) => (Number(allocations[d.id]) || 0) !== 0);
+    setAllocations((current) => {
+      const next = { ...current };
+      docs.forEach((d) => {
+        if (todasElegidas) delete next[d.id];
+        else next[d.id] = String(round2(signOfDoc(d.docType) * d.pending));
+      });
+      return next;
+    });
+  }
+
+  /** Endosar un cheque tipeando su número interno, sin abrir la cartera. */
+  function agregarChequePorNumeroInterno() {
+    const n = Number(numeroInternoCheque.replace(/[^\d]/g, ''));
+    if (!n) return;
+    const cheque = walletChecks.find((c) => c.numeroInterno === n);
+    if (!cheque) {
+      setAvisoCheque(`No hay ningún cheque en cartera con el número interno #${n}.`);
+      return;
+    }
+    if (values.some((v) => v.checkId === cheque.id)) {
+      setAvisoCheque(`El cheque #${n} ya está en esta orden.`);
+      return;
+    }
+    setValues((current) => [
+      ...current,
+      { key: nextKey++, kind: 'CHEQUE_ENDOSADO' as const, amount: cheque.amount, checkId: cheque.id },
+    ]);
+    setAvisoCheque(`Agregado el cheque #${n}: ${cheque.number} de ${cheque.bankName} por $ ${formatMoney(cheque.amount)}.`);
+    setNumeroInternoCheque('');
   }
 
   function handleRemoveDraftProvisional(tempKey: string) {
@@ -435,7 +578,7 @@ export function PaymentOrderNew() {
   }
   // Una NC provisoria a medio cargar, o cargada sin importe a imputar, se
   // perdía en silencio al guardar: la orden salía sin el descuento.
-  if (addingProvisional && (provisionalDescription.trim() || provisionalAmount > 0)) {
+  if (addingProvisional && (provisionalDescription.trim() || provisionalAmount > 0 || provisionalPercent)) {
     problems.push('Tocá "Agregar" en la NC provisoria, o cancelala.');
   }
   for (const row of provisionalRows) {
@@ -578,38 +721,63 @@ export function PaymentOrderNew() {
         )}
 
         {addingProvisional && (
-          <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
-            <label className={cn(labelClass, 'sm:flex-1')}>
-              Motivo
-              <input
-                value={provisionalDescription}
-                onChange={(e) => setProvisionalDescription(e.target.value)}
-                placeholder="Descuento 5% pronto pago FC A 0003-00012345"
-                className={cn(inputClass, !provisionalDescription.trim() && 'field-required')}
-              />
-            </label>
-            <label className={cn(labelClass, 'sm:w-40')}>
-              Importe
-              <input
-                type="number" step="0.01" min="0"
-                value={provisionalAmount || ''}
-                onChange={(e) => setProvisionalAmount(Number(e.target.value))}
-                className={cn(inputClass, 'font-mono', provisionalAmount <= 0 && 'field-required')}
-              />
-            </label>
-            <div className="flex gap-2 sm:mb-0">
-              <Button
-                type="button"
-                onClick={handleAddProvisional}
-                disabled={!provisionalDescription.trim() || provisionalAmount <= 0}
-                className="px-3"
-              >
-                <Plus size={15} /> Agregar
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setAddingProvisional(false)} className="px-3">
-                Cancelar
-              </Button>
+          <div className="mb-4 border border-line bg-panel-alt p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className={cn(labelClass, 'sm:w-28')}>
+                Descuento %
+                <NumeroInput
+                  autoFocus
+                  value={provisionalPercent}
+                  onValor={(n) => cambiarPorcentaje(n)}
+                  placeholder="5"
+                  className={cn(inputClass, 'text-right font-mono')}
+                />
+              </label>
+              <label className={cn(labelClass, 'sm:w-40')}>
+                Importe
+                <NumeroInput
+                  value={provisionalAmount || null}
+                  onValor={(n) => {
+                    // Un importe tipeado a mano deja de seguir al porcentaje.
+                    setProvisionalAmount(n ?? 0);
+                    setProvisionalPercent(null);
+                  }}
+                  className={cn(inputClass, 'text-right font-mono', provisionalAmount <= 0 && 'field-required')}
+                />
+              </label>
+              <label className={cn(labelClass, 'sm:flex-1')}>
+                Motivo
+                <input
+                  value={provisionalDescription}
+                  onChange={(e) => {
+                    setProvisionalDescription(e.target.value);
+                    setDescripcionTocada(true);
+                  }}
+                  placeholder="Descuento 5% pronto pago"
+                  className={cn(inputClass, !provisionalDescription.trim() && !provisionalPercent && 'field-required')}
+                />
+              </label>
+              <div className="flex gap-2 sm:mb-0">
+                <Button
+                  type="button"
+                  onClick={handleAddProvisional}
+                  disabled={(!provisionalDescription.trim() && !provisionalPercent) || provisionalAmount <= 0}
+                  className="px-3"
+                >
+                  <Plus size={15} /> Agregar
+                </Button>
+                <Button type="button" variant="ghost" onClick={cerrarProvisional} className="px-3">
+                  Cancelar
+                </Button>
+              </div>
             </div>
+            <p className="mt-2 text-[12px] text-text-soft">
+              {baseDescuento > 0
+                ? `El porcentaje se calcula sobre las facturas tildadas: $ ${formatMoney(baseDescuento)}` +
+                  ` (${facturasElegidas.length} ${facturasElegidas.length === 1 ? 'factura' : 'facturas'}). ` +
+                  'Si después tildás o destildás facturas, el descuento se recalcula solo.'
+                : 'Tildá primero las facturas que vas a pagar: el porcentaje se calcula sobre ellas.'}
+            </p>
           </div>
         )}
 
@@ -618,6 +786,18 @@ export function PaymentOrderNew() {
             <table className="table-stack w-full text-left text-[15px]">
               <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
+                  <th className="w-8 px-3 py-1">
+                    {docs.length > 0 && (
+                      <input
+                        type="checkbox"
+                        aria-label="Tildar todas"
+                        title="Tildar o destildar todas"
+                        checked={docs.every((d) => (Number(allocations[d.id]) || 0) !== 0)}
+                        onChange={alternarTodas}
+                        className="h-4 w-4 accent-accent-deep"
+                      />
+                    )}
+                  </th>
                   <th className="px-3 py-1 w-44">Comprobante</th>
                   <th className="px-3 py-1 w-28">Fecha</th>
                   <th className="px-3 py-1 w-28">Vence</th>
@@ -632,7 +812,22 @@ export function PaymentOrderNew() {
                   const wrongSign = amount !== 0 && Math.sign(amount) !== signOfDoc(doc.docType);
                   const excess = Math.abs(amount) > doc.pending;
                   return (
-                    <tr key={doc.id} className={cn('h-10 border-b border-line', idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel')}>
+                    <tr
+                      key={doc.id}
+                      className={cn(
+                        'h-10 border-b border-line',
+                        amount !== 0 ? 'bg-accent/10' : idx % 2 === 0 ? 'bg-panel-alt' : 'bg-panel'
+                      )}
+                    >
+                      <td className="px-3 py-1">
+                        <input
+                          type="checkbox"
+                          aria-label={`Pagar ${doc.fullNumber}`}
+                          checked={amount !== 0}
+                          onChange={() => alternarComprobante(doc)}
+                          className="h-4 w-4 accent-accent-deep"
+                        />
+                      </td>
                       <td data-primary className="px-3 py-1">
                         <span className={cn('text-[12px] font-semibold uppercase tracking-[0.06em]', isCredit ? 'text-state-done' : 'text-text-soft')}>
                           {PURCHASE_DOC_TYPE_SHORT[doc.docType]}
@@ -653,10 +848,16 @@ export function PaymentOrderNew() {
                         {isCredit ? '−' : ''}$ {formatMoney(doc.pending)}
                       </td>
                       <td data-label="A imputar" className="px-1 py-1">
-                        <input
-                          type="number" step="0.01"
-                          value={allocations[doc.id] ?? ''}
-                          onChange={(e) => setAllocations((c) => ({ ...c, [doc.id]: e.target.value }))}
+                        <NumeroInput
+                          value={leerNumero(allocations[doc.id] ?? '', { puntoDeMiles: false })}
+                          onValor={(n) =>
+                            setAllocations((c) => {
+                              const next = { ...c };
+                              if (n === null || n === 0) delete next[doc.id];
+                              else next[doc.id] = String(n);
+                              return next;
+                            })
+                          }
                           placeholder={isCredit ? '−0,00' : '0,00'}
                           className={cn(
                             'w-full rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
@@ -679,6 +880,7 @@ export function PaymentOrderNew() {
                         (docs.length + idx) % 2 === 0 ? 'bg-panel-alt' : 'bg-panel'
                       )}
                     >
+                      <td className="px-3 py-1"></td>
                       <td data-primary className="px-3 py-1">
                         <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-state-done">NC</span>{' '}
                         <span className="font-mono font-semibold">{row.fullNumber}</span>
@@ -691,10 +893,9 @@ export function PaymentOrderNew() {
                       </td>
                       <td data-label="A imputar" className="px-1 py-1">
                         <div className="flex items-center gap-1">
-                          <input
-                            type="number" step="0.01"
-                            value={allocations[row.key] ?? ''}
-                            onChange={(e) => setAllocations((c) => ({ ...c, [row.key]: e.target.value }))}
+                          <NumeroInput
+                            value={leerNumero(allocations[row.key] ?? '', { puntoDeMiles: false })}
+                            onValor={(n) => setAllocations((c) => ({ ...c, [row.key]: n === null ? '' : String(n) }))}
                             placeholder="−0,00"
                             className={cn(
                               'w-full rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
@@ -720,6 +921,33 @@ export function PaymentOrderNew() {
             </table>
           </div>
         )}
+
+        {(docs.length > 0 || provisionalRows.length > 0) && (
+          <dl className="mt-3 flex flex-wrap justify-end gap-x-6 gap-y-1 text-[15px]">
+            <div className="flex items-baseline gap-1.5">
+              <dt className="text-text-soft">
+                {facturasElegidas.length} {facturasElegidas.length === 1 ? 'factura elegida' : 'facturas elegidas'}
+              </dt>
+              <dd className="font-mono font-semibold text-text">$ {formatMoney(baseDescuento)}</dd>
+            </div>
+            {notasDeCreditoElegidas !== 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="text-text-soft">Notas de crédito</dt>
+                <dd className="font-mono font-semibold text-state-done">−$ {formatMoney(Math.abs(notasDeCreditoElegidas))}</dd>
+              </div>
+            )}
+            {descuentoProvisorias !== 0 && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="text-text-soft">NC provisorias</dt>
+                <dd className="font-mono font-semibold text-state-done">−$ {formatMoney(Math.abs(descuentoProvisorias))}</dd>
+              </div>
+            )}
+            <div className="flex items-baseline gap-1.5">
+              <dt className="font-semibold text-text">A pagar</dt>
+              <dd className="font-mono font-semibold text-text">$ {formatMoney(totalApplied)}</dd>
+            </div>
+          </dl>
+        )}
       </Panel>
 
       {/* ── Cheques en cartera para endosar: modal, solo al elegir el medio ── */}
@@ -740,7 +968,7 @@ export function PaymentOrderNew() {
               autoFocus
               value={checkSearch}
               onChange={(e) => setCheckSearch(e.target.value)}
-              placeholder="Buscar por número, banco, librador, vencimiento o importe…"
+              placeholder="Buscar por N° interno (#12), número, banco, librador, vencimiento o importe…"
               className={cn(inputClass, 'mt-0 w-full pl-9')}
             />
           </div>
@@ -749,6 +977,7 @@ export function PaymentOrderNew() {
               <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
                 <tr>
                   <th className="w-8 px-3 py-1"></th>
+                  <th className="px-3 py-1 w-20">N° int.</th>
                   <th className="px-3 py-1">Número</th>
                   <th className="px-3 py-1">Banco</th>
                   <th className="px-3 py-1">Librador</th>
@@ -759,7 +988,7 @@ export function PaymentOrderNew() {
               <tbody>
                 {filteredWalletChecks.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-4 text-center text-sm text-text-soft">
+                    <td colSpan={7} className="px-3 py-4 text-center text-sm text-text-soft">
                       {availableWalletChecks.length === 0
                         ? 'No quedan cheques en cartera para endosar.'
                         : 'Ningún cheque coincide con la búsqueda.'}
@@ -780,6 +1009,9 @@ export function PaymentOrderNew() {
                         onClick={(e) => e.stopPropagation()}
                         className="h-4 w-4 accent-accent-deep"
                       />
+                    </td>
+                    <td data-label="N° int." className="px-3 py-1 font-mono font-semibold text-accent-deep">
+                      {c.numeroInterno !== null ? `#${c.numeroInterno}` : '—'}
                     </td>
                     <td data-primary className="px-3 py-1 font-mono font-semibold">
                       {c.number}
@@ -833,6 +1065,8 @@ export function PaymentOrderNew() {
       <Panel className="mb-6 p-5">
         <SectionHeader title="Medios de pago" />
 
+        {supplierId && <SaldoACancelar aPagar={totalApplied} cargado={totalValues} />}
+
         <div className="mb-4 flex flex-col gap-2 border border-line bg-panel-alt p-3 sm:flex-row sm:items-end">
           <label className={cn(labelClass, 'sm:flex-1')}>
             Medio
@@ -856,11 +1090,16 @@ export function PaymentOrderNew() {
           {selectedMedioKey && (
             <label className={cn(labelClass, 'sm:w-40')}>
               Importe
-              <input
-                type="number" step="0.01" min="0"
-                value={draftAmount || ''}
-                onChange={(e) => setDraftAmount(Number(e.target.value))}
-                className={cn(inputClass, 'font-mono')}
+              <NumeroInput
+                value={draftAmount || null}
+                onValor={(n) => setDraftAmount(n ?? 0)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddMedio();
+                  }
+                }}
+                className={cn(inputClass, 'text-right font-mono')}
               />
             </label>
           )}
@@ -868,7 +1107,30 @@ export function PaymentOrderNew() {
           <Button type="button" onClick={handleAddMedio} disabled={!selectedMedioKey} className="px-3 sm:mb-0">
             <Plus size={15} /> Agregar
           </Button>
+
+          {walletChecks.length > 0 && (
+            <label className={cn(labelClass, 'border-line sm:ml-2 sm:w-44 sm:border-l sm:pl-3')}>
+              Cheque por N° interno
+              <input
+                value={numeroInternoCheque}
+                onChange={(e) => {
+                  setNumeroInternoCheque(e.target.value);
+                  setAvisoCheque(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    agregarChequePorNumeroInterno();
+                  }
+                }}
+                inputMode="numeric"
+                placeholder="#  y Enter"
+                className={cn(inputClass, 'font-mono')}
+              />
+            </label>
+          )}
         </div>
+        {avisoCheque && <p className="-mt-2 mb-3 text-[13px] text-text-soft">{avisoCheque}</p>}
 
         {values.length === 0 && <p className="text-sm text-text-soft">Sin valores cargados.</p>}
 
@@ -932,16 +1194,16 @@ export function PaymentOrderNew() {
                     .filter((c) => c.id === value.checkId || !values.some((v) => v.checkId === c.id))
                     .map((c) => (
                       <option key={c.id} value={c.id}>
+                        {c.numeroInterno !== null ? `#${c.numeroInterno} · ` : ''}
                         {c.electronico ? 'eCheq ' : ''}{c.number} — {c.bankName} — vence {formatDate(c.dueDate)}
                       </option>
                     ))}
                 </select>
               )}
 
-              <input
-                type="number" step="0.01" min="0"
-                value={value.amount || ''}
-                onChange={(e) => patchValue(value.key, { amount: Number(e.target.value) })}
+              <NumeroInput
+                value={value.amount || null}
+                onValor={(n) => patchValue(value.key, { amount: n ?? 0 })}
                 disabled={value.kind === 'CHEQUE_ENDOSADO'}
                 className={cn(
                   compactFieldClass,
@@ -1021,6 +1283,12 @@ export function PaymentOrderNew() {
         </div>
       </Panel>
 
+      {supplierId && (totalApplied !== 0 || totalValues !== 0) && (
+        <div className="sticky bottom-0 z-30 -mx-2 mb-4 border-t-2 border-accent bg-panel/95 px-4 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur">
+          <SaldoACancelar aPagar={totalApplied} cargado={totalValues} enLinea />
+        </div>
+      )}
+
       {altaMedio && (
         <PaymentMethodModal
           method={null}
@@ -1035,6 +1303,39 @@ export function PaymentOrderNew() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Cuánto falta para cancelar lo elegido, a medida que se cargan cheques,
+ * transferencias, retenciones o NC.
+ */
+function SaldoACancelar({ aPagar, cargado, enLinea }: { aPagar: number; cargado: number; enLinea?: boolean }) {
+  const saldo = round2(aPagar - cargado);
+  return (
+    <dl
+      className={cn(
+        'flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[15px]',
+        !enLinea && 'mb-4 border border-line bg-panel px-3 py-2'
+      )}
+    >
+      <div className="flex items-baseline gap-1.5">
+        <dt className="text-text-soft">A pagar</dt>
+        <dd className="font-mono font-semibold text-text">$ {formatMoney(aPagar)}</dd>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <dt className="text-text-soft">Cargado</dt>
+        <dd className="font-mono font-semibold text-text">$ {formatMoney(cargado)}</dd>
+      </div>
+      <div className="ml-auto flex items-baseline gap-1.5">
+        <dt className="text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
+          {saldo > 0 ? 'Falta cancelar' : saldo < 0 ? 'Sobra (queda a cuenta)' : 'Saldo'}
+        </dt>
+        <dd className={cn('font-display text-xl font-medium', saldo > 0 ? 'text-danger' : saldo < 0 ? 'text-state-wait' : 'text-state-done')}>
+          $ {formatMoney(Math.abs(saldo))}
+        </dd>
+      </div>
+    </dl>
   );
 }
 
