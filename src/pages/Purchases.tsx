@@ -17,6 +17,7 @@ import {
   type PurchaseListRow,
 } from '@/src/lib/purchases';
 import { urlDeAccion } from '@/src/lib/accionDesdeListado';
+import { MODOS_DE_CARGA, nombreDelModo, rutaDeCarga, ultimoModoDeCarga } from '@/src/lib/modoDeCargaCompra';
 import {
   ComprobantesListado,
   ETIQUETAR,
@@ -86,6 +87,7 @@ export function Purchases() {
   React.useEffect(() => { cargar(); }, [cargar]);
 
   const getId = React.useCallback((f: PurchaseListRow) => f.id, []);
+  const ultimoModo = React.useMemo(() => ultimoModoDeCarga(), []);
 
   if (role !== 'admin') return <Navigate to="/" replace />;
 
@@ -149,12 +151,13 @@ export function Purchases() {
       bloqueo: NO_ANULADO,
       onClick: (f: PurchaseListRow | null) => f && eliminar(f),
     },
-    {
-      label: 'Nueva compra de conceptos',
+    // Las cuatro formas de cargar, a mano. "Nueva" abre la última usada.
+    ...MODOS_DE_CARGA.map((m) => ({
+      label: `Nueva compra de ${nombreDelModo(m)}`,
       sinSeleccion: true,
-      onClick: () => navigate('/compras/nueva/conceptos'),
-    },
-    { label: 'Nueva compra con IA', sinSeleccion: true, onClick: () => navigate('/compras-ia') },
+      onClick: () => navigate(rutaDeCarga(m)),
+    })),
+    { label: 'Leídas por IA sin confirmar', sinSeleccion: true, onClick: () => navigate('/compras-ia') },
     {
       label: 'Cuenta corriente de proveedores',
       sinSeleccion: true,
@@ -173,7 +176,10 @@ export function Purchases() {
       error={error}
       getId={getId}
       columnas={COLUMNAS}
-      nuevo={{ to: '/compras/nueva/articulos', title: 'Compra de artículos. La de conceptos está en Más acciones.' }}
+      nuevo={{
+        to: rutaDeCarga(ultimoModo),
+        title: `Compra de ${nombreDelModo(ultimoModo)}, como la última que cargaste. Las otras formas están en Más acciones.`,
+      }}
       onAbrir={(f) => navigate(ficha(f))}
       botones={botones}
       masAcciones={masAcciones}

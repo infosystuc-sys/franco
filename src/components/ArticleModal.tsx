@@ -1,4 +1,6 @@
 import React from 'react';
+import { NumeroInput } from '@/src/components/NumeroInput';
+import { leerNumero } from '@/src/lib/numeros';
 import { Plus, Trash2, X, Star, Factory, PackageX, Boxes } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
@@ -361,12 +363,9 @@ export function ArticleModal({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-6 sm:items-start">
               <label className={cn(labelClass, 'col-span-2')}>
                 Utilidad %
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.markupPercent ?? ''}
-                  onChange={(e) => patch({ markupPercent: e.target.value === '' ? null : Number(e.target.value) })}
+                <NumeroInput
+                  value={form.markupPercent}
+                  onValor={(n) => patch({ markupPercent: n })}
                   className={cn(inputClass, 'text-right')}
                   placeholder={`${defaultMarkup} (global)`}
                 />
@@ -380,13 +379,10 @@ export function ArticleModal({
                   preferido, ese cálculo se muestra solo como referencia. */}
               <label className={cn(labelClass, 'col-span-4')}>
                 Precio de venta
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.unitPrice || ''}
+                <NumeroInput
+                  value={form.unitPrice || null}
                   placeholder="0,00"
-                  onChange={(e) => patch({ unitPrice: Number(e.target.value) })}
+                  onValor={(n) => patch({ unitPrice: n ?? 0 })}
                   className={cn(inputClass, 'text-right')}
                 />
                 {preferred && (
@@ -579,12 +575,10 @@ function SuppliersSection({
                 className="col-span-3 border border-line px-2 py-1 text-xs font-mono"
               />
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={link.purchasePrice}
+                inputMode="decimal"
+                defaultValue={String(link.purchasePrice).replace('.', ',')}
                 onBlur={(e) => {
-                  const value = Number(e.target.value);
+                  const value = leerNumero(e.target.value, { puntoDeMiles: false }) ?? NaN;
                   if (Number.isFinite(value) && value !== link.purchasePrice) {
                     run(() => updateArticleSupplier(link.id, { supplierCode: link.supplierCode, purchasePrice: value }));
                   }
@@ -624,12 +618,9 @@ function SuppliersSection({
             placeholder="Código proveedor"
             className="col-span-3 border border-line px-2 py-2 text-xs font-mono"
           />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
+          <NumeroInput
+            value={leerNumero(price, { puntoDeMiles: false })}
+            onValor={(n) => setPrice(n === null ? '' : String(n))}
             placeholder="P. compra"
             className="col-span-3 border border-line px-2 py-2 text-xs text-right"
           />

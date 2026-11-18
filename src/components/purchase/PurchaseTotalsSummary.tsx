@@ -2,6 +2,8 @@ import React from 'react';
 import { AlertTriangle, Check, Pencil, RotateCcw } from 'lucide-react';
 import { cn, formatMoney } from '@/src/lib/utils';
 import { labelClass, inputClass } from '@/src/components/FiscalFields';
+import { NumeroInput } from '@/src/components/NumeroInput';
+import { leerNumero } from '@/src/lib/numeros';
 import { hayAjustes, SIN_AJUSTES, type PurchaseAjustes, type PurchaseTotals } from '@/src/lib/purchases';
 
 function Row({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
@@ -30,11 +32,6 @@ function RowEditable({
   calculado: number;
   onChange: (value: number | undefined) => void;
 }) {
-  const [texto, setTexto] = React.useState(String(value));
-  React.useEffect(() => {
-    if (Number(texto) !== value) setTexto(String(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
   const ajustado = Math.abs(value - calculado) > 0.004;
   return (
     <div className="flex items-start justify-between gap-3">
@@ -50,15 +47,10 @@ function RowEditable({
         )}
       </dt>
       <dd>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={texto}
-          onChange={(e) => {
-            setTexto(e.target.value);
-            const n = Number(e.target.value);
-            if (e.target.value.trim() !== '' && Number.isFinite(n)) onChange(n);
+        <NumeroInput
+          value={value}
+          onValor={(n) => {
+            if (n !== null) onChange(n);
           }}
           className={cn(
             'w-36 rounded border bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none',
@@ -122,10 +114,9 @@ export function PurchaseTotalsSummary({
     <>
       <label className={cn(labelClass, 'mb-4 block sm:w-1/2')}>
         Bonificación general %
-        <input
-          type="number" step="0.01" min="0" max="100"
-          value={generalDiscount}
-          onChange={(e) => onGeneralDiscountChange(e.target.value)}
+        <NumeroInput
+          value={leerNumero(generalDiscount, { puntoDeMiles: false })}
+          onValor={(n) => onGeneralDiscountChange(n === null ? '' : String(n))}
           className={cn(inputClass, 'font-mono')}
         />
       </label>
@@ -234,10 +225,9 @@ export function PurchaseTotalsSummary({
       <div className="mt-4 border-t border-line pt-3">
         <label className={labelClass}>
           Total del comprobante (control)
-          <input
-            type="number" step="0.01" min="0"
-            value={declaredTotal}
-            onChange={(e) => onDeclaredTotalChange(e.target.value)}
+          <NumeroInput
+            value={leerNumero(declaredTotal, { puntoDeMiles: false })}
+            onValor={(n) => onDeclaredTotalChange(n === null ? '' : String(n))}
             placeholder="Tipeá el total que figura en el papel"
             className={cn(
               inputClass, 'font-mono',

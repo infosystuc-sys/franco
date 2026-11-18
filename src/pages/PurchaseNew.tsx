@@ -35,6 +35,8 @@ import {
 } from '@/src/lib/purchases';
 import { ClienteCombobox } from '@/src/components/ClienteCombobox';
 import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
+import { SelectorModoDeCarga } from '@/src/components/purchase/SelectorModoDeCarga';
+import { recordarModoDeCarga } from '@/src/lib/modoDeCargaCompra';
 import { SupplierModal } from '@/src/components/SupplierModal';
 import { ArticleModal } from '@/src/components/ArticleModal';
 import { fetchDefaultMarkup } from '@/src/lib/priceLists';
@@ -64,6 +66,13 @@ const EMPTY_LINE: PurchaseLine = {
  * concepto no tocan nada fuera del comprobante.
  */
 export function PurchaseNew() {
+  // Pasar de artículos a conceptos es otra carga: sin la key, el formulario
+  // seguía con los renglones y el proveedor de la anterior.
+  const { kind } = useParams();
+  return <CargaDeCompra key={kind} />;
+}
+
+function CargaDeCompra() {
   const { role } = useAuth();
   const { kind: kindParam } = useParams();
   const navigate = useNavigate();
@@ -89,6 +98,14 @@ export function PurchaseNew() {
   // Nota de crédito: la factura que acredita y si la acredita entera o en
   // parte. Desde la ficha de una factura se llega con ?acredita=<id>.
   const [searchParams] = useSearchParams();
+  const esDesdeFactura = !!searchParams.get('acredita');
+  // La próxima "Nueva" del listado abre esta misma forma de carga. Una nota
+  // de crédito hecha desde una factura no cuenta: es un caso aparte.
+  React.useEffect(() => {
+    if (!esDesdeFactura && (kindParam === 'articulos' || kindParam === 'conceptos')) {
+      recordarModoDeCarga({ via: 'manual', clase: kindParam });
+    }
+  }, [esDesdeFactura, kindParam]);
   const [creditsInvoiceId, setCreditsInvoiceId] = React.useState('');
   const [facturaAcreditada, setFacturaAcreditada] = React.useState<FacturaAcreditable | null>(null);
   const [modoNC, setModoNC] = React.useState<ModoNotaDeCredito>('TOTAL');
@@ -370,6 +387,10 @@ export function PurchaseNew() {
           </>
         }
       />
+
+      {!esDesdeFactura && (
+        <SelectorModoDeCarga actual={{ via: 'manual', clase: isArticles ? 'articulos' : 'conceptos' }} />
+      )}
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>

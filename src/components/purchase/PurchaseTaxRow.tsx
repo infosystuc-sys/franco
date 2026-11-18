@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { NumeroInput } from '@/src/components/NumeroInput';
 import { formatMoney } from '@/src/lib/utils';
 import type { TaxRate } from '@/src/lib/taxRates';
 import type { PurchaseFootTax } from '@/src/lib/purchases';
@@ -27,10 +28,9 @@ export function PurchaseTaxRow({
           {edited && ` · calculado $ ${formatMoney(suggested)}`}
         </span>
       </span>
-      <input
-        type="number" step="0.01" min="0"
+      <NumeroInput
         value={tax.amount}
-        onChange={(e) => onAmountChange(Number(e.target.value))}
+        onValor={(n) => onAmountChange(n ?? 0)}
         className="w-28 rounded border border-line bg-panel px-2 py-1 text-right font-mono text-sm focus:border-accent-deep focus:outline-none"
       />
       <button

@@ -6,6 +6,8 @@ import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel } from '@/src/components/ui';
 import type { PurchaseKind } from '@/src/lib/purchases';
 import { LeerFacturaConIA } from '@/src/components/purchase/LeerFacturaConIA';
+import { SelectorModoDeCarga } from '@/src/components/purchase/SelectorModoDeCarga';
+import { recordarModoDeCarga } from '@/src/lib/modoDeCargaCompra';
 
 /** Paso 1 de la carga con IA: sacar la foto o elegir el archivo y esperar a que Gemini lo lea. */
 export function PurchaseAIUpload() {
@@ -15,21 +17,35 @@ export function PurchaseAIUpload() {
 
   const kind: PurchaseKind = kindParam === 'articulos' ? 'ARTICULOS' : 'CONCEPTOS';
 
+  // La próxima "Nueva" del listado de compras abre esta misma carga con IA.
+  React.useEffect(() => {
+    if (kindParam === 'articulos' || kindParam === 'conceptos') {
+      recordarModoDeCarga({ via: 'ia', clase: kindParam });
+    }
+  }, [kindParam]);
+
   if (role !== 'admin') return <Navigate to="/" replace />;
   if (kindParam !== 'articulos' && kindParam !== 'conceptos') {
     return <Navigate to="/compras-ia" replace />;
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-3xl">
       <PageHeader
         title={kind === 'ARTICULOS' ? 'Factura de artículos — con IA' : 'Factura de conceptos — con IA'}
         actions={
-          <Link to="/compras-ia">
-            <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
-          </Link>
+          <>
+            <Link to="/compras-ia">
+              <Button variant="ghost" type="button">Leídas sin confirmar</Button>
+            </Link>
+            <Link to="/compras">
+              <Button variant="ghost" type="button"><XCircle size={16} /> Cancelar</Button>
+            </Link>
+          </>
         }
       />
+
+      <SelectorModoDeCarga actual={{ via: 'ia', clase: kind === 'ARTICULOS' ? 'articulos' : 'conceptos' }} />
 
       {error && (
         <div className="mb-6 rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import type { PurchaseKind } from '@/src/lib/purchases';
+import { recordarModoDeCarga } from '@/src/lib/modoDeCargaCompra';
 import {
   describeDraftFileProblem,
   describeExtractionError,
@@ -54,6 +55,7 @@ export function LeerFacturaConIA({
       }
       const { storagePath, mimeType } = await uploadPurchaseInvoiceDraft(file);
       const { id } = await requestExtraction({ storagePath, mimeType, kind });
+      recordarModoDeCarga({ via: 'ia', clase: kind === 'ARTICULOS' ? 'articulos' : 'conceptos' });
       navigate(`/compras-ia/revisar/${id}`);
     } catch (err) {
       onError(describeExtractionError(getErrorMessage(err)));

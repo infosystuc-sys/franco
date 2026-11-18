@@ -1,4 +1,5 @@
 import { Trash2, Package } from 'lucide-react';
+import { NumeroInput } from '@/src/components/NumeroInput';
 import { cn, formatMoney } from '@/src/lib/utils';
 import type { ExpenseConcept } from '@/src/lib/expenseConcepts';
 import type { TaxRate } from '@/src/lib/taxRates';
@@ -77,26 +78,23 @@ export function PurchaseItemRow({
       )}
 
       <td data-label="Cant." className="px-1 py-1">
-        <input
-          type="number" step="0.01" min="0"
+        <NumeroInput
           value={line.quantity}
-          onChange={(e) => patchCuenta({ quantity: Number(e.target.value) })}
+          onValor={(n) => patchCuenta({ quantity: n ?? 0 })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
       <td data-label="P. unitario" className="px-1 py-1">
-        <input
-          type="number" step="0.01" min="0"
+        <NumeroInput
           value={line.unitPrice}
-          onChange={(e) => patchCuenta({ unitPrice: Number(e.target.value) })}
+          onValor={(n) => patchCuenta({ unitPrice: n ?? 0 })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
       <td data-label="Bonif. %" className="px-1 py-1">
-        <input
-          type="number" step="0.01" min="0" max="100"
+        <NumeroInput
           value={line.discountPercent}
-          onChange={(e) => patchCuenta({ discountPercent: Number(e.target.value) })}
+          onValor={(n) => patchCuenta({ discountPercent: Math.min(100, Math.max(0, n ?? 0)) })}
           className="w-full bg-transparent px-2 py-1 text-right"
         />
       </td>
@@ -117,12 +115,9 @@ export function PurchaseItemRow({
       </td>
       {netoEditable ? (
         <td data-label="Neto" className="px-1 py-1 text-right">
-          <input
-            type="number" step="0.01" min="0"
+          <NumeroInput
             value={impreso ? line.netAmount! : Math.round(cuenta * 100) / 100}
-            onChange={(e) =>
-              onPatch({ netAmount: e.target.value.trim() === '' ? null : Number(e.target.value) })
-            }
+            onValor={(n) => onPatch({ netAmount: n })}
             className={cn(
               'w-full bg-transparent px-2 py-1 text-right font-semibold',
               impreso && Math.abs(net - cuenta) >= 0.005 && 'text-state-wait'
