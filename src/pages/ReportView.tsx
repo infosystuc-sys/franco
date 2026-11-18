@@ -128,16 +128,23 @@ export function ReportView() {
     return [...new Set(rows.map((r) => String(r[columna] ?? '')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   }, [rows, report]);
 
-  // Qué letras y clases hay en lo consultado: "FACTURA A" → clase FACTURA, letra A.
+  // Qué letras y clases hay en lo consultado: "FACTURA A" → clase FACTURA,
+  // letra A. A y B se ofrecen siempre, aunque el período no tenga ninguna:
+  // así se ve que hay 0 en vez de que falte el botón. Cada una con su cantidad.
   const tiposPresentes = React.useMemo(() => {
-    const ls = new Set<string>();
-    const cs = new Set<string>();
+    const ls = new Map<string, number>([['A', 0], ['B', 0]]);
+    const cs = new Map<string, number>([['FACTURA', 0]]);
     for (const r of rows ?? []) {
       const { clase, letra } = partirTipo(r.tipo);
-      if (letra) ls.add(letra);
-      if (clase) cs.add(clase);
+      if (letra) ls.set(letra, (ls.get(letra) ?? 0) + 1);
+      if (clase) cs.set(clase, (cs.get(clase) ?? 0) + 1);
     }
-    return { letras: [...ls].sort(), clases: [...cs].sort() };
+    return {
+      letras: [...ls.keys()].sort(),
+      clases: [...cs.keys()].sort(),
+      cuantasLetra: ls,
+      cuantasClase: cs,
+    };
   }, [rows]);
 
   React.useEffect(() => {
@@ -379,7 +386,7 @@ export function ReportView() {
                 {tiposPresentes.letras.length > 1 && (
                   <ChipsDeFiltro
                     titulo="Letra"
-                    opciones={tiposPresentes.letras.map((l) => ({ valor: l, etiqueta: l }))}
+                    opciones={tiposPresentes.letras.map((l) => ({ valor: l, etiqueta: `${l} (${tiposPresentes.cuantasLetra.get(l) ?? 0})` }))}
                     elegidos={letras}
                     onChange={setLetras}
                   />
@@ -387,7 +394,7 @@ export function ReportView() {
                 {tiposPresentes.clases.length > 1 && (
                   <ChipsDeFiltro
                     titulo="Comprobante"
-                    opciones={tiposPresentes.clases.map((c) => ({ valor: c, etiqueta: nombreDeClase(c) }))}
+                    opciones={tiposPresentes.clases.map((c) => ({ valor: c, etiqueta: `${nombreDeClase(c)} (${tiposPresentes.cuantasClase.get(c) ?? 0})` }))}
                     elegidos={clases}
                     onChange={setClases}
                   />
