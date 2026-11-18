@@ -8,6 +8,8 @@ import { labelClass, inputClass } from '@/src/components/FiscalFields';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchExpenseConcepts, type ExpenseConcept } from '@/src/lib/expenseConcepts';
 import { fetchBanks, type Bank } from '@/src/lib/banks';
+import { fetchCustomers } from '@/src/lib/customers';
+import { leerNumero } from '@/src/lib/numeros';
 import { BankCombobox } from '@/src/components/BankCombobox';
 import {
   describeCheckError,
@@ -27,6 +29,7 @@ export function CheckNew() {
 
   const [concepts, setConcepts] = React.useState<ExpenseConcept[]>([]);
   const [checkBanks, setCheckBanks] = React.useState<Bank[]>([]);
+  const [clientes, setClientes] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState<string | null>(null);
 
@@ -48,6 +51,10 @@ export function CheckNew() {
       })
       .catch((err) => !cancelled && setLoadError(describeCheckError(getErrorMessage(err))))
       .finally(() => !cancelled && setLoading(false));
+    // Sugerencias para "Entregado por": no hace falta esperarlas.
+    fetchCustomers(true)
+      .then((cs) => !cancelled && setClientes(cs.map((c) => c.name)))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -62,7 +69,7 @@ export function CheckNew() {
     setForm((prev) => ({ ...prev, ...changes }));
   }
 
-  const amountNumber = Number(form.amount);
+  const amountNumber = leerNumero(form.amount) ?? NaN;
   const amountInvalid =
     form.amount.trim() === '' || !Number.isFinite(amountNumber) || amountNumber <= 0;
 
@@ -79,8 +86,15 @@ export function CheckNew() {
     setSaving(true);
     setError(null);
     try {
-      await receiveCheck(form);
-      navigate('/cheques');
+      const { numeroInterno } = await receiveCheck(form);
+      navigate('/cheques', {
+        state: {
+          aviso:
+            numeroInterno !== null
+              ? `Cheque ${form.number} recibido con el número interno #${numeroInterno}. Anotalo en el cheque.`
+              : `Cheque ${form.number} recibido.`,
+        },
+      });
     } catch (err) {
       setError(describeCheckError(getErrorMessage(err)));
       setSaving(false);
@@ -165,10 +179,27 @@ export function CheckNew() {
               </span>
             </label>
 
+            <label className={cn(labelClass, 'sm:col-span-2')}>
+              Entregado por
+              <input
+                value={form.entregadoPor}
+                onChange={(e) => patch({ entregadoPor: e.target.value })}
+                list="clientes-que-entregan"
+                placeholder="Quién trajo el cheque (cliente u otro)"
+                className={inputClass}
+              />
+              <datalist id="clientes-que-entregan">
+                {clientes.map((nombre) => (
+                  <option key={nombre} value={nombre} />
+                ))}
+              </datalist>
+            </label>
+
             <label className={labelClass}>
               Importe *
               <input
-                type="number" step="0.01" min="0"
+                inputMode="decimal"
+                placeholder="0,00"
                 value={form.amount}
                 onChange={(e) => patch({ amount: e.target.value })}
                 className={cn(inputClass, 'font-mono', amountInvalid && 'field-required')}

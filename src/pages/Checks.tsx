@@ -1,12 +1,13 @@
 import React from 'react';
 import { ordenarFilas, type Orden } from '@/src/lib/ordenar';
 import { ThOrdenable } from '@/src/components/ThOrdenable';
-import { Plus, Search, AlertTriangle, Landmark, ArrowRightLeft, Check, Ban, Pencil, Trash2 } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
+import { Plus, Search, Landmark, ArrowRightLeft, Check, Ban, Pencil, Trash2, ChevronDown } from 'lucide-react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { cn, formatDate, formatMoney, todayLocal, coincideBusqueda } from '@/src/lib/utils';
 import { useAuth } from '@/src/lib/auth';
 import { Button, PageHeader, Panel, SectionHeader, StateStrip } from '@/src/components/ui';
 import { inputClass, labelClass } from '@/src/components/FiscalFields';
+import { leerNumero as leerImporte } from '@/src/lib/numeros';
 import { getErrorMessage } from '@/src/lib/workOrders';
 import { fetchPaymentMethods, type PaymentMethod } from '@/src/lib/paymentMethods';
 import {
@@ -14,6 +15,7 @@ import {
   canDeposit,
   canEndorse,
   canReject,
+  chequeGemelo,
   CHECK_STATUS_BADGE,
   CHECK_STATUS_LABELS,
   CHECK_STATUS_STRIP,
@@ -25,6 +27,7 @@ import {
   fetchChecks,
   modificarCheque,
   isInWallet,
+  quienEntrego,
   rejectCheck,
   type CheckStatus,
   type ThirdPartyCheck,
@@ -40,6 +43,7 @@ import {
  */
 export function Checks() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [checks, setChecks] = React.useState<ThirdPartyCheck[]>([]);
   const [banks, setBanks] = React.useState<PaymentMethod[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -49,6 +53,12 @@ export function Checks() {
   const [statusFilter, setStatusFilter] = React.useState<CheckStatus | ''>('');
   const [tipoFilter, setTipoFilter] = React.useState<'' | 'fisico' | 'electronico'>('');
   const [editando, setEditando] = React.useState<ThirdPartyCheck | null>(null);
+  const [importeDesde, setImporteDesde] = React.useState('');
+  const [importeHasta, setImporteHasta] = React.useState('');
+  const location = useLocation();
+  const [aviso, setAviso] = React.useState<string | null>(
+    (location.state as { aviso?: string } | null)?.aviso ?? null
+  );
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -73,13 +83,34 @@ export function Checks() {
 
   const filtered = React.useMemo(() => {
     const term = search.trim().toLowerCase();
+    const desde = leerImporte(importeDesde);
+    const hasta = leerImporte(importeHasta);
     return checks.filter((check) => {
-      if (statusFilter && check.status !== statusFilter) return false;
+      // Los anulados (eliminados que figuraban en un comprobante anulado) solo
+      // se ven pidiéndolos.
+      if (statusFilter ? check.status !== statusFilter : check.status === 'ANULADO') return false;
       if (tipoFilter && check.electronico !== (tipoFilter === 'electronico')) return false;
+      if (desde !== null && check.amount < desde - 0.005) return false;
+      if (hasta !== null && check.amount > hasta + 0.005) return false;
       if (!term) return true;
-      return coincideBusqueda(term, [check.number, check.bankName, check.drawer]);
+      // "#12" o "12" encuentran el número interno; el importe se busca con o
+      // sin puntos de miles.
+      const interno = check.numeroInterno !== null ? `#${check.numeroInterno}` : '';
+      if (interno && term.startsWith('#')) return interno === term;
+      return (
+        coincideBusqueda(term, [
+          check.number,
+          check.bankName,
+          check.drawer,
+          quienEntrego(check),
+          interno,
+          check.numeroInterno !== null ? String(check.numeroInterno) : null,
+        ]) ||
+        String(check.amount).includes(term.replace(/\./g, '').replace(',', '.')) ||
+        formatMoney(check.amount).includes(term)
+      );
     });
-  }, [checks, search, statusFilter, tipoFilter]);
+  }, [checks, search, statusFilter, tipoFilter, importeDesde, importeHasta]);
 
   // Orden por columna: click en el título ordena, otro invierte, otro vuelve
   // al orden original.
@@ -88,7 +119,9 @@ export function Checks() {
     () =>
       ordenarFilas(filtered, orden, (c, columna) => {
         switch (columna) {
+      case 'N° int.': return c.numeroInterno ?? 0;
       case 'Número': return c.number;
+      case 'Entregó': return quienEntrego(c) ?? '';
       case 'Tipo': return c.electronico ? 'eCheq' : 'Cheque';
       case 'Banco / Librador': return c.bankName;
       case 'Cobro': return c.dueDate;
@@ -118,6 +151,7 @@ export function Checks() {
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
+    setAviso(null);
     try {
       await action();
       await load();
@@ -174,13 +208,46 @@ export function Checks() {
   }
 
   function handleEliminar(check: ThirdPartyCheck) {
-    const ok = window.confirm(
-      `¿Eliminar el cheque ${check.number} de ${check.bankName} por $ ${formatMoney(check.amount)}?\n\n` +
-        'Se anula el ingreso a la cartera que generó y el cheque desaparece del listado. ' +
-        'Si entró con una cobranza, hay que anular esa cobranza.'
-    );
-    if (!ok) return;
-    run(() => eliminarCheque(check.id));
+    const gemelo = chequeGemelo(check, checks);
+    let texto = `¿Eliminar el cheque ${check.number} de ${check.bankName} por $ ${formatMoney(check.amount)}?\n\n`;
+    if (check.cobranza && gemelo && !gemelo.cobranza) {
+      texto +=
+        `Entró con la cobranza ${check.cobranza.fullNumber}, y hay otro cheque igual cargado aparte ` +
+        `(${gemelo.bankName}, ${CHECK_STATUS_LABELS[gemelo.status].toLowerCase()}). Es el mismo cheque cargado dos veces: ` +
+        'queda uno solo. La cobranza pasa a ese otro cheque y se anula el ingreso de más en la cartera.';
+    } else if (check.cobranza) {
+      texto +=
+        `Entró con la cobranza ${check.cobranza.fullNumber}: para sacarlo hay que anular esa cobranza. ` +
+        'Se va a intentar igual por si es un cheque cargado dos veces.';
+    } else {
+      texto += 'Se anula el ingreso a la cartera que generó y el cheque desaparece del listado.';
+    }
+    if (!window.confirm(texto)) return;
+    run(async () => {
+      const resultado = await eliminarCheque(check.id);
+      setAviso(
+        resultado === 'UNIFICADO'
+          ? `Listo: el cheque ${check.number} estaba cargado dos veces y quedó uno solo.`
+          : resultado === 'ANULADO'
+            ? `El cheque ${check.number} figuraba en un comprobante anulado: quedó anulado en vez de borrarse.`
+            : `Cheque ${check.number} eliminado.`
+      );
+    });
+  }
+
+  function accionesDe(check: ThirdPartyCheck): AccionDeCheque[] {
+    const acciones: AccionDeCheque[] = [];
+    if (canDeposit(check.status)) acciones.push({ label: 'Depositar', icon: Landmark, onClick: () => handleDeposit(check) });
+    if (canEndorse(check.status)) {
+      acciones.push({ label: 'Endosar', icon: ArrowRightLeft, onClick: () => navigate(`/tesoreria/endosar-cheque?check=${check.id}`) });
+    }
+    if (canCredit(check.status)) acciones.push({ label: 'Acreditar', icon: Check, onClick: () => handleCredit(check) });
+    if (canReject(check.status)) acciones.push({ label: 'Rechazar', icon: Ban, onClick: () => handleReject(check), danger: true });
+    if (check.status !== 'ANULADO') acciones.push({ label: 'Modificar', icon: Pencil, onClick: () => setEditando(check) });
+    if (check.status === 'EN_CARTERA') {
+      acciones.push({ label: 'Eliminar', icon: Trash2, onClick: () => handleEliminar(check), danger: true });
+    }
+    return acciones;
   }
 
   return (
@@ -199,6 +266,9 @@ export function Checks() {
 
       {error && (
         <div className="rounded-md border border-danger/40 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div>
+      )}
+      {aviso && (
+        <div className="rounded-md border border-state-done/40 bg-panel px-4 py-3 text-sm text-state-done">{aviso}</div>
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -252,12 +322,31 @@ export function Checks() {
           <option value="fisico">Solo físicos</option>
           <option value="electronico">Solo electrónicos (eCheq)</option>
         </select>
-        <div className="relative ml-auto w-full sm:w-64">
+        <div className="flex items-center gap-1 text-sm text-text-soft">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.06em]">Importe</span>
+          <input
+            value={importeDesde}
+            onChange={(e) => setImporteDesde(e.target.value)}
+            inputMode="decimal"
+            placeholder="desde"
+            aria-label="Importe desde"
+            className="h-9 w-28 rounded-md border border-line bg-panel px-2 text-right text-sm focus:border-accent-deep focus:outline-none"
+          />
+          <input
+            value={importeHasta}
+            onChange={(e) => setImporteHasta(e.target.value)}
+            inputMode="decimal"
+            placeholder="hasta"
+            aria-label="Importe hasta"
+            className="h-9 w-28 rounded-md border border-line bg-panel px-2 text-right text-sm focus:border-accent-deep focus:outline-none"
+          />
+        </div>
+        <div className="relative ml-auto w-full sm:w-72">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-soft" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Número, banco o librador…"
+            placeholder="N° interno (#12), número, banco, quién lo entregó, importe…"
             className="h-9 w-full rounded-md border border-line bg-panel pl-9 pr-3 text-sm focus:border-accent-deep focus:outline-none"
           />
         </div>
@@ -267,23 +356,25 @@ export function Checks() {
         <table className="table-stack w-full text-left text-[15px]">
           <thead className="h-9 bg-panel-head text-[13px] font-semibold uppercase tracking-[0.06em] text-text-soft">
             <tr>
-              <ThOrdenable columna="Número" orden={orden} onOrden={setOrden} className="px-4 py-1 w-32">Número</ThOrdenable>
+              <ThOrdenable columna="N° int." orden={orden} onOrden={setOrden} className="px-4 py-1 w-20">N° int.</ThOrdenable>
+              <ThOrdenable columna="Número" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32">Número</ThOrdenable>
               <ThOrdenable columna="Tipo" orden={orden} onOrden={setOrden} className="px-3 py-1 w-28">Tipo</ThOrdenable>
               <ThOrdenable columna="Banco / Librador" orden={orden} onOrden={setOrden} className="px-3 py-1">Banco / Librador</ThOrdenable>
+              <ThOrdenable columna="Entregó" orden={orden} onOrden={setOrden} className="px-3 py-1">Entregó</ThOrdenable>
               <ThOrdenable columna="Cobro" orden={orden} onOrden={setOrden} className="px-3 py-1 w-28">Cobro</ThOrdenable>
               <ThOrdenable columna="Importe" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32 text-right">Importe</ThOrdenable>
               <ThOrdenable columna="Estado" orden={orden} onOrden={setOrden} className="px-3 py-1 w-32">Estado</ThOrdenable>
-              <th className="px-3 py-1 w-52">Acciones</th>
+              <th className="px-3 py-1 w-32"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-text-soft">Cargando cheques…</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-text-soft">Cargando cheques…</td></tr>
             )}
 
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-text-soft">
+                <td colSpan={9} className="px-4 py-10 text-center text-text-soft">
                   {checks.length === 0
                     ? 'Todavía no hay cheques cargados.'
                     : 'Ningún cheque coincide con el filtro.'}
@@ -295,9 +386,14 @@ export function Checks() {
               ordenados.map((check) => {
                 const overdue = check.status === 'EN_CARTERA' && check.dueDate <= todayLocal();
                 return (
-                  <tr key={check.id} className="relative h-12 border-b border-line last:border-b-0 hover:bg-panel-alt">
-                    <td data-primary className="relative px-4 py-1">
+                  <tr key={check.id} className="relative h-11 border-b border-line last:border-b-0 hover:bg-panel-alt">
+                    <td data-label="N° int." className="relative px-4 py-1">
                       <StateStrip color={CHECK_STATUS_STRIP[check.status]} />
+                      <span className="font-mono font-semibold text-accent-deep">
+                        {check.numeroInterno !== null ? `#${check.numeroInterno}` : '—'}
+                      </span>
+                    </td>
+                    <td data-primary className="px-3 py-1">
                       <span className="font-mono font-semibold text-text">{check.number}</span>
                     </td>
 
@@ -316,6 +412,19 @@ export function Checks() {
                       <span className="block">{check.bankName}</span>
                       {check.drawer && (
                         <span className="block text-[13px] text-text-faint">{check.drawer}</span>
+                      )}
+                    </td>
+
+                    <td data-label="Entregó" className="px-3 py-1">
+                      {quienEntrego(check) ? (
+                        <>
+                          <span className="block">{quienEntrego(check)}</span>
+                          {check.cobranza && !check.entregadoPor && (
+                            <span className="block text-[12px] text-text-faint">Cobranza {check.cobranza.fullNumber}</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-text-faint">—</span>
                       )}
                     </td>
 
@@ -352,39 +461,8 @@ export function Checks() {
                       )}
                     </td>
 
-                    <td className="px-3 py-1">
-                      <div className="flex flex-wrap gap-1">
-                        {canDeposit(check.status) && (
-                          <ActionButton onClick={() => handleDeposit(check)} disabled={busy} icon={Landmark}>
-                            Depositar
-                          </ActionButton>
-                        )}
-                        {canEndorse(check.status) && (
-                          <Link to={`/tesoreria/endosar-cheque?check=${check.id}`}>
-                            <ActionButton disabled={busy} icon={ArrowRightLeft}>
-                              Endosar
-                            </ActionButton>
-                          </Link>
-                        )}
-                        {canCredit(check.status) && (
-                          <ActionButton onClick={() => handleCredit(check)} disabled={busy} icon={Check}>
-                            Acreditar
-                          </ActionButton>
-                        )}
-                        {canReject(check.status) && (
-                          <ActionButton onClick={() => handleReject(check)} disabled={busy} icon={Ban} danger>
-                            Rechazar
-                          </ActionButton>
-                        )}
-                        <ActionButton onClick={() => setEditando(check)} disabled={busy} icon={Pencil}>
-                          Modificar
-                        </ActionButton>
-                        {check.status === 'EN_CARTERA' && (
-                          <ActionButton onClick={() => handleEliminar(check)} disabled={busy} icon={Trash2} danger>
-                            Eliminar
-                          </ActionButton>
-                        )}
-                      </div>
+                    <td className="px-3 py-1 text-right">
+                      <MenuDeAcciones acciones={accionesDe(check)} disabled={busy} />
                     </td>
                   </tr>
                 );
@@ -435,6 +513,7 @@ function ModificarChequeModal({
     dueDate: check.dueDate,
     amount: String(check.amount),
     notes: check.notes ?? '',
+    entregadoPor: check.entregadoPor ?? '',
   });
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -443,7 +522,7 @@ function ModificarChequeModal({
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
-    const amount = Number(form.amount.replace(',', '.'));
+    const amount = leerImporte(form.amount) ?? NaN;
     if (!form.number.trim() || !form.bankName.trim() || !form.dueDate) {
       setError('Número, banco y fecha de cobro son obligatorios.');
       return;
@@ -490,9 +569,18 @@ function ModificarChequeModal({
               Banco
               <input value={form.bankName} onChange={(e) => patch({ bankName: e.target.value })} className={inputClass} />
             </label>
-            <label className={cn(labelClass, 'sm:col-span-2')}>
+            <label className={labelClass}>
               Librador
               <input value={form.drawer} onChange={(e) => patch({ drawer: e.target.value })} className={inputClass} />
+            </label>
+            <label className={labelClass}>
+              Entregado por
+              <input
+                value={form.entregadoPor}
+                onChange={(e) => patch({ entregadoPor: e.target.value })}
+                placeholder={check.cobranza ? check.cobranza.customerName : 'Quién lo trajo'}
+                className={inputClass}
+              />
             </label>
             <label className={labelClass}>
               Fecha de emisión
@@ -505,9 +593,7 @@ function ModificarChequeModal({
             <label className={labelClass}>
               Importe
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                inputMode="decimal"
                 value={form.amount}
                 onChange={(e) => patch({ amount: e.target.value })}
                 disabled={!importeEditable}
@@ -541,34 +627,93 @@ function ModificarChequeModal({
   );
 }
 
-function ActionButton({
-  onClick,
-  disabled,
-  icon: Icon,
-  danger,
-  children,
-}: {
-  onClick?: () => void;
-  disabled: boolean;
+interface AccionDeCheque {
+  label: string;
   icon: React.ComponentType<{ size?: number }>;
+  onClick: () => void;
   danger?: boolean;
-  children: React.ReactNode;
-}) {
+}
+
+/**
+ * Las acciones de un cheque en un desplegable, para que el renglón no se
+ * haga alto con cuatro o cinco botones apilados. El menú se dibuja con
+ * posición fija: la tabla recorta lo que se sale de ella.
+ */
+function MenuDeAcciones({ acciones, disabled }: { acciones: AccionDeCheque[]; disabled: boolean }) {
+  const [abierto, setAbierto] = React.useState<{ top: number; right: number } | null>(null);
+  const boton = React.useRef<HTMLButtonElement>(null);
+  const menu = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!abierto) return;
+    const cerrar = (e: Event) => {
+      if (e.type === 'mousedown' && (menu.current?.contains(e.target as Node) || boton.current?.contains(e.target as Node))) return;
+      setAbierto(null);
+    };
+    const conEscape = (e: KeyboardEvent) => e.key === 'Escape' && setAbierto(null);
+    document.addEventListener('mousedown', cerrar);
+    window.addEventListener('scroll', cerrar, true);
+    window.addEventListener('resize', cerrar);
+    document.addEventListener('keydown', conEscape);
+    return () => {
+      document.removeEventListener('mousedown', cerrar);
+      window.removeEventListener('scroll', cerrar, true);
+      window.removeEventListener('resize', cerrar);
+      document.removeEventListener('keydown', conEscape);
+    };
+  }, [abierto]);
+
+  if (acciones.length === 0) return null;
+
+  function alternar() {
+    if (abierto) {
+      setAbierto(null);
+      return;
+    }
+    const r = boton.current!.getBoundingClientRect();
+    // Si no entra abajo, se abre para arriba.
+    const alto = acciones.length * 34 + 8;
+    const top = r.bottom + alto > window.innerHeight ? Math.max(8, r.top - alto - 4) : r.bottom + 4;
+    setAbierto({ top, right: window.innerWidth - r.right });
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'inline-flex items-center gap-1 border px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:opacity-40',
-        danger
-          ? 'border-danger/40 text-danger hover:bg-danger-soft'
-          : 'border-line-strong text-text-soft hover:bg-panel-alt hover:text-text'
+    <>
+      <button
+        ref={boton}
+        type="button"
+        onClick={alternar}
+        disabled={disabled}
+        className="inline-flex items-center gap-1 border border-line-strong px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-text-soft transition-colors hover:bg-panel-alt hover:text-text disabled:opacity-40"
+      >
+        Acciones <ChevronDown size={12} />
+      </button>
+      {abierto && (
+        <div
+          ref={menu}
+          style={{ top: abierto.top, right: abierto.right }}
+          className="fixed z-50 min-w-[10rem] border border-line bg-panel py-1 text-left shadow-lg"
+        >
+          {acciones.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              onClick={() => {
+                setAbierto(null);
+                a.onClick();
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-1.5 text-[13px] font-semibold uppercase tracking-[0.04em] transition-colors',
+                a.danger ? 'text-danger hover:bg-danger-soft' : 'text-text-soft hover:bg-panel-alt hover:text-text'
+              )}
+            >
+              <a.icon size={13} />
+              {a.label}
+            </button>
+          ))}
+        </div>
       )}
-    >
-      <Icon size={12} />
-      {children}
-    </button>
+    </>
   );
 }
 
